@@ -33,15 +33,34 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (isAuthenticated()) {
-        const userData = await getCurrentUser();
-        setUser(userData);
-        await testBackendConnection();
-        await fetchMeetings();
-      } else {
+      try {
+        console.log('🔐 AUTH: Starting authentication check...');
+        
+        if (isAuthenticated()) {
+          console.log('🔐 AUTH: User is authenticated, getting user data...');
+          const userData = await getCurrentUser();
+          console.log('🔐 AUTH: User data received:', userData);
+          
+          if (userData) {
+            setUser(userData);
+            await testBackendConnection();
+            await fetchMeetings();
+          } else {
+            console.log('🔐 AUTH: No user data, redirecting to login...');
+            window.location.href = '/login';
+          }
+        } else {
+          console.log('🔐 AUTH: User not authenticated, redirecting to login...');
+          window.location.href = '/login';
+        }
+      } catch (error) {
+        console.error('🔐 AUTH: Authentication error:', error);
+        // Show error message to user
+        alert('Authentication error: ' + (error instanceof Error ? error.message : 'Unknown error'));
         window.location.href = '/login';
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     checkAuth();
   }, []);
@@ -314,7 +333,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 시작되었습니다! (오프라인 모드)',
+        text: '회의가 시작되었습니다! (모의 서비스)',
         confirmButtonText: '확인'
       });
 
@@ -372,7 +391,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 종료되었습니다! (오프라인 모드)',
+        text: '회의가 종료되었습니다! (모의 서비스)',
         confirmButtonText: '확인'
       });
 
@@ -439,6 +458,46 @@ const Dashboard: React.FC = () => {
     return (
       <div className="loading-container">
         <div className="loading-spinner">Loading...</div>
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <p>If this takes too long, try logging in:</p>
+          <button 
+            onClick={() => {
+              const email = prompt('Enter email:', 'test@example.com');
+              const password = prompt('Enter password:', 'password123');
+              if (email && password) {
+                // Simple login for testing
+                fetch('http://localhost:3007/graphql', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    query: `
+                      mutation Login($email: String!, $password: String!) {
+                        login(email: $email, password: $password) {
+                          token
+                          user { _id displayName email systemRole }
+                        }
+                      }
+                    `,
+                    variables: { email, password }
+                  })
+                })
+                .then(res => res.json())
+                .then(data => {
+                  if (data.data?.login?.token) {
+                    localStorage.setItem('jwt', data.data.login.token);
+                    window.location.reload();
+                  } else {
+                    alert('Login failed: ' + (data.errors?.[0]?.message || 'Unknown error'));
+                  }
+                })
+                .catch(err => alert('Login error: ' + err.message));
+              }
+            }}
+            style={{ padding: '10px 20px', margin: '10px' }}
+          >
+            Quick Login
+          </button>
+        </div>
       </div>
     );
   }

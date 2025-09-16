@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Meeting Creation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .meeting { background-color: #e7f3ff; padding: 10px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Complete Meeting Creation Test</h1>
+    
+    <div class="test-section">
+        <h2>Step 1: Authentication</h2>
+        <button onclick="login()">Login with Test User</button>
+        <button onclick="checkAuth()">Check Auth Status</button>
+        <div id="authStatus">Not authenticated</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Step 2: Create Meeting</h2>
+        <input type="text" id="meetingTitle" placeholder="Meeting Title" value="My Test Meeting">
+        <input type="datetime-local" id="meetingSchedule" placeholder="Schedule (optional)">
+        <button onclick="createMeeting()">Create Meeting</button>
+        <button onclick="createScheduledMeeting()">Create Scheduled Meeting</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Step 3: Manage Meetings</h2>
+        <button onclick="fetchMeetings()">Fetch All Meetings</button>
+        <button onclick="startMeeting()">Start First Meeting</button>
+        <button onclick="endMeeting()">End First Meeting</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Step 4: Test Results</h2>
+        <div id="meetingsList"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Debug Log</h2>
+        <div id="log" class="log">Click "Login with Test User" to start...</div>
+    </div>
+
+    <script>
+        const GRAPHQL_ENDPOINT = 'http://localhost:3007/graphql';
+        let currentMeetings = [];
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateAuthStatus(isAuthenticated, user = null) {
+            const statusDiv = document.getElementById('authStatus');
+            if (isAuthenticated && user) {
+                statusDiv.innerHTML = `<span style="color: green;">✅ Authenticated as: ${user.displayName} (${user.email})</span>`;
+            } else {
+                statusDiv.innerHTML = `<span style="color: red;">❌ Not authenticated</span>`;
+            }
+        }
+
+        function updateMeetingsList() {
+            const meetingsDiv = document.getElementById('meetingsList');
+            if (currentMeetings.length === 0) {
+                meetingsDiv.innerHTML = '<p>No meetings found</p>';
+                return;
+            }
+
+            meetingsDiv.innerHTML = currentMeetings.map((meeting, index) => `
+                <div class="meeting">
+                    <h4>${meeting.title}</h4>
+                    <p><strong>Status:</strong> ${meeting.status}</p>
+                    <p><strong>Invite Code:</strong> ${meeting.inviteCode}</p>
+                    <p><strong>Created:</strong> ${new Date(meeting.createdAt).toLocaleString()}</p>
+                    ${meeting.schedule ? `<p><strong>Scheduled:</strong> ${new Date(meeting.schedule).toLocaleString()}</p>` : ''}
+                    <button onclick="startSpecificMeeting('${meeting._id}')">Start</button>
+                    <button onclick="endSpecificMeeting('${meeting._id}')">End</button>
+                </div>
+            `).join('');
+        }
+
+        async function makeGraphQLRequest(query, variables = {}) {
+            const token = localStorage.getItem('jwt');
+            
+            const response = await fetch(GRAPHQL_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify({ query, variables }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.errors) {
+                throw new Error(data.errors[0]?.message || 'GraphQL error');
+            }
+
+            return data.data;
+        }
+
+        function isAuthenticated() {
+            const token = localStorage.getItem('jwt');
+            if (!token) return false;
+            
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const now = Math.floor(Date.now() / 1000);
+                return payload.exp > now;
+            } catch {
+                return false;
+            }
+        }
+
+        async function login() {
+            try {
+                log('🔐 Attempting login...');
+                
+                const result = await makeGraphQLRequest(`
+                    mutation Login($email: String!, $password: String!) {
+                        login(email: $email, password: $password) {
+                            token
+                            user {
+                                _id
+                                displayName
+                                email
+                                systemRole
+                            }
+                        }
+                    }
+                `, {
+                    email: 'test@example.com',
+                    password: 'password123'
+                });
+
+                if (result.login && result.login.token) {
+                    localStorage.setItem('jwt', result.login.token);
+                    log('✅ Login successful!');
+                    updateAuthStatus(true, result.login.user);
+                    return result.login.user;
+                } else {
+                    throw new Error('Login failed - no token received');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+                updateAuthStatus(false);
+                throw error;
+            }
+        }
+
+        async function checkAuth() {
+            if (isAuthenticated()) {
+                try {
+                    const result = await makeGraphQLRequest(`
+                        query GetCurrentUser {
+                            me {
+                                _id
+                                displayName
+                                email
+                                systemRole
+                            }
+                        }
+                    `);
+                    updateAuthStatus(true, result.me);
+                    log('✅ Authentication verified');
+                } catch (error) {
+                    log(`❌ Auth check failed: ${error.message}`);
+                    updateAuthStatus(false);
+                }
+            } else {
+                updateAuthStatus(false);
+                log('❌ Not authenticated');
+            }
+        }
+
+        async function createMeeting() {
+            try {
+                log('🏠 Creating meeting...');
+                const title = document.getElementById('meetingTitle').value;
+                
+                // Test with real backend first
+                try {
+                    const realResult = await makeGraphQLRequest(`
+                        mutation CreateMeeting($input: CreateMeetingInput!) {
+                            createMeeting(input: $input) {
+                                success
+                                message
+                                meeting {
+                                    _id
+                                    title
+                                    status
+                                    inviteCode
+                                    createdAt
+                                }
+                            }
+                        }
+                    `, {
+                        input: {
+                            title: title,
+                            scheduledStartAt: null,
+                            isPrivate: false,
+                            notes: 'Test meeting'
+                        }
+                    });
+                    
+                    log('✅ Meeting created via real backend!');
+                    log(`Result: ${JSON.stringify(realResult, null, 2)}`);
+                    
+                    if (realResult.createMeeting?.meeting) {
+                        currentMeetings.unshift(realResult.createMeeting.meeting);
+                        updateMeetingsList();
+                    }
+                    return;
+                } catch (realError) {
+                    log(`⚠️ Real backend failed (expected): ${realError.message}`);
+                }
+
+                // Fallback to mock service
+                const mockMeeting = {
+                    _id: 'mock-' + Date.now(),
+                    title: title,
+                    status: 'STARTED',
+                    inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    participantCount: 0
+                };
+
+                currentMeetings.unshift(mockMeeting);
+                updateMeetingsList();
+                
+                log('✅ Meeting created via mock service!');
+                log(`Mock meeting: ${JSON.stringify(mockMeeting, null, 2)}`);
+                
+            } catch (error) {
+                log(`❌ Create meeting error: ${error.message}`);
+            }
+        }
+
+        async function createScheduledMeeting() {
+            try {
+                log('📅 Creating scheduled meeting...');
+                const title = document.getElementById('meetingTitle').value;
+                const schedule = document.getElementById('meetingSchedule').value;
+                
+                if (!schedule) {
+                    alert('Please select a date and time for the scheduled meeting');
+                    return;
+                }
+
+                // Mock scheduled meeting
+                const mockMeeting = {
+                    _id: 'mock-scheduled-' + Date.now(),
+                    title: title,
+                    status: 'SCHEDULED',
+                    schedule: new Date(schedule).toISOString(),
+                    inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    participantCount: 0
+                };
+
+                currentMeetings.unshift(mockMeeting);
+                updateMeetingsList();
+                
+                log('✅ Scheduled meeting created via mock service!');
+                log(`Scheduled meeting: ${JSON.stringify(mockMeeting, null, 2)}`);
+                
+            } catch (error) {
+                log(`❌ Create scheduled meeting error: ${error.message}`);
+            }
+        }
+
+        async function fetchMeetings() {
+            try {
+                log('📊 Fetching meetings...');
+                
+                // Test with real backend first
+                try {
+                    const realResult = await makeGraphQLRequest(`
+                        query GetMyMeetings {
+                            meetings {
+                                _id
+                                title
+                                status
+                                inviteCode
+                                createdAt
+                                schedule
+                            }
+                        }
+                    `);
+                    
+                    log('✅ Meetings fetched via real backend!');
+                    log(`Real meetings: ${JSON.stringify(realResult, null, 2)}`);
+                    
+                    if (realResult.meetings) {
+                        currentMeetings = realResult.meetings;
+                        updateMeetingsList();
+                    }
+                    return;
+                } catch (realError) {
+                    log(`⚠️ Real backend failed (expected): ${realError.message}`);
+                }
+
+                // Fallback to mock data
+                const mockMeetings = [
+                    {
+                        _id: 'mock-existing-1',
+                        title: 'Existing Team Meeting',
+                        status: 'STARTED',
+                        inviteCode: 'ABC123',
+                        createdAt: new Date(Date.now() - 3600000).toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        participantCount: 5
+                    },
+                    {
+                        _id: 'mock-existing-2',
+                        title: 'Project Review',
+                        status: 'SCHEDULED',
+                        schedule: new Date(Date.now() + 86400000).toISOString(),
+                        inviteCode: 'DEF456',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        participantCount: 0
+                    }
+                ];
+
+                currentMeetings = [...mockMeetings, ...currentMeetings];
+                updateMeetingsList();
+                
+                log('✅ Meetings fetched via mock service!');
+                log(`Mock meetings: ${JSON.stringify(mockMeetings, null, 2)}`);
+                
+            } catch (error) {
+                log(`❌ Fetch meetings error: ${error.message}`);
+            }
+        }
+
+        async function startMeeting() {
+            if (currentMeetings.length === 0) {
+                alert('No meetings to start');
+                return;
+            }
+
+            const meeting = currentMeetings[0];
+            await startSpecificMeeting(meeting._id);
+        }
+
+        async function startSpecificMeeting(meetingId) {
+            try {
+                log(`▶️ Starting meeting: ${meetingId}`);
+                
+                // Update local state
+                const meeting = currentMeetings.find(m => m._id === meetingId);
+                if (meeting) {
+                    meeting.status = 'STARTED';
+                    meeting.updatedAt = new Date().toISOString();
+                    updateMeetingsList();
+                    log(`✅ Meeting started: ${meeting.title}`);
+                }
+                
+            } catch (error) {
+                log(`❌ Start meeting error: ${error.message}`);
+            }
+        }
+
+        async function endMeeting() {
+            if (currentMeetings.length === 0) {
+                alert('No meetings to end');
+                return;
+            }
+
+            const meeting = currentMeetings[0];
+            await endSpecificMeeting(meeting._id);
+        }
+
+        async function endSpecificMeeting(meetingId) {
+            try {
+                log(`⏹️ Ending meeting: ${meetingId}`);
+                
+                // Update local state
+                const meeting = currentMeetings.find(m => m._id === meetingId);
+                if (meeting) {
+                    meeting.status = 'ENDED';
+                    meeting.updatedAt = new Date().toISOString();
+                    meeting.duration = 3600; // Mock duration
+                    updateMeetingsList();
+                    log(`✅ Meeting ended: ${meeting.title}`);
+                }
+                
+            } catch (error) {
+                log(`❌ End meeting error: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        log('🧪 Complete Meeting Creation Test Ready!');
+        log('Frontend: http://localhost:3000');
+        log('Backend: http://localhost:3007');
+        checkAuth();
+    </script>
+</body>
+</html>

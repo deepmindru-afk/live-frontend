@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Debug</h1>
+    
+    <div class="test-section">
+        <h2>Test Authentication</h2>
+        <input type="email" id="email" placeholder="Email" value="test@example.com">
+        <input type="password" id="password" placeholder="Password" value="password123">
+        <button onclick="testLogin()">Test Login</button>
+        <button onclick="testSignup()">Test Signup</button>
+        <button onclick="testGetCurrentUser()">Get Current User</button>
+        <button onclick="testIsAuthenticated()">Check Auth Status</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test GraphQL Requests</h2>
+        <button onclick="testHealthQuery()">Test Health Query</button>
+        <button onclick="testCreateMeeting()">Test Create Meeting</button>
+        <button onclick="testFetchMeetings()">Test Fetch Meetings</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Debug Log</h2>
+        <div id="log" class="log">Click a button to start testing...</div>
+    </div>
+
+    <script>
+        const GRAPHQL_ENDPOINT = 'http://localhost:3007/graphql';
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        async function makeGraphQLRequest(query, variables = {}) {
+            const token = localStorage.getItem('jwt');
+            
+            log(`Making GraphQL request to: ${GRAPHQL_ENDPOINT}`);
+            log(`Query: ${query.substring(0, 100)}...`);
+            log(`Variables: ${JSON.stringify(variables)}`);
+            log(`Token available: ${!!token}`);
+
+            const response = await fetch(GRAPHQL_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify({ query, variables }),
+            });
+
+            log(`Response status: ${response.status}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                log(`Error response: ${errorText}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            log(`Response data: ${JSON.stringify(data, null, 2)}`);
+            
+            if (data.errors) {
+                log(`GraphQL errors: ${JSON.stringify(data.errors, null, 2)}`);
+                throw new Error(data.errors[0]?.message || 'GraphQL error');
+            }
+
+            return data.data;
+        }
+
+        async function testLogin() {
+            try {
+                log('Testing login...');
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                const result = await makeGraphQLRequest(`
+                    mutation Login($email: String!, $password: String!) {
+                        login(email: $email, password: $password) {
+                            token
+                            user {
+                                _id
+                                displayName
+                                email
+                                systemRole
+                            }
+                        }
+                    }
+                `, { email, password });
+
+                if (result.login && result.login.token) {
+                    localStorage.setItem('jwt', result.login.token);
+                    log('✅ Login successful!');
+                    log(`User: ${result.login.user.displayName}`);
+                } else {
+                    log('❌ Login failed - no token received');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+            }
+        }
+
+        async function testSignup() {
+            try {
+                log('Testing signup...');
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                const result = await makeGraphQLRequest(`
+                    mutation Signup($displayName: String!, $email: String!, $password: String!) {
+                        signup(input: { displayName: "Test User", email: $email, password: $password }) {
+                            token
+                            user {
+                                _id
+                                displayName
+                                email
+                                systemRole
+                            }
+                        }
+                    }
+                `, { email, password });
+
+                if (result.signup && result.signup.token) {
+                    localStorage.setItem('jwt', result.signup.token);
+                    log('✅ Signup successful!');
+                    log(`User: ${result.signup.user.displayName}`);
+                } else {
+                    log('❌ Signup failed - no token received');
+                }
+            } catch (error) {
+                log(`❌ Signup error: ${error.message}`);
+            }
+        }
+
+        async function testGetCurrentUser() {
+            try {
+                log('Testing getCurrentUser...');
+                const result = await makeGraphQLRequest(`
+                    query GetCurrentUser {
+                        me {
+                            _id
+                            displayName
+                            email
+                            systemRole
+                        }
+                    }
+                `);
+
+                if (result.me) {
+                    log('✅ GetCurrentUser successful!');
+                    log(`User: ${JSON.stringify(result.me, null, 2)}`);
+                } else {
+                    log('❌ GetCurrentUser failed - no user data');
+                }
+            } catch (error) {
+                log(`❌ GetCurrentUser error: ${error.message}`);
+            }
+        }
+
+        function testIsAuthenticated() {
+            const token = localStorage.getItem('jwt');
+            log(`Token in localStorage: ${token ? 'Yes' : 'No'}`);
+            
+            if (token) {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const now = Math.floor(Date.now() / 1000);
+                    const isValid = payload.exp > now;
+                    log(`Token valid: ${isValid}`);
+                    log(`Token payload: ${JSON.stringify(payload, null, 2)}`);
+                } catch (error) {
+                    log(`❌ Token parsing error: ${error.message}`);
+                }
+            }
+        }
+
+        async function testHealthQuery() {
+            try {
+                log('Testing health query...');
+                const result = await makeGraphQLRequest(`
+                    query TestQuery {
+                        health
+                    }
+                `);
+                log('✅ Health query successful!');
+                log(`Health: ${result.health}`);
+            } catch (error) {
+                log(`❌ Health query error: ${error.message}`);
+            }
+        }
+
+        async function testCreateMeeting() {
+            try {
+                log('Testing createMeeting...');
+                const result = await makeGraphQLRequest(`
+                    mutation CreateMeeting($input: CreateMeetingInput!) {
+                        createMeeting(input: $input) {
+                            success
+                            message
+                            meeting {
+                                _id
+                                title
+                                status
+                                inviteCode
+                                createdAt
+                            }
+                        }
+                    }
+                `, {
+                    input: {
+                        title: 'Test Meeting',
+                        scheduledStartAt: null,
+                        isPrivate: false,
+                        notes: 'Test meeting'
+                    }
+                });
+                log('✅ CreateMeeting successful!');
+                log(`Result: ${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                log(`❌ CreateMeeting error: ${error.message}`);
+            }
+        }
+
+        async function testFetchMeetings() {
+            try {
+                log('Testing fetchMeetings...');
+                const result = await makeGraphQLRequest(`
+                    query GetMyMeetings {
+                        meetings {
+                            _id
+                            title
+                            status
+                            inviteCode
+                            createdAt
+                        }
+                    }
+                `);
+                log('✅ FetchMeetings successful!');
+                log(`Meetings: ${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                log(`❌ FetchMeetings error: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        log('Auth Debug Tool Ready!');
+        log('Frontend: http://localhost:3000');
+        log('Backend: http://localhost:3007');
+    </script>
+</body>
+</html>

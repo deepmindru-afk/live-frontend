@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Creation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Meeting Creation Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Meeting Creation</h2>
+        <input type="text" id="meetingTitle" placeholder="Meeting Title" value="Test Meeting">
+        <input type="datetime-local" id="meetingSchedule">
+        <button onclick="testCreateMeeting()">Create Meeting</button>
+        <button onclick="testFetchMeetings()">Fetch Meetings</button>
+        <button onclick="testStartMeeting()">Start Meeting</button>
+        <button onclick="testEndMeeting()">End Meeting</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <script>
+        // Mock GraphQL service (simplified version for testing)
+        let mockMeetings = [
+            {
+                _id: 'mock-1',
+                title: 'Existing Meeting',
+                status: 'STARTED',
+                inviteCode: 'ABC123',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                participantCount: 5,
+                duration: 3600
+            }
+        ];
+
+        function log(message) {
+            const results = document.getElementById('results');
+            results.textContent += new Date().toISOString() + ': ' + message + '\n';
+        }
+
+        function testCreateMeeting() {
+            const title = document.getElementById('meetingTitle').value;
+            const schedule = document.getElementById('meetingSchedule').value;
+            
+            log('Creating meeting: ' + title);
+            
+            const newMeeting = {
+                _id: 'mock-' + Date.now(),
+                title: title,
+                status: schedule ? 'SCHEDULED' : 'STARTED',
+                schedule: schedule || undefined,
+                inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                participantCount: 0
+            };
+            
+            mockMeetings.unshift(newMeeting);
+            
+            log('✅ Meeting created successfully!');
+            log('Meeting ID: ' + newMeeting._id);
+            log('Invite Code: ' + newMeeting.inviteCode);
+            log('Status: ' + newMeeting.status);
+        }
+
+        function testFetchMeetings() {
+            log('Fetching meetings...');
+            log('Found ' + mockMeetings.length + ' meetings:');
+            mockMeetings.forEach((meeting, index) => {
+                log(`${index + 1}. ${meeting.title} (${meeting.status}) - ${meeting.inviteCode}`);
+            });
+        }
+
+        function testStartMeeting() {
+            const meeting = mockMeetings.find(m => m.status === 'SCHEDULED');
+            if (meeting) {
+                meeting.status = 'STARTED';
+                meeting.updatedAt = new Date().toISOString();
+                log('✅ Meeting started: ' + meeting.title);
+            } else {
+                log('❌ No scheduled meetings found to start');
+            }
+        }
+
+        function testEndMeeting() {
+            const meeting = mockMeetings.find(m => m.status === 'STARTED');
+            if (meeting) {
+                meeting.status = 'ENDED';
+                meeting.updatedAt = new Date().toISOString();
+                meeting.duration = 3600;
+                log('✅ Meeting ended: ' + meeting.title);
+            } else {
+                log('❌ No started meetings found to end');
+            }
+        }
+
+        // Initialize
+        log('Meeting Creation Test Ready!');
+        log('Frontend: http://localhost:3000');
+        log('Backend: http://localhost:3007');
+    </script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .dashboard { display: none; }
+        .loading { text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <h2>Loading Dashboard...</h2>
+        <div id="loadingStatus">Checking authentication...</div>
+    </div>
+
+    <div id="dashboard" class="dashboard">
+        <h1>Dashboard Test</h1>
+        
+        <div class="test-section">
+            <h2>User Info</h2>
+            <div id="userInfo">Loading user info...</div>
+        </div>
+
+        <div class="test-section">
+            <h2>Meeting Management</h2>
+            <input type="text" id="meetingTitle" placeholder="Meeting Title" value="Test Meeting">
+            <button onclick="createMeeting()">Create Meeting</button>
+            <button onclick="fetchMeetings()">Fetch Meetings</button>
+            <button onclick="testMockService()">Test Mock Service</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Debug Log</h2>
+            <div id="log" class="log">Starting dashboard test...</div>
+        </div>
+    </div>
+
+    <script>
+        const GRAPHQL_ENDPOINT = 'http://localhost:3007/graphql';
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateLoadingStatus(message) {
+            document.getElementById('loadingStatus').textContent = message;
+        }
+
+        async function makeGraphQLRequest(query, variables = {}) {
+            const token = localStorage.getItem('jwt');
+            
+            log(`Making GraphQL request to: ${GRAPHQL_ENDPOINT}`);
+            log(`Query: ${query.substring(0, 100)}...`);
+            log(`Variables: ${JSON.stringify(variables)}`);
+            log(`Token available: ${!!token}`);
+
+            const response = await fetch(GRAPHQL_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                },
+                body: JSON.stringify({ query, variables }),
+            });
+
+            log(`Response status: ${response.status}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                log(`Error response: ${errorText}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            log(`Response data: ${JSON.stringify(data, null, 2)}`);
+            
+            if (data.errors) {
+                log(`GraphQL errors: ${JSON.stringify(data.errors, null, 2)}`);
+                throw new Error(data.errors[0]?.message || 'GraphQL error');
+            }
+
+            return data.data;
+        }
+
+        function isAuthenticated() {
+            const token = localStorage.getItem('jwt');
+            if (!token) return false;
+            
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const now = Math.floor(Date.now() / 1000);
+                return payload.exp > now;
+            } catch {
+                return false;
+            }
+        }
+
+        async function getCurrentUser() {
+            if (!isAuthenticated()) return null;
+            
+            try {
+                const data = await makeGraphQLRequest(`
+                    query GetCurrentUser {
+                        me {
+                            _id
+                            displayName
+                            email
+                            systemRole
+                        }
+                    }
+                `);
+                
+                if (data && data.me) {
+                    return data.me;
+                } else {
+                    log('No user data in response');
+                    return null;
+                }
+            } catch (error) {
+                log(`Error fetching current user: ${error.message}`);
+                localStorage.removeItem('jwt');
+                return null;
+            }
+        }
+
+        async function login() {
+            try {
+                updateLoadingStatus('Logging in...');
+                log('Attempting login...');
+                
+                const result = await makeGraphQLRequest(`
+                    mutation Login($email: String!, $password: String!) {
+                        login(email: $email, password: $password) {
+                            token
+                            user {
+                                _id
+                                displayName
+                                email
+                                systemRole
+                            }
+                        }
+                    }
+                `, {
+                    email: 'test@example.com',
+                    password: 'password123'
+                });
+
+                if (result.login && result.login.token) {
+                    localStorage.setItem('jwt', result.login.token);
+                    log('✅ Login successful!');
+                    return result.login.user;
+                } else {
+                    throw new Error('Login failed - no token received');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+                throw error;
+            }
+        }
+
+        async function initializeDashboard() {
+            try {
+                updateLoadingStatus('Checking authentication...');
+                
+                let user = null;
+                
+                if (isAuthenticated()) {
+                    updateLoadingStatus('Getting user data...');
+                    user = await getCurrentUser();
+                    if (user) {
+                        log('✅ User authenticated from existing token');
+                    } else {
+                        log('❌ Invalid token, attempting login...');
+                        user = await login();
+                    }
+                } else {
+                    updateLoadingStatus('Not authenticated, attempting login...');
+                    user = await login();
+                }
+
+                if (user) {
+                    document.getElementById('userInfo').innerHTML = `
+                        <p><strong>Name:</strong> ${user.displayName}</p>
+                        <p><strong>Email:</strong> ${user.email}</p>
+                        <p><strong>Role:</strong> ${user.systemRole}</p>
+                    `;
+                    
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    
+                    log('✅ Dashboard initialized successfully!');
+                } else {
+                    throw new Error('Failed to authenticate user');
+                }
+            } catch (error) {
+                log(`❌ Dashboard initialization failed: ${error.message}`);
+                updateLoadingStatus(`Error: ${error.message}`);
+            }
+        }
+
+        async function createMeeting() {
+            try {
+                log('Creating meeting...');
+                const title = document.getElementById('meetingTitle').value;
+                
+                // Test with mock service first
+                const mockResult = await testMockCreateMeeting(title);
+                log(`Mock service result: ${JSON.stringify(mockResult, null, 2)}`);
+                
+                // Test with real backend
+                try {
+                    const realResult = await makeGraphQLRequest(`
+                        mutation CreateMeeting($input: CreateMeetingInput!) {
+                            createMeeting(input: $input) {
+                                success
+                                message
+                                meeting {
+                                    _id
+                                    title
+                                    status
+                                    inviteCode
+                                    createdAt
+                                }
+                            }
+                        }
+                    `, {
+                        input: {
+                            title: title,
+                            scheduledStartAt: null,
+                            isPrivate: false,
+                            notes: 'Test meeting'
+                        }
+                    });
+                    log(`Real backend result: ${JSON.stringify(realResult, null, 2)}`);
+                } catch (realError) {
+                    log(`Real backend failed (expected): ${realError.message}`);
+                }
+                
+            } catch (error) {
+                log(`❌ Create meeting error: ${error.message}`);
+            }
+        }
+
+        async function testMockCreateMeeting(title) {
+            // Simple mock implementation
+            const mockMeeting = {
+                _id: 'mock-' + Date.now(),
+                title: title,
+                status: 'STARTED',
+                inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
+                createdAt: new Date().toISOString()
+            };
+            
+            return {
+                createMeeting: {
+                    success: true,
+                    message: 'Meeting created successfully (mock)',
+                    meeting: mockMeeting
+                }
+            };
+        }
+
+        async function fetchMeetings() {
+            try {
+                log('Fetching meetings...');
+                
+                // Test with mock service
+                const mockMeetings = [
+                    {
+                        _id: 'mock-1',
+                        title: 'Team Meeting',
+                        status: 'STARTED',
+                        inviteCode: 'ABC123',
+                        createdAt: new Date().toISOString()
+                    },
+                    {
+                        _id: 'mock-2',
+                        title: 'Project Review',
+                        status: 'SCHEDULED',
+                        inviteCode: 'DEF456',
+                        createdAt: new Date().toISOString()
+                    }
+                ];
+                
+                log(`Mock meetings: ${JSON.stringify(mockMeetings, null, 2)}`);
+                
+                // Test with real backend
+                try {
+                    const realResult = await makeGraphQLRequest(`
+                        query GetMyMeetings {
+                            meetings {
+                                _id
+                                title
+                                status
+                                inviteCode
+                                createdAt
+                            }
+                        }
+                    `);
+                    log(`Real backend result: ${JSON.stringify(realResult, null, 2)}`);
+                } catch (realError) {
+                    log(`Real backend failed (expected): ${realError.message}`);
+                }
+                
+            } catch (error) {
+                log(`❌ Fetch meetings error: ${error.message}`);
+            }
+        }
+
+        async function testMockService() {
+            try {
+                log('Testing mock service...');
+                
+                // Test health query (should go to real backend)
+                const healthResult = await makeGraphQLRequest(`
+                    query TestQuery {
+                        health
+                    }
+                `);
+                log(`Health query result: ${JSON.stringify(healthResult, null, 2)}`);
+                
+            } catch (error) {
+                log(`❌ Mock service test error: ${error.message}`);
+            }
+        }
+
+        // Initialize dashboard when page loads
+        window.addEventListener('load', initializeDashboard);
+    </script>
+</body>
+</html>
