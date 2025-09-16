@@ -1,0 +1,46 @@
+{
+  "name": "live-solution-apollo",
+  "version": "1.0.0",
+  "description": "GraphQL queries, mutations, and types for Live Solution",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@apollo/client": "^3.8.0",
+    "graphql": "^16.8.0",
+    "graphql-ws": "^5.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "keywords": [
+    "graphql",
+    "apollo",
+    "live-solution",
+    "video-conferencing",
+    "education"
+  ],
+  "author": "Live Solution Team",
+  "license": "MIT",
+  "files": [
+    "**/*.ts",
+    "**/*.tsx",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/live-solution"
+  }
+}
