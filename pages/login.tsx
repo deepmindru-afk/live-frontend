@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../lib/auth-handlers';
-import { LoginCredentials } from '../lib/auth-handlers';
+import { handleLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../lib/simple-auth-handlers';
+import { LoginCredentials } from '../lib/simple-auth-handlers';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({
@@ -65,15 +65,20 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔐 LOGIN FORM: Form submitted!');
+    console.log('🔐 LOGIN FORM: Form data:', formData);
     
     if (!validateForm()) {
+      console.log('🔐 LOGIN FORM: Validation failed');
       return;
     }
 
+    console.log('🔐 LOGIN FORM: Validation passed, calling handleLogin');
     setIsLoading(true);
     
     try {
       const success = await handleLogin(formData);
+      console.log('🔐 LOGIN FORM: handleLogin result:', success);
       if (success) {
         // Get user data and redirect
         const user = await getCurrentUser();
@@ -84,7 +89,7 @@ const LoginPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('🔐 LOGIN FORM: Login error:', error);
     } finally {
       setIsLoading(false);
     }

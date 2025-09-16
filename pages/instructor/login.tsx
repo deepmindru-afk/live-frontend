@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../../lib/auth-handlers';
-import { LoginCredentials } from '../../../lib/auth-handlers';
+import { handleLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
+import { LoginCredentials } from '../../lib/simple-auth-handlers';
 
 const InstructorLoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({
@@ -12,8 +11,6 @@ const InstructorLoginPage: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<LoginCredentials>>({});
-  
-  const router = useRouter();
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -21,18 +18,20 @@ const InstructorLoginPage: React.FC = () => {
       if (isAuthenticated()) {
         const user = await getCurrentUser();
         if (user) {
-          // Check if user is instructor or admin
-          if (user.systemRole === 'TUTOR' || user.systemRole === 'ADMIN') {
-            redirectBasedOnRole(user);
-          } else {
-            // Redirect to member login if not instructor
-            router.push('/login');
-          }
+          redirectBasedOnRole(user);
         }
       }
     };
     checkAuth();
-  }, [router]);
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Partial<LoginCredentials> = {};
@@ -53,22 +52,6 @@ const InstructorLoginPage: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[name as keyof LoginCredentials]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: undefined,
-      }));
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -81,24 +64,8 @@ const InstructorLoginPage: React.FC = () => {
     try {
       const success = await handleLogin(formData);
       if (success) {
-        // Get user data and check if instructor
-        const user = await getCurrentUser();
-        if (user) {
-          if (user.systemRole === 'TUTOR' || user.systemRole === 'ADMIN') {
-            redirectBasedOnRole(user);
-          } else {
-            // Show error if not instructor
-            const { default: Swal } = await import('sweetalert2');
-            await Swal.fire({
-              icon: 'error',
-              title: 'Access Denied',
-              text: 'This account is not authorized for instructor access.',
-              confirmButtonText: 'OK',
-            });
-            // Redirect to member login
-            router.push('/login');
-          }
-        }
+        // Redirect will be handled by the auth handler
+        window.location.href = '/dashboard';
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -135,13 +102,12 @@ const InstructorLoginPage: React.FC = () => {
                   type="email"
                   id="email"
                   name="email"
-                  className={`form-input ${errors.email ? 'error' : ''}`}
+                  className="form-input"
                   placeholder="강사 이메일을 입력하세요"
                   value={formData.email}
                   onChange={handleInputChange}
                   disabled={isLoading}
                 />
-                {errors.email && <div className="error-message">{errors.email}</div>}
               </div>
 
               <div className="form-group">
@@ -150,13 +116,12 @@ const InstructorLoginPage: React.FC = () => {
                   type="password"
                   id="password"
                   name="password"
-                  className={`form-input ${errors.password ? 'error' : ''}`}
+                  className="form-input"
                   placeholder="비밀번호를 입력하세요"
                   value={formData.password}
                   onChange={handleInputChange}
                   disabled={isLoading}
                 />
-                {errors.password && <div className="error-message">{errors.password}</div>}
               </div>
 
               <button 

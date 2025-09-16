@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../../lib/auth-handlers';
-import { SignupData } from '../../../lib/auth-handlers';
+import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
+import { SignupData } from '../../lib/simple-auth-handlers';
 
 const InstructorSignupPage: React.FC = () => {
   const [formData, setFormData] = useState<SignupData>({

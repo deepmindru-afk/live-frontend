@@ -1,37 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
+import React, { useEffect } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
-import { isAuthenticated, getCurrentUser, handleLogout } from '../lib/auth-handlers';
+import { isAuthenticated } from '../lib/simple-auth-handlers';
 
 const HomePage: React.FC = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
   useEffect(() => {
-    const checkAuth = async () => {
-      if (isAuthenticated()) {
-        const userData = await getCurrentUser();
-        setUser(userData);
-      }
-      setLoading(false);
-    };
-    checkAuth();
+    // Redirect to dashboard if user is already authenticated
+    if (isAuthenticated()) {
+      window.location.href = '/dashboard';
+    }
   }, []);
-
-  const handleLogoutClick = () => {
-    handleLogout();
-    setUser(null);
-  };
-
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -55,48 +32,35 @@ const HomePage: React.FC = () => {
             </p>
           </div>
 
-          {user ? (
-            <div className="user-dashboard">
-              <h2>Welcome back, {user.displayName}!</h2>
-              <p>You are logged in as a {user.systemRole}</p>
-              
-              <div className="dashboard-actions">
-                <button className="action-button primary" onClick={handleLogoutClick}>
-                  Logout
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="auth-options">
-              <div className="auth-cards">
-                <div className="auth-card member-card">
-                  <h3>Member Access</h3>
-                  <p>Join meetings and participate in virtual sessions</p>
-                  <div className="card-actions">
-                    <Link href="/login" className="card-button primary">
-                      Member Login
-                    </Link>
-                    <Link href="/signup" className="card-button secondary">
-                      Member Signup
-                    </Link>
-                  </div>
+          <div className="auth-options">
+            <div className="auth-cards">
+              <div className="auth-card member-card">
+                <h3>Member Access</h3>
+                <p>Join meetings and participate in virtual sessions</p>
+                <div className="card-actions">
+                  <a href="/member" className="card-button primary">
+                    Member Portal
+                  </a>
+                  <a href="/login" className="card-button secondary">
+                    Member Login
+                  </a>
                 </div>
+              </div>
 
-                <div className="auth-card instructor-card">
-                  <h3>Instructor Access</h3>
-                  <p>Create and manage virtual meetings and content</p>
-                  <div className="card-actions">
-                    <Link href="/instructor/login" className="card-button primary">
-                      Instructor Login
-                    </Link>
-                    <Link href="/instructor/signup" className="card-button secondary">
-                      Instructor Signup
-                    </Link>
-                  </div>
+              <div className="auth-card instructor-card">
+                <h3>Instructor Access</h3>
+                <p>Create and manage virtual meetings and content</p>
+                <div className="card-actions">
+                  <a href="/instructor" className="card-button primary">
+                    Instructor Portal
+                  </a>
+                  <a href="/instructor/login" className="card-button secondary">
+                    Instructor Login
+                  </a>
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </>

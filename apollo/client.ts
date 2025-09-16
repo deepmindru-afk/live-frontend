@@ -1,8 +1,6 @@
 import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
-import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
-import { createClient } from 'graphql-ws';
 
 // ===== APOLLO CLIENT CONFIGURATION =====
 
@@ -11,28 +9,26 @@ const httpLink = createHttpLink({
   uri: process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql',
 });
 
-// WebSocket Link for subscriptions (if needed)
-const wsLink = new GraphQLWsLink(
-  createClient({
-    url: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3007/graphql',
-    connectionParams: () => {
-      const token = localStorage.getItem('authToken');
-      return {
-        authorization: token ? `Bearer ${token}` : '',
-      };
-    },
-  })
-);
+// WebSocket Link removed for now to fix build issues
 
 // Auth Link to add token to requests
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('authToken');
-  return {
-    headers: {
-      ...headers,
-      authorization: token ? `Bearer ${token}` : '',
-    },
-  };
+  // Check if we're on the client side before accessing localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const token = localStorage.getItem('jwt');
+      return {
+        headers: {
+          ...headers,
+          authorization: token ? `Bearer ${token}` : '',
+        },
+      };
+    } catch (error) {
+      console.warn('localStorage not available:', error);
+      return { headers };
+    }
+  }
+  return { headers };
 });
 
 // Error Link for handling errors
@@ -50,9 +46,15 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
     
     // Handle 401 errors (unauthorized)
     if ('statusCode' in networkError && networkError.statusCode === 401) {
-      // Clear token and redirect to login
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Clear token and redirect to login (only on client side)
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('jwt');
+          window.location.href = '/login';
+        } catch (error) {
+          console.warn('localStorage not available:', error);
+        }
+      }
     }
   }
 });
@@ -106,18 +108,38 @@ export const apolloClient = new ApolloClient({
 
 // Token management
 export const setAuthToken = (token: string) => {
-  localStorage.setItem('authToken', token);
-  // Reset Apollo Client cache to apply new token
-  apolloClient.resetStore();
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('jwt', token);
+      // Reset Apollo Client cache to apply new token
+      apolloClient.resetStore();
+    } catch (error) {
+      console.warn('localStorage not available:', error);
+    }
+  }
 };
 
 export const getAuthToken = (): string | null => {
-  return localStorage.getItem('authToken');
+  if (typeof window !== 'undefined') {
+    try {
+      return localStorage.getItem('jwt');
+    } catch (error) {
+      console.warn('localStorage not available:', error);
+      return null;
+    }
+  }
+  return null;
 };
 
 export const clearAuthToken = () => {
-  localStorage.removeItem('authToken');
-  apolloClient.clearStore();
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('jwt');
+      apolloClient.clearStore();
+    } catch (error) {
+      console.warn('localStorage not available:', error);
+    }
+  }
 };
 
 // Check if user is authenticated

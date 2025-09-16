@@ -63,6 +63,49 @@ export const CHANGE_PASSWORD = gql`
   }
 `;
 
+export const LOGOUT = gql`
+  mutation Logout {
+    logout {
+      success
+      message
+      timestamp
+    }
+  }
+`;
+
+export const UPLOAD_PROFILE_IMAGE = gql`
+  mutation UploadProfileImage($file: String!) {
+    uploadProfileImage(file: $file) {
+      success
+      message
+      avatarUrl
+      user {
+        _id
+        email
+        displayName
+        avatarUrl
+        systemRole
+      }
+    }
+  }
+`;
+
+export const DELETE_PROFILE_IMAGE = gql`
+  mutation DeleteProfileImage {
+    deleteProfileImage {
+      success
+      message
+      user {
+        _id
+        email
+        displayName
+        avatarUrl
+        systemRole
+      }
+    }
+  }
+`;
+
 export const DELETE_MEMBER = gql`
   mutation DeleteMember($id: ID!) {
     deleteMember(id: $id) {

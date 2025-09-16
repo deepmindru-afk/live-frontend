@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../lib/auth-handlers';
-import { SignupData } from '../lib/auth-handlers';
+import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../lib/simple-auth-handlers';
+import { SignupData } from '../lib/simple-auth-handlers';
 
 const SignupPage: React.FC = () => {
   const [formData, setFormData] = useState<SignupData>({
@@ -87,15 +87,29 @@ const SignupPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🚀 SIGNUP FORM: Form submitted!');
+    console.log('🚀 SIGNUP FORM: Form data:', formData);
+    console.log('🚀 SIGNUP FORM: Confirm password:', confirmPassword);
     
     if (!validateForm()) {
+      console.log('🚀 SIGNUP FORM: Validation failed');
       return;
     }
 
+    console.log('🚀 SIGNUP FORM: Validation passed, calling handleSignup');
     setIsLoading(true);
     
     try {
-      const success = await handleSignup(formData);
+      // Only send required fields to backend
+      const signupData = {
+        displayName: formData.displayName,
+        email: formData.email,
+        password: formData.password,
+      };
+      console.log('🚀 SIGNUP FORM: Sending data:', signupData);
+      
+      const success = await handleSignup(signupData);
+      console.log('🚀 SIGNUP FORM: handleSignup result:', success);
       if (success) {
         // Get user data and redirect
         const user = await getCurrentUser();
@@ -106,7 +120,7 @@ const SignupPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('🚀 SIGNUP FORM: Signup error:', error);
     } finally {
       setIsLoading(false);
     }
