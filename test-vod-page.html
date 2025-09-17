@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOD Management Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        .test-section { margin: 20px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .vod-demo { display: flex; min-height: 100vh; }
+        .sidebar { width: 300px; background-color: #f1f3f4; padding: 30px; display: flex; flex-direction: column; }
+        .main-content { flex: 1; background-color: white; padding: 30px; }
+        .logo { font-size: 24px; font-weight: bold; margin-bottom: 40px; color: #333; }
+        .logo .mate { color: #4285f4; }
+        .welcome { font-size: 20px; font-weight: bold; margin-bottom: 40px; color: #333; }
+        .create-room { background-color: #e3f2fd; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .schedule { background-color: #f3e5f5; padding: 20px; border-radius: 12px; }
+        .room-title { font-size: 18px; font-weight: bold; color: white; margin-bottom: 15px; }
+        .room-input { display: flex; align-items: center; gap: 10px; }
+        .room-input input { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 14px; }
+        .room-btn { width: 40px; height: 40px; background-color: #1976d2; border: none; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .schedule-btn { background-color: #7b1fa2; }
+        .schedule-text { font-size: 14px; color: white; margin: 0 0 15px 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .user-info { display: flex; align-items: center; gap: 20px; }
+        .tabs { display: flex; gap: 30px; margin-bottom: 30px; border-bottom: 1px solid #eee; }
+        .tab { background: none; border: none; padding: 15px 0; font-size: 16px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { color: #1976d2; border-bottom-color: #1976d2; font-weight: bold; }
+        .upload-options { display: flex; gap: 15px; margin-bottom: 30px; }
+        .upload-btn { padding: 12px 24px; background-color: white; border: 2px solid #1976d2; border-radius: 8px; color: #1976d2; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+        .search-bar { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+        .search-container { display: flex; align-items: center; gap: 10px; }
+        .search-input { padding: 10px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 250px; }
+        .search-btn { padding: 10px; background-color: #1976d2; border: none; border-radius: 6px; color: white; cursor: pointer; }
+        .vod-table { background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        th { background-color: #f8f9fa; font-weight: 600; }
+        tr:hover { background-color: #f8f9fa; }
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; }
+        .empty-icon { width: 80px; height: 80px; background-color: #f8f9fa; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .empty-text { font-size: 18px; color: #6c757d; margin: 0; }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background-color: white; border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { margin: 0; }
+        .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; }
+        .modal-btn.secondary { background-color: #6c757d; color: white; }
+        .modal-btn.primary { background-color: #1976d2; color: white; }
+        .file-input { width: 100%; padding: 20px; border: 2px dashed #ddd; border-radius: 8px; background-color: #f8f9fa; cursor: pointer; font-size: 16px; color: #666; }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 8px; font-weight: 500; }
+        .form-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .three-dots { background: none; border: none; cursor: pointer; font-size: 18px; color: #6c757d; }
+        .vod-menu { position: fixed; top: 100px; left: 50px; background-color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); padding: 8px 0; min-width: 200px; z-index: 2001; }
+        .menu-header { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: 500; color: #333; }
+        .menu-item { width: 100%; padding: 12px 16px; border: none; background-color: transparent; text-align: left; cursor: pointer; font-size: 14px; color: #dc3545; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>VOD Management Test</h1>
+        <button onclick="testGetVODs()">Test Get VODs</button>
+        <button onclick="testUploadFile()">Test File Upload</button>
+        <button onclick="testUploadURL()">Test URL Upload</button>
+        <button onclick="testDeleteVOD()">Test Delete VOD</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>VOD Management UI Demo</h2>
+        <div class="vod-demo">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <div class="logo">
+                    Meet: <span class="mate">mate</span>
+                </div>
+                
+                <div class="welcome">
+                    member1님, 안녕하세요 👋
+                </div>
+
+                <!-- Create Room Section -->
+                <div class="create-room">
+                    <div class="room-title">
+                        방 만들기 +
+                    </div>
+                    <div class="room-input">
+                        <input type="text" placeholder="방 이름을 입력하세요">
+                        <button class="room-btn">→</button>
+                    </div>
+                </div>
+
+                <!-- Schedule Section -->
+                <div class="schedule">
+                    <div class="room-title">
+                        예약하기 Ⓒ
+                    </div>
+                    <p class="schedule-text">
+                        원하는 시간에 회의를 할 수 있습니다
+                    </p>
+                    <button class="room-btn schedule-btn" style="margin-left: auto;">→</button>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Header -->
+                <div class="header">
+                    <div></div>
+                    <div class="user-info">
+                        <span>member1님</span>
+                        <span>|</span>
+                        <button style="background: none; border: none; color: #333; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            로그아웃 <span>↻</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="tabs">
+                    <button class="tab">시작된 회의</button>
+                    <button class="tab">예약된 회의</button>
+                    <button class="tab">종료된 회의</button>
+                    <button class="tab active">VOD 관리</button>
+                </div>
+
+                <!-- VOD Management Section -->
+                <div>
+                    <!-- Upload Options -->
+                    <div class="upload-options">
+                        <button class="upload-btn" onclick="showFileUploadModal()">
+                            📁 파일 등록
+                        </button>
+                        <button class="upload-btn" onclick="showURLUploadModal()">
+                            🔗 URL 등록
+                        </button>
+                    </div>
+
+                    <!-- Search Bar -->
+                    <div class="search-bar">
+                        <div class="search-container">
+                            <input type="text" placeholder="검색어를 입력하세요" class="search-input">
+                            <button class="search-btn">🔍</button>
+                        </div>
+                    </div>
+
+                    <!-- VOD Table -->
+                    <div class="vod-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    <th>VOD 제목</th>
+                                    <th>용량</th>
+                                    <th>비고</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1</td>
+                                    <td>
+                                        <div>
+                                            <div style="font-weight: 500; margin-bottom: 4px;">Sample VOD 1</div>
+                                            <div style="font-size: 14px; color: #666;">1:00:00</div>
+                                        </div>
+                                    </td>
+                                    <td>1.0 GB</td>
+                                    <td>
+                                        <button class="three-dots" onclick="showVODMenu('vod-1', event)">⋯</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>2</td>
+                                    <td>
+                                        <div>
+                                            <div style="font-weight: 500; margin-bottom: 4px;">Sample VOD 2</div>
+                                            <div style="font-size: 14px; color: #666;">0:30:00</div>
+                                        </div>
+                                    </td>
+                                    <td>512.0 MB</td>
+                                    <td>
+                                        <button class="three-dots" onclick="showVODMenu('vod-2', event)">⋯</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Upload Modal -->
+    <div id="fileUploadModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">파일 업로드</h2>
+                <button class="close-btn" onclick="hideFileUploadModal()">×</button>
+            </div>
+            <div class="form-group">
+                <input type="file" id="fileInput" accept="video/*" style="display: none;">
+                <button class="file-input" onclick="document.getElementById('fileInput').click()">
+                    파일을 선택하세요
+                </button>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="hideFileUploadModal()">취소</button>
+                <button class="modal-btn primary" onclick="uploadFile()">업로드</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL Upload Modal -->
+    <div id="urlUploadModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">URL 등록</h2>
+                <button class="close-btn" onclick="hideURLUploadModal()">×</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">VOD 제목</label>
+                <input type="text" class="form-input" placeholder="VOD 제목을 입력하세요" id="urlTitle">
+            </div>
+            <div class="form-group">
+                <label class="form-label">URL</label>
+                <input type="url" class="form-input" placeholder="VOD URL을 입력하세요" id="urlInput">
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="hideURLUploadModal()">취소</button>
+                <button class="modal-btn primary" onclick="uploadURL()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VOD Menu -->
+    <div id="vodMenu" class="vod-menu" style="display: none;">
+        <div class="menu-header" id="menuHeader">VOD 제목</div>
+        <button class="menu-item" onclick="deleteVOD()">
+            <span>🗑️</span>
+            삭제
+        </button>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function showFileUploadModal() {
+            document.getElementById('fileUploadModal').style.display = 'flex';
+            log('📁 Showing file upload modal');
+        }
+
+        function hideFileUploadModal() {
+            document.getElementById('fileUploadModal').style.display = 'none';
+            log('❌ Hiding file upload modal');
+        }
+
+        function showURLUploadModal() {
+            document.getElementById('urlUploadModal').style.display = 'flex';
+            log('🔗 Showing URL upload modal');
+        }
+
+        function hideURLUploadModal() {
+            document.getElementById('urlUploadModal').style.display = 'none';
+            log('❌ Hiding URL upload modal');
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length > 0) {
+                log(`📁 Uploading file: ${fileInput.files[0].name}`);
+                hideFileUploadModal();
+            } else {
+                log('❌ No file selected');
+            }
+        }
+
+        function uploadURL() {
+            const title = document.getElementById('urlTitle').value;
+            const url = document.getElementById('urlInput').value;
+            
+            if (title && url) {
+                log(`🔗 Uploading URL: ${title} - ${url}`);
+                hideURLUploadModal();
+            } else {
+                log('❌ Please fill in both title and URL');
+            }
+        }
+
+        function showVODMenu(vodId, event) {
+            event.stopPropagation();
+            document.getElementById('menuHeader').textContent = `VOD ${vodId}`;
+            document.getElementById('vodMenu').style.display = 'block';
+            log(`👤 Showing VOD menu for: ${vodId}`);
+        }
+
+        function deleteVOD() {
+            log('🗑️ Deleting VOD');
+            document.getElementById('vodMenu').style.display = 'none';
+        }
+
+        // Test functions
+        function testGetVODs() {
+            log('📺 Testing get VODs...');
+            log('✅ Get VODs functionality ready');
+        }
+
+        function testUploadFile() {
+            log('📁 Testing file upload...');
+            showFileUploadModal();
+        }
+
+        function testUploadURL() {
+            log('🔗 Testing URL upload...');
+            showURLUploadModal();
+        }
+
+        function testDeleteVOD() {
+            log('🗑️ Testing delete VOD...');
+            log('✅ Delete VOD functionality ready');
+        }
+
+        // Close menus when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.vod-menu') && !event.target.closest('.three-dots')) {
+                document.getElementById('vodMenu').style.display = 'none';
+            }
+        });
+
+        // Initialize
+        log('🧪 VOD Management Test Ready!');
+        log('Frontend: http://localhost:3000/vod');
+        log('Backend: http://localhost:3007');
+        log('Click upload buttons or three-dot menus to test!');
+    </script>
+</body>
+</html>

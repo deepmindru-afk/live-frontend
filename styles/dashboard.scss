@@ -304,6 +304,22 @@
                   }
                 }
               }
+
+              .three-dots {
+                background: none !important;
+                border: none !important;
+                cursor: pointer;
+                font-size: 18px;
+                color: #6c757d;
+                padding: 4px 8px;
+                border-radius: 4px;
+                transition: all 0.2s;
+
+                &:hover {
+                  background: #f8f9fa !important;
+                  color: #495057;
+                }
+              }
             }
           }
         }

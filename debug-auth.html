@@ -3,271 +3,292 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auth Debug</title>
+    <title>Authentication Debug</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .debug-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
         .success { background-color: #d4edda; border-color: #c3e6cb; }
         .error { background-color: #f8d7da; border-color: #f5c6cb; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        input { padding: 8px; margin: 5px; width: 200px; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
         .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
     </style>
 </head>
 <body>
-    <h1>Authentication Debug</h1>
-    
-    <div class="test-section">
-        <h2>Test Authentication</h2>
-        <input type="email" id="email" placeholder="Email" value="test@example.com">
-        <input type="password" id="password" placeholder="Password" value="password123">
-        <button onclick="testLogin()">Test Login</button>
-        <button onclick="testSignup()">Test Signup</button>
-        <button onclick="testGetCurrentUser()">Get Current User</button>
-        <button onclick="testIsAuthenticated()">Check Auth Status</button>
-        <button onclick="clearLog()">Clear Log</button>
+    <div class="debug-section">
+        <h1>🔐 Authentication Debug</h1>
+        <p>Debugging why the dashboard is not loading meetings data.</p>
     </div>
 
-    <div class="test-section">
-        <h2>Test GraphQL Requests</h2>
-        <button onclick="testHealthQuery()">Test Health Query</button>
-        <button onclick="testCreateMeeting()">Test Create Meeting</button>
-        <button onclick="testFetchMeetings()">Test Fetch Meetings</button>
+    <div class="debug-section">
+        <h2>Current Authentication Status</h2>
+        <div id="authStatus" class="log">Checking...</div>
+        <button class="btn-primary" onclick="checkAuthStatus()">Check Auth Status</button>
     </div>
 
-    <div class="test-section">
-        <h2>Debug Log</h2>
-        <div id="log" class="log">Click a button to start testing...</div>
+    <div class="debug-section">
+        <h2>Test Backend Connection</h2>
+        <button class="btn-success" onclick="testBackendConnection()">Test Backend</button>
+        <button class="btn-warning" onclick="testMeetingsWithAuth()">Test Meetings with Auth</button>
+        <div id="backendResults" class="log">Click a button to test...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Login Test</h2>
+        <div>
+            <input type="email" id="email" placeholder="Email" value="tutor2@example.com" style="padding: 8px; margin: 5px; width: 200px;">
+            <input type="password" id="password" placeholder="Password" value="test123" style="padding: 8px; margin: 5px; width: 200px;">
+            <button class="btn-primary" onclick="testLogin()">Test Login</button>
+        </div>
+        <div id="loginResults" class="log">Enter credentials and click Test Login...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>What We Know</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>✅ Backend is Working</h3>
+                <div class="log" style="background-color: #d4edda;">
+Backend Status: ✅ WORKING
+- getMeetings endpoint: ✅ Available
+- Returns 17 meetings when authenticated
+- Response structure: ✅ Correct
+- Field names: ✅ Correct (scheduledFor, status, etc.)
+
+Test with curl:
+curl -X POST http://localhost:3007/graphql \
+  -H "Authorization: Bearer TOKEN" \
+  -d '{"query":"query { getMeetings(input: {}) { total meetings { _id title status } } }"}'
+
+Result: 17 meetings returned ✅
+                </div>
+            </div>
+            <div>
+                <h3>❌ Frontend Issue</h3>
+                <div class="log" style="background-color: #f8d7da;">
+Frontend Status: ❌ NOT WORKING
+- Dashboard shows: "등록된 회의가 없습니다"
+- No meetings displayed
+- Likely causes:
+  1. User not logged in (no JWT token)
+  2. JWT token expired
+  3. Token not sent in requests
+  4. Authentication flow broken
+
+Need to check:
+- localStorage.getItem('token')
+- Authorization header in requests
+- User login status
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        const GRAPHQL_ENDPOINT = 'http://localhost:3007/graphql';
-        
-        function log(message) {
-            const logDiv = document.getElementById('log');
+        function log(elementId, message) {
+            const element = document.getElementById(elementId);
             const timestamp = new Date().toISOString();
-            logDiv.textContent += `[${timestamp}] ${message}\n`;
-            logDiv.scrollTop = logDiv.scrollHeight;
+            element.textContent += `[${timestamp}] ${message}\n`;
+            element.scrollTop = element.scrollHeight;
         }
 
-        function clearLog() {
-            document.getElementById('log').textContent = '';
+        function checkAuthStatus() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            log('authStatus', '=== AUTHENTICATION STATUS ===');
+            log('authStatus', `Token exists: ${!!token}`);
+            log('authStatus', `Token value: ${token ? token.substring(0, 50) + '...' : 'null'}`);
+            log('authStatus', `User exists: ${!!user}`);
+            
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    log('authStatus', `User data: ${JSON.stringify(userData, null, 2)}`);
+                } catch (e) {
+                    log('authStatus', `User data parse error: ${e.message}`);
+                }
+            }
+            
+            if (!token) {
+                log('authStatus', '❌ NO TOKEN - User needs to login');
+            } else {
+                log('authStatus', '✅ Token found - checking if valid...');
+                testTokenValidity(token);
+            }
         }
 
-        async function makeGraphQLRequest(query, variables = {}) {
-            const token = localStorage.getItem('jwt');
-            
-            log(`Making GraphQL request to: ${GRAPHQL_ENDPOINT}`);
-            log(`Query: ${query.substring(0, 100)}...`);
-            log(`Variables: ${JSON.stringify(variables)}`);
-            log(`Token available: ${!!token}`);
+        async function testTokenValidity(token) {
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        query: 'query { me { _id email displayName systemRole } }'
+                    })
+                });
 
-            const response = await fetch(GRAPHQL_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
-                },
-                body: JSON.stringify({ query, variables }),
-            });
+                const data = await response.json();
+                log('authStatus', `Token validation response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log('authStatus', '❌ Token is invalid or expired');
+                } else if (data.data && data.data.me) {
+                    log('authStatus', '✅ Token is valid and working');
+                }
+            } catch (error) {
+                log('authStatus', `❌ Token validation error: ${error.message}`);
+            }
+        }
 
-            log(`Response status: ${response.status}`);
+        async function testBackendConnection() {
+            log('backendResults', '🔍 Testing backend connection...');
             
-            if (!response.ok) {
-                const errorText = await response.text();
-                log(`Error response: ${errorText}`);
-                throw new Error(`HTTP error! status: ${response.status}`);
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: 'query { health }'
+                    })
+                });
+
+                const data = await response.json();
+                log('backendResults', `Backend response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.data && data.data.health) {
+                    log('backendResults', '✅ Backend is reachable');
+                } else {
+                    log('backendResults', '❌ Backend health check failed');
+                }
+            } catch (error) {
+                log('backendResults', `❌ Backend connection error: ${error.message}`);
+            }
+        }
+
+        async function testMeetingsWithAuth() {
+            log('backendResults', '📊 Testing meetings query with authentication...');
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                log('backendResults', '❌ No token found - cannot test authenticated request');
+                return;
             }
 
-            const data = await response.json();
-            log(`Response data: ${JSON.stringify(data, null, 2)}`);
-            
-            if (data.errors) {
-                log(`GraphQL errors: ${JSON.stringify(data.errors, null, 2)}`);
-                throw new Error(data.errors[0]?.message || 'GraphQL error');
-            }
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetMeetings($input: MeetingQueryInput!) {
+                                getMeetings(input: $input) {
+                                    total
+                                    meetings {
+                                        _id
+                                        title
+                                        status
+                                        scheduledFor
+                                        inviteCode
+                                        createdAt
+                                        participantCount
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {}
+                        }
+                    })
+                });
 
-            return data.data;
+                const data = await response.json();
+                log('backendResults', `Meetings response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log('backendResults', `❌ GraphQL errors: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.getMeetings) {
+                    const meetings = data.data.getMeetings.meetings;
+                    log('backendResults', `✅ Found ${meetings.length} meetings (Total: ${data.data.getMeetings.total})`);
+                } else {
+                    log('backendResults', '❌ Unexpected response format');
+                }
+            } catch (error) {
+                log('backendResults', `❌ Meetings query error: ${error.message}`);
+            }
         }
 
         async function testLogin() {
-            try {
-                log('Testing login...');
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                
-                const result = await makeGraphQLRequest(`
-                    mutation Login($email: String!, $password: String!) {
-                        login(email: $email, password: $password) {
-                            token
-                            user {
-                                _id
-                                displayName
-                                email
-                                systemRole
-                            }
-                        }
-                    }
-                `, { email, password });
-
-                if (result.login && result.login.token) {
-                    localStorage.setItem('jwt', result.login.token);
-                    log('✅ Login successful!');
-                    log(`User: ${result.login.user.displayName}`);
-                } else {
-                    log('❌ Login failed - no token received');
-                }
-            } catch (error) {
-                log(`❌ Login error: ${error.message}`);
-            }
-        }
-
-        async function testSignup() {
-            try {
-                log('Testing signup...');
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                
-                const result = await makeGraphQLRequest(`
-                    mutation Signup($displayName: String!, $email: String!, $password: String!) {
-                        signup(input: { displayName: "Test User", email: $email, password: $password }) {
-                            token
-                            user {
-                                _id
-                                displayName
-                                email
-                                systemRole
-                            }
-                        }
-                    }
-                `, { email, password });
-
-                if (result.signup && result.signup.token) {
-                    localStorage.setItem('jwt', result.signup.token);
-                    log('✅ Signup successful!');
-                    log(`User: ${result.signup.user.displayName}`);
-                } else {
-                    log('❌ Signup failed - no token received');
-                }
-            } catch (error) {
-                log(`❌ Signup error: ${error.message}`);
-            }
-        }
-
-        async function testGetCurrentUser() {
-            try {
-                log('Testing getCurrentUser...');
-                const result = await makeGraphQLRequest(`
-                    query GetCurrentUser {
-                        me {
-                            _id
-                            displayName
-                            email
-                            systemRole
-                        }
-                    }
-                `);
-
-                if (result.me) {
-                    log('✅ GetCurrentUser successful!');
-                    log(`User: ${JSON.stringify(result.me, null, 2)}`);
-                } else {
-                    log('❌ GetCurrentUser failed - no user data');
-                }
-            } catch (error) {
-                log(`❌ GetCurrentUser error: ${error.message}`);
-            }
-        }
-
-        function testIsAuthenticated() {
-            const token = localStorage.getItem('jwt');
-            log(`Token in localStorage: ${token ? 'Yes' : 'No'}`);
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
             
-            if (token) {
-                try {
-                    const payload = JSON.parse(atob(token.split('.')[1]));
-                    const now = Math.floor(Date.now() / 1000);
-                    const isValid = payload.exp > now;
-                    log(`Token valid: ${isValid}`);
-                    log(`Token payload: ${JSON.stringify(payload, null, 2)}`);
-                } catch (error) {
-                    log(`❌ Token parsing error: ${error.message}`);
-                }
-            }
-        }
-
-        async function testHealthQuery() {
+            log('loginResults', `🔐 Testing login with: ${email}`);
+            
             try {
-                log('Testing health query...');
-                const result = await makeGraphQLRequest(`
-                    query TestQuery {
-                        health
-                    }
-                `);
-                log('✅ Health query successful!');
-                log(`Health: ${result.health}`);
-            } catch (error) {
-                log(`❌ Health query error: ${error.message}`);
-            }
-        }
-
-        async function testCreateMeeting() {
-            try {
-                log('Testing createMeeting...');
-                const result = await makeGraphQLRequest(`
-                    mutation CreateMeeting($input: CreateMeetingInput!) {
-                        createMeeting(input: $input) {
-                            success
-                            message
-                            meeting {
-                                _id
-                                title
-                                status
-                                inviteCode
-                                createdAt
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation TutorLogin($input: LoginInput!) {
+                                tutorLogin(input: $input) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
                             }
+                        `,
+                        variables: {
+                            input: { email, password }
                         }
-                    }
-                `, {
-                    input: {
-                        title: 'Test Meeting',
-                        scheduledStartAt: null,
-                        isPrivate: false,
-                        notes: 'Test meeting'
-                    }
+                    })
                 });
-                log('✅ CreateMeeting successful!');
-                log(`Result: ${JSON.stringify(result, null, 2)}`);
+
+                const data = await response.json();
+                log('loginResults', `Login response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log('loginResults', `❌ Login failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.tutorLogin) {
+                    const { token, user } = data.data.tutorLogin;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    log('loginResults', '✅ Login successful! Token saved to localStorage');
+                    log('loginResults', `User: ${user.displayName} (${user.systemRole})`);
+                    
+                    // Test meetings after login
+                    setTimeout(() => {
+                        testMeetingsWithAuth();
+                    }, 1000);
+                } else {
+                    log('loginResults', '❌ Unexpected login response format');
+                }
             } catch (error) {
-                log(`❌ CreateMeeting error: ${error.message}`);
+                log('loginResults', `❌ Login error: ${error.message}`);
             }
         }
 
-        async function testFetchMeetings() {
-            try {
-                log('Testing fetchMeetings...');
-                const result = await makeGraphQLRequest(`
-                    query GetMyMeetings {
-                        meetings {
-                            _id
-                            title
-                            status
-                            inviteCode
-                            createdAt
-                        }
-                    }
-                `);
-                log('✅ FetchMeetings successful!');
-                log(`Meetings: ${JSON.stringify(result, null, 2)}`);
-            } catch (error) {
-                log(`❌ FetchMeetings error: ${error.message}`);
-            }
-        }
-
-        // Initialize
-        log('Auth Debug Tool Ready!');
-        log('Frontend: http://localhost:3000');
-        log('Backend: http://localhost:3007');
+        // Auto-check on page load
+        window.onload = function() {
+            checkAuthStatus();
+        };
     </script>
 </body>
 </html>

@@ -19,8 +19,22 @@ const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhos
 
 // Login mutation
 const LOGIN_MUTATION = `
-  mutation Login($email: String!, $password: String!) {
-    login(email: $email, password: $password) {
+  mutation Login($input: LoginInput!) {
+    login(input: $input) {
+      token
+      user {
+        _id
+        displayName
+        email
+        systemRole
+      }
+    }
+  }
+`;
+
+const TUTOR_LOGIN_MUTATION = `
+  mutation TutorLogin($input: LoginInput!) {
+    tutorLogin(input: $input) {
       token
       user {
         _id
@@ -36,6 +50,20 @@ const LOGIN_MUTATION = `
 const SIGNUP_MUTATION = `
   mutation Signup($displayName: String!, $email: String!, $password: String!) {
     signup(input: { displayName: $displayName, email: $email, password: $password }) {
+      token
+      user {
+        _id
+        displayName
+        email
+        systemRole
+      }
+    }
+  }
+`;
+
+const TUTOR_SIGNUP_MUTATION = `
+  mutation TutorSignup($displayName: String!, $email: String!, $password: String!, $department: String) {
+    tutorSignup(input: { displayName: $displayName, email: $email, password: $password, department: $department }) {
       token
       user {
         _id
@@ -72,9 +100,10 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   
   console.log('🌐 GRAPHQL: Making request to:', GRAPHQL_ENDPOINT);
   console.log('🌐 GRAPHQL: Query type:', typeof queryString);
-  console.log('🌐 GRAPHQL: Query:', queryString);
+  console.log('🌐 GRAPHQL: Query:', queryString.substring(0, 200) + '...');
   console.log('🌐 GRAPHQL: Variables:', variables);
   console.log('🌐 GRAPHQL: Token available:', !!token);
+  console.log('🌐 GRAPHQL: Token preview:', token ? token.substring(0, 50) + '...' : 'null');
   console.log('🌐 GRAPHQL: Environment check - NEXT_PUBLIC_GRAPHQL_URL:', process.env.NEXT_PUBLIC_GRAPHQL_URL);
 
   const requestBody = {
@@ -82,14 +111,22 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     variables,
   };
 
-  console.log('🌐 GRAPHQL: Request body:', JSON.stringify(requestBody, null, 2));
+  console.log('🌐 GRAPHQL: Request body preview:', JSON.stringify(requestBody, null, 2).substring(0, 500) + '...');
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log('🌐 GRAPHQL: Authorization header added');
+  } else {
+    console.warn('🌐 GRAPHQL: No token available - request will be unauthenticated');
+  }
   
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-    },
+    headers,
     body: JSON.stringify(requestBody),
   });
 
@@ -105,7 +142,14 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   let data;
   try {
     data = await response.json();
-    console.log('🌐 GRAPHQL: Response data:', data);
+    console.log('🌐 GRAPHQL: Response data preview:', JSON.stringify(data, null, 2).substring(0, 1000) + '...');
+    
+    // Check for GraphQL errors
+    if (data.errors) {
+      console.error('🌐 GRAPHQL: GraphQL errors in response:', data.errors);
+      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+    }
+    
   } catch (jsonError) {
     console.error('🌐 GRAPHQL: Failed to parse JSON response:', jsonError);
     throw new Error('Invalid JSON response from server');
@@ -127,8 +171,10 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
     console.log('🔐 LOGIN: GraphQL endpoint:', GRAPHQL_ENDPOINT);
     
     const data = await makeGraphQLRequest(LOGIN_MUTATION, {
-      email: credentials.email,
-      password: credentials.password,
+      input: {
+        email: credentials.email,
+        password: credentials.password,
+      }
     });
 
     console.log('🔐 LOGIN: Response received:', data);
@@ -147,6 +193,39 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
   } catch (error: any) {
     console.error('Login error:', error);
     alert(`Login failed: ${error.message}`);
+    return false;
+  }
+};
+
+// Handle tutor login
+export const handleTutorLogin = async (credentials: LoginCredentials): Promise<boolean> => {
+  try {
+    console.log('🎓 TUTOR LOGIN: Attempting tutor login with:', credentials);
+    console.log('🎓 TUTOR LOGIN: GraphQL endpoint:', GRAPHQL_ENDPOINT);
+    
+    const data = await makeGraphQLRequest(TUTOR_LOGIN_MUTATION, {
+      input: {
+        email: credentials.email,
+        password: credentials.password,
+      }
+    });
+
+    console.log('🎓 TUTOR LOGIN: Response received:', data);
+
+    if (data.tutorLogin && data.tutorLogin.token) {
+      // Save JWT to localStorage
+      setAuthToken(data.tutorLogin.token);
+      
+      // Show success message
+      alert(`Welcome back, Tutor ${data.tutorLogin.user.displayName}!`);
+      
+      return true;
+    } else {
+      throw new Error('Tutor login failed - no token received');
+    }
+  } catch (error: any) {
+    console.error('Tutor login error:', error);
+    alert(`Tutor login failed: ${error.message}`);
     return false;
   }
 };
@@ -179,6 +258,39 @@ export const handleSignup = async (input: SignupData): Promise<boolean> => {
   } catch (error: any) {
     console.error('Signup error:', error);
     alert(`Signup failed: ${error.message}`);
+    return false;
+  }
+};
+
+// Handle tutor signup
+export const handleTutorSignup = async (input: SignupData): Promise<boolean> => {
+  try {
+    console.log('🎓 TUTOR SIGNUP: Attempting tutor signup with:', input);
+    console.log('🎓 TUTOR SIGNUP: GraphQL endpoint:', GRAPHQL_ENDPOINT);
+    
+    const data = await makeGraphQLRequest(TUTOR_SIGNUP_MUTATION, {
+      displayName: input.displayName,
+      email: input.email,
+      password: input.password,
+      department: input.department || '',
+    });
+
+    console.log('🎓 TUTOR SIGNUP: Response received:', data);
+
+    if (data.tutorSignup && data.tutorSignup.token) {
+      // Save JWT to localStorage
+      setAuthToken(data.tutorSignup.token);
+      
+      // Show success message
+      alert(`Welcome to Meet: mate as a Tutor, ${data.tutorSignup.user.displayName}!`);
+      
+      return true;
+    } else {
+      throw new Error('Tutor signup failed - no token received');
+    }
+  } catch (error: any) {
+    console.error('Tutor signup error:', error);
+    alert(`Tutor signup failed: ${error.message}`);
     return false;
   }
 };
@@ -274,11 +386,23 @@ export const handleLogout = async (): Promise<boolean> => {
 export const redirectBasedOnRole = (user: any): void => {
   if (typeof window === 'undefined') return;
 
+  console.log('🔄 REDIRECT: Redirecting user based on role:', user.systemRole);
+
   switch (user.systemRole) {
     case 'ADMIN':
+      console.log('🔄 REDIRECT: Admin user - redirecting to dashboard');
+      window.location.href = '/dashboard';
+      break;
     case 'TUTOR':
+      console.log('🔄 REDIRECT: Tutor user - redirecting to instructor dashboard');
+      window.location.href = '/instructor';
+      break;
     case 'MEMBER':
+      console.log('🔄 REDIRECT: Member user - redirecting to member dashboard');
+      window.location.href = '/member';
+      break;
     default:
+      console.log('🔄 REDIRECT: Unknown role - redirecting to dashboard');
       window.location.href = '/dashboard';
       break;
   }
@@ -288,12 +412,25 @@ export const redirectBasedOnRole = (user: any): void => {
 export const setAuthToken = (token: string) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('jwt', token);
+    localStorage.setItem('token', token); // Also store as 'token' for compatibility
+    console.log('🔐 AUTH: Token stored in localStorage');
   }
 };
 
 export const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('jwt');
+    // Try both 'jwt' and 'token' keys for compatibility
+    const jwtToken = localStorage.getItem('jwt');
+    const tokenKey = localStorage.getItem('token');
+    const token = jwtToken || tokenKey;
+    
+    if (token) {
+      console.log('🔐 AUTH: Token found in localStorage');
+      return token;
+    } else {
+      console.log('🔐 AUTH: No token found in localStorage');
+      return null;
+    }
   }
   return null;
 };
@@ -301,5 +438,46 @@ export const getAuthToken = (): string | null => {
 export const clearAuthToken = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('jwt');
+    localStorage.removeItem('token'); // Clear both keys
+    localStorage.removeItem('user'); // Also clear user data
+    console.log('🔐 AUTH: All auth data cleared from localStorage');
   }
+};
+
+// Force login for testing
+export const forceLogin = async (email: string = 'tutor2@example.com', password: string = 'test123'): Promise<boolean> => {
+  console.log('🔐 FORCE LOGIN: Attempting forced login...');
+  
+  try {
+    const result = await handleTutorLogin({ email, password });
+    if (result) {
+      console.log('🔐 FORCE LOGIN: Success! User logged in');
+      return true;
+    } else {
+      console.log('🔐 FORCE LOGIN: Failed to login');
+      return false;
+    }
+  } catch (error) {
+    console.error('🔐 FORCE LOGIN: Error:', error);
+    return false;
+  }
+};
+
+// Test authentication status
+export const testAuthStatus = (): { isAuth: boolean; token: string | null; user: any } => {
+  const isAuth = isAuthenticated();
+  const token = getAuthToken();
+  const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+  let user = null;
+  
+  if (userStr) {
+    try {
+      user = JSON.parse(userStr);
+    } catch (e) {
+      console.error('Failed to parse user data:', e);
+    }
+  }
+  
+  console.log('🔐 AUTH STATUS:', { isAuth, token: token ? token.substring(0, 50) + '...' : null, user });
+  return { isAuth, token, user };
 };

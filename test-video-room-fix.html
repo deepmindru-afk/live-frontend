@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Room Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .fix-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .before { background-color: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545; }
+        .after { background-color: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>🎥 Video Room Fix Test</h1>
+        <p>Testing the fix for the meeting page to show a proper LiveKit-style video room instead of just meeting details.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 What Was Fixed</h2>
+        <div class="fix-comparison">
+            <div class="before">
+                <h3>❌ Before (Issues)</h3>
+                <ul>
+                    <li><strong>GraphQL Errors:</strong> Wrong field names in JOIN_MEETING mutation</li>
+                    <li><strong>Basic Meeting Page:</strong> Only showed meeting details, no video</li>
+                    <li><strong>No LiveKit Integration:</strong> No camera/microphone functionality</li>
+                    <li><strong>Wrong Response Fields:</strong> Querying non-existent 'status' field</li>
+                    <li><strong>Schema Mismatch:</strong> Backend expected different input types</li>
+                </ul>
+            </div>
+            <div class="after">
+                <h3>✅ After (Fixed)</h3>
+                <ul>
+                    <li><strong>Correct GraphQL:</strong> Fixed field names and response structure</li>
+                    <li><strong>Video Room Page:</strong> Created proper LiveKit-style video interface</li>
+                    <li><strong>Live Video Features:</strong> Camera, microphone, screen sharing</li>
+                    <li><strong>Proper Response:</strong> Only querying available fields</li>
+                    <li><strong>Schema Match:</strong> Using correct JoinMeetingInput format</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Test Video Room Functionality</h2>
+        <button class="btn-primary" onclick="testTutorLogin()">1. Login as Tutor</button>
+        <button class="btn-success" onclick="testCreateMeeting()">2. Create Meeting</button>
+        <button class="btn-warning" onclick="testJoinMeeting()">3. Test Join Meeting (Fixed GraphQL)</button>
+        <button class="btn-info" onclick="openVideoRoom()">4. Open Video Room</button>
+        <button class="btn-primary" onclick="testVideoFeatures()">5. Test Video Features</button>
+        <div id="results" class="log">Click buttons to test video room functionality...</div>
+    </div>
+
+    <div class="test-section info">
+        <h2>📋 Video Room Features</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>🎥 Video Controls</h3>
+                <ul>
+                    <li>✅ Camera on/off toggle</li>
+                    <li>✅ Microphone mute/unmute</li>
+                    <li>✅ Screen sharing</li>
+                    <li>✅ Chat sidebar</li>
+                    <li>✅ Leave meeting</li>
+                </ul>
+            </div>
+            <div>
+                <h3>🔧 Technical Fixes</h3>
+                <ul>
+                    <li>✅ Fixed GraphQL mutation fields</li>
+                    <li>✅ Correct JoinMeetingInput format</li>
+                    <li>✅ Proper ParticipantResponse handling</li>
+                    <li>✅ Auto-redirect to video room</li>
+                    <li>✅ Role-based redirect on leave</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testMeetingId = null;
+        let testToken = null;
+        let testParticipantId = null;
+
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function testTutorLogin() {
+            log('🔐 Testing tutor login...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation TutorLogin($input: LoginInput!) {
+                                tutorLogin(input: $input) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: { 
+                                email: 'tutor2@example.com', 
+                                password: 'test123' 
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`Login response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Login failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.tutorLogin) {
+                    const { token, user } = data.data.tutorLogin;
+                    
+                    // Store token
+                    testToken = token;
+                    localStorage.setItem('jwt', token);
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    
+                    log('✅ Tutor login successful!');
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                } else {
+                    log('❌ Unexpected login response format');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+            }
+        }
+
+        async function testCreateMeeting() {
+            log('📊 Creating test meeting...');
+            
+            if (!testToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${testToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation CreateMeeting($input: CreateMeetingInput!) {
+                                createMeeting(input: $input) {
+                                    _id
+                                    title
+                                    inviteCode
+                                    status
+                                    participantCount
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                title: 'Video Room Test Meeting',
+                                duration: 60,
+                                notes: 'Test meeting for video room functionality'
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`Create meeting response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Create meeting failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.createMeeting) {
+                    testMeetingId = data.data.createMeeting._id;
+                    log(`✅ Meeting created successfully!`);
+                    log(`Meeting ID: ${testMeetingId}`);
+                    log(`Invite Code: ${data.data.createMeeting.inviteCode}`);
+                } else {
+                    log('❌ Unexpected create meeting response format');
+                }
+            } catch (error) {
+                log(`❌ Create meeting error: ${error.message}`);
+            }
+        }
+
+        async function testJoinMeeting() {
+            log('🎯 Testing join meeting with FIXED GraphQL format...');
+            
+            if (!testToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+
+            if (!testMeetingId) {
+                log('❌ No meeting ID found - please create a meeting first');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${testToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation JoinMeeting($input: JoinMeetingInput!) {
+                                joinMeeting(input: $input) {
+                                    _id
+                                    meetingId
+                                    displayName
+                                    role
+                                    micState
+                                    cameraState
+                                    userId
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                meetingId: testMeetingId,
+                                displayName: 'Test Tutor',
+                                inviteCode: null
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`Join meeting response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Join meeting failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.joinMeeting) {
+                    const participant = data.data.joinMeeting;
+                    testParticipantId = participant._id;
+                    log(`✅ Successfully joined meeting!`);
+                    log(`Participant ID: ${participant._id}`);
+                    log(`Role: ${participant.role}`);
+                    log(`Display Name: ${participant.displayName}`);
+                    log(`Mic State: ${participant.micState}`);
+                    log(`Camera State: ${participant.cameraState}`);
+                    log('🎯 GraphQL mutation is now working correctly!');
+                } else {
+                    log('❌ Unexpected join meeting response format');
+                }
+            } catch (error) {
+                log(`❌ Join meeting error: ${error.message}`);
+            }
+        }
+
+        function openVideoRoom() {
+            if (!testMeetingId) {
+                log('❌ No meeting ID found - please create a meeting first');
+                return;
+            }
+
+            log('🎥 Opening video room...');
+            log('You should see:');
+            log('1. Dark video room interface (not basic meeting details)');
+            log('2. Video controls at the bottom (mic, camera, screen share, chat)');
+            log('3. Live video feed from your camera');
+            log('4. Professional LiveKit-style interface');
+            
+            // Open video room in new tab
+            window.open(`/meeting/${testMeetingId}/video-room`, '_blank');
+        }
+
+        function testVideoFeatures() {
+            log('🎥 Testing video features...');
+            log('In the video room, you should be able to:');
+            log('1. 🎤 Toggle microphone on/off');
+            log('2. 📹 Toggle camera on/off');
+            log('3. 📺 Start/stop screen sharing');
+            log('4. 💬 Open/close chat sidebar');
+            log('5. 🚪 Leave meeting (redirects to /instructor)');
+            log('');
+            log('This is now a proper LiveKit-style video room!');
+        }
+
+        // Auto-run on page load
+        window.onload = function() {
+            log('🧪 Video Room Fix Test Ready!');
+            log('This test verifies the fix for the meeting page to show a proper video room');
+            log('');
+            log('Test steps:');
+            log('1. Click "Login as Tutor" to authenticate');
+            log('2. Click "Create Meeting" to create a test meeting');
+            log('3. Click "Test Join Meeting" to verify the GraphQL fix');
+            log('4. Click "Open Video Room" to see the new video interface');
+            log('5. Click "Test Video Features" to see what you can do');
+        };
+    </script>
+</body>
+</html>

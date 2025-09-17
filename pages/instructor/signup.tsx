@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
+import { handleTutorSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { SignupData } from '../../lib/simple-auth-handlers';
 
 const InstructorSignupPage: React.FC = () => {
@@ -101,20 +101,20 @@ const InstructorSignupPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // For instructor signup, we need to modify the signup data to indicate instructor role
-      // This would typically be handled by the backend, but for now we'll use the regular signup
-      const success = await handleSignup(formData);
+      // Use tutor signup function which will assign TUTOR role
+      const success = await handleTutorSignup(formData);
       if (success) {
-        // Get user data and check if instructor
+        // Get user data and redirect based on role
         const user = await getCurrentUser();
         if (user) {
-          // Note: In a real implementation, the backend should assign TUTOR role for instructor signup
-          // For now, we'll redirect based on the user's actual role
           redirectBasedOnRole(user);
+        } else {
+          // Fallback redirect
+          window.location.href = '/instructor';
         }
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Tutor signup error:', error);
     } finally {
       setIsLoading(false);
     }

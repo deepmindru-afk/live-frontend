@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { handleLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
+import { handleTutorLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { LoginCredentials } from '../../lib/simple-auth-handlers';
 
 const InstructorLoginPage: React.FC = () => {
@@ -62,13 +62,19 @@ const InstructorLoginPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const success = await handleLogin(formData);
+      const success = await handleTutorLogin(formData);
       if (success) {
-        // Redirect will be handled by the auth handler
-        window.location.href = '/dashboard';
+        // Get user data and redirect based on role
+        const user = await getCurrentUser();
+        if (user) {
+          redirectBasedOnRole(user);
+        } else {
+          // Fallback redirect
+          window.location.href = '/instructor';
+        }
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Tutor login error:', error);
     } finally {
       setIsLoading(false);
     }

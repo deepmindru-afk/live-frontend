@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Leave Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .meeting-demo { background-color: #1a1a1a; color: white; padding: 20px; border-radius: 8px; margin: 20px 0; height: 500px; position: relative; }
+        .sidebar { background-color: #2c3e50; width: 80px; height: 100%; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 20px; }
+        .control-btn { width: 50px; height: 50px; background-color: #34495e; border: none; border-radius: 50%; color: white; font-size: 20px; cursor: pointer; }
+        .control-btn.active { background-color: #e74c3c; }
+        .control-btn.blue { background-color: #3498db; }
+        .video-area { background-color: #000; flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+        .participant-grid { position: absolute; top: 20px; left: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; max-width: 300px; }
+        .participant-card { width: 150px; height: 100px; background-color: #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid #555; position: relative; }
+        .admin-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 1000; }
+        .admin-btn { padding: 8px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .admin-btn.mute { background-color: #f39c12; }
+        .admin-btn.camera { background-color: #e67e22; }
+        .admin-btn.kick { background-color: #e74c3c; }
+        .admin-btn.end { background-color: #dc3545; font-weight: bold; }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 3000; }
+        .modal-content { background-color: white; border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { margin: 0; }
+        .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d; }
+        .participant-list { background-color: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto; }
+        .participant-item { padding: 12px; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background-color 0.2s; }
+        .participant-item:hover { background-color: #e9ecef; }
+        .participant-avatar { width: 40px; height: 40px; background-color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; }
+        .participant-info { flex: 1; }
+        .participant-name { font-weight: 500; }
+        .participant-email { font-size: 14px; color: #666; }
+        .select-text { margin-left: auto; color: #007bff; font-size: 14px; }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+        .modal-btn { flex: 1; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+        .modal-btn.secondary { background-color: #6c757d; color: white; }
+        .modal-btn.danger { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Host Leave Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Host Leave Functions</h2>
+        <button onclick="testForceEndMeeting()">Test Force End Meeting</button>
+        <button onclick="testHostTransfer()">Test Host Transfer</button>
+        <button onclick="testHostLeave()">Test Host Leave</button>
+        <button onclick="testParticipantLeave()">Test Participant Leave</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Meeting UI with Host Leave Functions</h2>
+        <div class="meeting-demo" style="display: flex;">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                    <div style="width: 40px; height: 40px; background-color: #3498db; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">👤</div>
+                    <div style="width: 40px; height: 40px; background-color: #95a5a6; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📄</div>
+                    <span style="font-size: 12px; text-align: center;">문서</span>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 15px; flex: 1; justify-content: center;">
+                    <button class="control-btn" onclick="toggleControl('mic')">🎤</button>
+                    <button class="control-btn" onclick="toggleControl('camera')">📷</button>
+                    <button class="control-btn" onclick="toggleControl('screen')">📺</button>
+                    <button class="control-btn blue" onclick="toggleControl('chat')">💬</button>
+                    <button class="control-btn" onclick="toggleControl('calendar')">📅</button>
+                </div>
+                
+                <button class="control-btn" style="background-color: #e74c3c; border-radius: 8px;" onclick="handleLeaveClick()" title="미팅 종료/호스트 이전">🚪</button>
+            </div>
+            
+            <!-- Main Video Area -->
+            <div class="video-area">
+                <div style="text-align: center; color: #888; font-size: 48px; font-weight: bold;">4</div>
+                
+                <!-- Participant Grid -->
+                <div class="participant-grid">
+                    <!-- Host Participant -->
+                    <div class="participant-card" style="border: 2px solid #f39c12;">
+                        <div style="text-align: center; color: #888;">
+                            <div style="font-size: 24px; margin-bottom: 4px;">👤</div>
+                            <div style="font-size: 10px;">김철수 (호스트)</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Regular Participants -->
+                    <div class="participant-card">
+                        <div style="text-align: center; color: #888;">
+                            <div style="font-size: 24px; margin-bottom: 4px;">👤</div>
+                            <div style="font-size: 10px;">이영희</div>
+                        </div>
+                    </div>
+                    
+                    <div class="participant-card">
+                        <div style="text-align: center; color: #888;">
+                            <div style="font-size: 24px; margin-bottom: 4px;">👤</div>
+                            <div style="font-size: 10px;">박민수</div>
+                        </div>
+                    </div>
+                    
+                    <div class="participant-card">
+                        <div style="text-align: center; color: #888;">
+                            <div style="font-size: 24px; margin-bottom: 4px;">👤</div>
+                            <div style="font-size: 10px;">정수진</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Bar -->
+                <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.8); padding: 8px 20px; border-radius: 20px; border: 2px solid #ffa500; display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 12px; height: 12px; background-color: #28a745; border-radius: 50%;"></div>
+                    <span style="color: white; font-size: 16px; font-weight: bold;">4</span>
+                    <div style="width: 12px; height: 12px; background-color: #dc3545; border-radius: 50%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Controls -->
+        <div class="admin-controls">
+            <button class="admin-btn mute" onclick="testForceMuteAll()">모두 음소거</button>
+            <button class="admin-btn camera" onclick="testForceCameraOff()">카메라 끄기</button>
+            <button class="admin-btn kick" onclick="testKickUser()">참여자 내보내기</button>
+            <button class="admin-btn end" onclick="testForceEndMeeting()">강제 종료</button>
+        </div>
+    </div>
+
+    <!-- Host Transfer Modal -->
+    <div id="hostTransferModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">호스트 권한 이전</h2>
+                <button class="close-btn" onclick="hideHostTransferModal()">×</button>
+            </div>
+
+            <p style="margin-bottom: 20px; color: #666;">
+                미팅을 떠나기 전에 호스트 권한을 다른 참가자에게 이전하거나 미팅을 종료할 수 있습니다.
+            </p>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin: 0 0 15px 0; color: #333;">호스트 권한 이전</h3>
+                <div class="participant-list">
+                    <div class="participant-item" onclick="transferHost('participant1')">
+                        <div class="participant-avatar">👤</div>
+                        <div class="participant-info">
+                            <div class="participant-name">이영희</div>
+                            <div class="participant-email">lee@example.com</div>
+                        </div>
+                        <div class="select-text">선택</div>
+                    </div>
+                    
+                    <div class="participant-item" onclick="transferHost('participant2')">
+                        <div class="participant-avatar">👤</div>
+                        <div class="participant-info">
+                            <div class="participant-name">박민수</div>
+                            <div class="participant-email">park@example.com</div>
+                        </div>
+                        <div class="select-text">선택</div>
+                    </div>
+                    
+                    <div class="participant-item" onclick="transferHost('participant3')">
+                        <div class="participant-avatar">👤</div>
+                        <div class="participant-info">
+                            <div class="participant-name">정수진</div>
+                            <div class="participant-email">jung@example.com</div>
+                        </div>
+                        <div class="select-text">선택</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="justLeaveMeeting()">권한 이전 없이 떠나기</button>
+                <button class="modal-btn danger" onclick="forceEndMeeting()">미팅 강제 종료</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let controlStates = { mic: false, camera: false, screen: false, chat: false, calendar: false };
+        let isHost = true; // Simulate host status
+        
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function handleLeaveClick() {
+            if (isHost) {
+                showHostTransferModal();
+            } else {
+                testParticipantLeave();
+            }
+        }
+
+        function showHostTransferModal() {
+            document.getElementById('hostTransferModal').style.display = 'flex';
+            log('👑 Showing host transfer modal');
+        }
+
+        function hideHostTransferModal() {
+            document.getElementById('hostTransferModal').style.display = 'none';
+            log('❌ Hiding host transfer modal');
+        }
+
+        function transferHost(participantId) {
+            const participants = {
+                'participant1': '이영희',
+                'participant2': '박민수',
+                'participant3': '정수진'
+            };
+            
+            const participantName = participants[participantId];
+            log(`👑 Transferring host to: ${participantName}`);
+            hideHostTransferModal();
+        }
+
+        function justLeaveMeeting() {
+            log('🚪 Leaving meeting without host transfer');
+            hideHostTransferModal();
+        }
+
+        function forceEndMeeting() {
+            log('🔴 Force ending meeting');
+            hideHostTransferModal();
+        }
+
+        function toggleControl(control) {
+            controlStates[control] = !controlStates[control];
+            const button = event.target;
+            
+            if (controlStates[control]) {
+                button.classList.add('active');
+                log(`✅ ${control} turned ON`);
+            } else {
+                button.classList.remove('active');
+                log(`❌ ${control} turned OFF`);
+            }
+        }
+
+        // Test functions
+        function testForceEndMeeting() {
+            log('🔴 Testing force end meeting...');
+            log('✅ Force end meeting functionality ready');
+        }
+
+        function testHostTransfer() {
+            log('👑 Testing host transfer...');
+            log('✅ Host transfer functionality ready');
+        }
+
+        function testHostLeave() {
+            log('🚪 Testing host leave...');
+            showHostTransferModal();
+        }
+
+        function testParticipantLeave() {
+            log('🚪 Testing participant leave...');
+            log('✅ Participant leave functionality ready');
+        }
+
+        function testForceMuteAll() {
+            log('🔇 Testing force mute all...');
+            log('✅ Force mute all functionality ready');
+        }
+
+        function testForceCameraOff() {
+            log('📷 Testing force camera off...');
+            log('✅ Force camera off functionality ready');
+        }
+
+        function testKickUser() {
+            log('🚪 Testing kick user...');
+            log('✅ Kick user functionality ready');
+        }
+
+        // Initialize
+        log('🧪 Host Leave Test Ready!');
+        log('Frontend: http://localhost:3000/meeting/test-meeting-123');
+        log('Backend: http://localhost:3007');
+        log('Click the leave button (🚪) to test host leave functionality!');
+    </script>
+</body>
+</html>

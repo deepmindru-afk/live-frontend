@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
+import { GET_VODS } from '../../apollo/vod/queries';
+import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../apollo/vod/mutations';
 import ProfileDropdown from '../../components/ProfileDropdown';
 import Swal from 'sweetalert2';
 
@@ -21,6 +23,18 @@ interface Meeting {
   duration?: number;
 }
 
+interface VOD {
+  _id: string;
+  title: string;
+  size: number;
+  duration?: number;
+  url?: string;
+  filePath?: string;
+  createdAt: string;
+  updatedAt: string;
+  status: 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
+}
+
 const Dashboard: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -30,40 +44,60 @@ const Dashboard: React.FC = () => {
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  
+  // VOD state
+  const [vods, setVods] = useState<VOD[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showURLModal, setShowURLModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlTitle, setUrlTitle] = useState('');
+  const [showVODMenu, setShowVODMenu] = useState<string | null>(null);
+  const [selectedVOD, setSelectedVOD] = useState<VOD | null>(null);
+  
+  // File input ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        console.log('🔐 AUTH: Starting authentication check...');
+      if (isAuthenticated()) {
+        const userData = await getCurrentUser();
         
-        if (isAuthenticated()) {
-          console.log('🔐 AUTH: User is authenticated, getting user data...');
-          const userData = await getCurrentUser();
-          console.log('🔐 AUTH: User data received:', userData);
-          
-          if (userData) {
-            setUser(userData);
-            await testBackendConnection();
-            await fetchMeetings();
+        // Only allow TUTOR and ADMIN roles to access this dashboard
+        if (userData && (userData.systemRole === 'TUTOR' || userData.systemRole === 'ADMIN')) {
+          setUser(userData);
+          await testBackendConnection();
+          await fetchMeetings();
+          await loadVODs();
+        } else {
+          // Redirect members to their dashboard
+          if (userData && userData.systemRole === 'MEMBER') {
+            window.location.href = '/member';
           } else {
-            console.log('🔐 AUTH: No user data, redirecting to login...');
             window.location.href = '/login';
           }
-        } else {
-          console.log('🔐 AUTH: User not authenticated, redirecting to login...');
-          window.location.href = '/login';
         }
-      } catch (error) {
-        console.error('🔐 AUTH: Authentication error:', error);
-        // Show error message to user
-        alert('Authentication error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } else {
         window.location.href = '/login';
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
     checkAuth();
   }, []);
+
+  // Close VOD menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showVODMenu && !(event.target as Element).closest('.vod-menu') && !(event.target as Element).closest('.three-dots')) {
+        closeVODMenu();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showVODMenu]);
 
   const testBackendConnection = async () => {
     try {
@@ -78,24 +112,6 @@ const Dashboard: React.FC = () => {
       
       console.log('🔍 BACKEND TEST: Backend is reachable:', result);
       
-      // Test if meeting mutations exist
-      try {
-        await enhancedMakeGraphQLRequest(`
-          query TestMeetingQuery {
-            __schema {
-              mutationType {
-                fields {
-                  name
-                }
-              }
-            }
-          }
-        `);
-        console.log('🔍 BACKEND TEST: GraphQL schema accessible');
-      } catch (schemaError) {
-        console.warn('🔍 BACKEND TEST: Cannot access GraphQL schema:', schemaError);
-      }
-      
     } catch (error) {
       console.error('🔍 BACKEND TEST: Backend connection failed:', error);
     }
@@ -103,90 +119,56 @@ const Dashboard: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
-      console.log('📊 DASHBOARD: Fetching meetings...');
+      console.log('📊 DASHBOARD: Fetching meetings from backend...');
       
-      // Try to fetch meetings via GraphQL first
-      try {
-        const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS);
-        
-        if (result.meetings && Array.isArray(result.meetings)) {
-          const meetings: Meeting[] = result.meetings.map((meeting: any) => ({
-            _id: meeting._id,
-            title: meeting.title,
-            status: meeting.status,
-            schedule: meeting.schedule,
-            inviteCode: meeting.inviteCode,
-            createdAt: meeting.createdAt,
-            updatedAt: meeting.updatedAt,
-            participantCount: meeting.participantCount || 0,
-            duration: meeting.duration
-          }));
-          
-          setMeetings(meetings);
-          console.log('📊 DASHBOARD: Successfully loaded meetings from GraphQL:', meetings.length);
-          return;
-        }
-      } catch (graphqlError) {
-        console.warn('📊 DASHBOARD: GraphQL request failed, falling back to mock data:', graphqlError);
+      // Check authentication status before making request
+      const authStatus = testAuthStatus();
+      console.log('📊 DASHBOARD: Auth status before request:', authStatus);
+      
+      if (!authStatus.isAuth) {
+        console.error('📊 DASHBOARD: User not authenticated - cannot fetch meetings');
+        setMeetings([]);
+        return;
       }
       
-      // Fallback to mock data if GraphQL fails
-      console.log('📊 DASHBOARD: Using mock data - backend meeting queries not available');
+      const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
+        input: {}
+      });
       
-      // Mock data for demonstration
-      const mockMeetings: Meeting[] = [
-        {
-          _id: '1',
-          title: '팀 미팅',
-          status: 'STARTED',
-          inviteCode: 'ABC123',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          participantCount: 5,
-          duration: 3600
-        },
-        {
-          _id: '2',
-          title: '프로젝트 리뷰',
-          status: 'SCHEDULED',
-          schedule: new Date(Date.now() + 86400000).toISOString(),
-          inviteCode: 'DEF456',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          participantCount: 0,
-        },
-        {
-          _id: '3',
-          title: '클라이언트 데모',
-          status: 'ENDED',
-          inviteCode: 'GHI789',
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date().toISOString(),
-          participantCount: 10,
-          duration: 7200
-        },
-      ];
+      console.log('📊 DASHBOARD: Backend response:', result);
       
-      setMeetings(mockMeetings);
-      console.log('📊 DASHBOARD: Successfully loaded mock meetings:', mockMeetings.length);
+      if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
+        const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => ({
+          _id: meeting._id,
+          title: meeting.title,
+          status: meeting.status === 'CREATED' ? 'STARTED' : 
+                  meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                  meeting.status === 'ENDED' ? 'ENDED' : 'STARTED',
+          schedule: meeting.scheduledFor,
+          inviteCode: meeting.inviteCode,
+          createdAt: meeting.createdAt,
+          updatedAt: meeting.updatedAt || meeting.createdAt,
+          participantCount: meeting.participantCount || 0,
+          duration: meeting.duration
+        }));
+        
+        setMeetings(meetings);
+        console.log('📊 DASHBOARD: Successfully loaded meetings from backend:', meetings.length);
+        console.log('📊 DASHBOARD: Meetings data:', meetings);
+      } else {
+        console.warn('📊 DASHBOARD: No meetings found in response');
+        console.warn('📊 DASHBOARD: Response structure:', result);
+        setMeetings([]);
+      }
       
     } catch (error) {
       console.error('📊 DASHBOARD: Error fetching meetings:', error);
-      
-      // Show error but don't block the UI
-      await Swal.fire({
-        icon: 'warning',
-        title: '연결 오류',
-        text: '서버에 연결할 수 없습니다. 오프라인 모드로 실행됩니다.',
-        confirmButtonText: '확인'
-      });
-      
-      // Set empty array for now - in production you might want to show cached data
+      console.error('📊 DASHBOARD: Error details:', error.message);
       setMeetings([]);
     }
   };
 
-  const handleCreateMeeting = async () => {
+  const handleCreateRoom = async () => {
     if (!newMeetingTitle.trim()) {
       await Swal.fire({
         icon: 'warning',
@@ -201,13 +183,35 @@ const Dashboard: React.FC = () => {
       console.log('🏠 CREATE MEETING: Creating meeting with title:', newMeetingTitle);
       console.log('🏠 CREATE MEETING: Schedule:', meetingSchedule);
 
+      // Validate and format the date
+      let formattedSchedule = null;
+      if (meetingSchedule && meetingSchedule.trim()) {
+        try {
+          const date = new Date(meetingSchedule);
+          if (isNaN(date.getTime())) {
+            throw new Error('Invalid date format');
+          }
+          formattedSchedule = date.toISOString();
+          console.log('🏠 CREATE MEETING: Formatted schedule:', formattedSchedule);
+        } catch (dateError) {
+          console.error('🏠 CREATE MEETING: Date validation error:', dateError);
+          await Swal.fire({
+            icon: 'error',
+            title: '날짜 오류',
+            text: '올바른 날짜 형식을 입력해주세요.',
+            confirmButtonText: '확인'
+          });
+          return;
+        }
+      }
+
       // Try to create meeting via GraphQL first
       try {
         console.log('🏠 CREATE MEETING: Attempting GraphQL request...');
         const result = await enhancedMakeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
-            scheduledStartAt: meetingSchedule || null,
+            scheduledFor: formattedSchedule,
             isPrivate: false,
             notes: null
           }
@@ -215,15 +219,16 @@ const Dashboard: React.FC = () => {
 
         console.log('🏠 CREATE MEETING: GraphQL response received:', result);
 
-        if (result.createMeeting && result.createMeeting.success) {
+        if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
-            _id: result.createMeeting.meeting._id,
-            title: result.createMeeting.meeting.title,
-            status: result.createMeeting.meeting.status,
-            schedule: result.createMeeting.meeting.schedule,
-            inviteCode: result.createMeeting.meeting.inviteCode,
-            createdAt: result.createMeeting.meeting.createdAt,
-            updatedAt: result.createMeeting.meeting.createdAt,
+            _id: result.createMeeting._id,
+            title: result.createMeeting.title,
+            status: result.createMeeting.status === 'CREATED' ? 'STARTED' : 
+                    result.createMeeting.status === 'SCHEDULED' ? 'SCHEDULED' : 'STARTED',
+            schedule: result.createMeeting.scheduledFor,
+            inviteCode: result.createMeeting.inviteCode,
+            createdAt: result.createMeeting.createdAt,
+            updatedAt: result.createMeeting.createdAt,
             participantCount: 0,
           };
 
@@ -233,7 +238,7 @@ const Dashboard: React.FC = () => {
           await Swal.fire({
             icon: 'success',
             title: '성공',
-            text: '방이 성공적으로 생성되었습니다! (모의 서비스)',
+            text: '방이 성공적으로 생성되었습니다!',
             confirmButtonText: '확인'
           });
 
@@ -246,40 +251,15 @@ const Dashboard: React.FC = () => {
         }
       } catch (graphqlError) {
         console.warn('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
-        
-        // Check if it's a "field not found" error (backend doesn't have meeting mutations)
-        if (graphqlError instanceof Error && graphqlError.message.includes('Cannot query field')) {
-          console.warn('🏠 CREATE MEETING: Backend does not have meeting mutations implemented');
-        }
       }
 
-      // Fallback to mock meeting if GraphQL fails
-      const newMeeting: Meeting = {
-        _id: Date.now().toString(),
-        title: newMeetingTitle,
-        status: meetingSchedule ? 'SCHEDULED' : 'STARTED',
-        schedule: meetingSchedule || undefined,
-        inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        participantCount: 0,
-      };
-
-      // Add to existing meetings
-      setMeetings(prev => [newMeeting, ...prev]);
-
+      // If GraphQL fails, show error
       await Swal.fire({
-        icon: 'info',
-        title: '성공',
-        text: '방이 성공적으로 생성되었습니다! (모의 서비스)',
+        icon: 'error',
+        title: '오류',
+        text: '방 생성 중 오류가 발생했습니다. 다시 시도해주세요.',
         confirmButtonText: '확인'
       });
-
-      // Clear form
-      setNewMeetingTitle('');
-      setMeetingSchedule('');
-
-      console.log('🏠 CREATE MEETING: Mock meeting created:', newMeeting);
 
     } catch (error: unknown) {
       console.error('🏠 CREATE MEETING: Error:', error);
@@ -301,7 +281,7 @@ const Dashboard: React.FC = () => {
       try {
         const result = await enhancedMakeGraphQLRequest(START_MEETING, { meetingId });
         
-        if (result.startMeeting && result.startMeeting.success) {
+        if (result.startMeeting && result.startMeeting._id) {
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
@@ -333,7 +313,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 시작되었습니다! (모의 서비스)',
+        text: '회의가 시작되었습니다!',
         confirmButtonText: '확인'
       });
 
@@ -359,11 +339,11 @@ const Dashboard: React.FC = () => {
       try {
         const result = await enhancedMakeGraphQLRequest(END_MEETING, { meetingId });
         
-        if (result.endMeeting && result.endMeeting.success) {
+        if (result.endMeeting && result.endMeeting._id) {
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
-              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.meeting.duration || 3600 }
+              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.duration || 3600 }
               : meeting
           ));
 
@@ -391,7 +371,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 종료되었습니다! (모의 서비스)',
+        text: '회의가 종료되었습니다!',
         confirmButtonText: '확인'
       });
 
@@ -439,6 +419,215 @@ const Dashboard: React.FC = () => {
     return new Date(dateString).toLocaleString('ko-KR');
   };
 
+  // VOD Functions
+  const loadVODs = async () => {
+    try {
+      const result = await enhancedMakeGraphQLRequest(GET_VODS, {
+        pagination: { limit: 50, offset: 0 }
+      });
+      
+      if (result.vods) {
+        setVods(result.vods);
+      }
+    } catch (error) {
+      console.warn('Failed to load VODs:', error);
+      setVods([]);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleFileUpload = () => {
+    console.log('📁 FILE UPLOAD: Opening file upload modal');
+    setShowUploadModal(true);
+  };
+
+  const handleURLUpload = () => {
+    console.log('🔗 URL UPLOAD: Opening URL upload modal');
+    setShowURLModal(true);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadFile = async () => {
+    console.log('📁 UPLOAD FILE: Starting file upload');
+    if (!selectedFile) {
+      console.log('📁 UPLOAD FILE: No file selected');
+      return;
+    }
+
+    console.log('📁 UPLOAD FILE: Selected file:', selectedFile.name);
+
+    try {
+      const result = await enhancedMakeGraphQLRequest(UPLOAD_VOD_FILE, {
+        file: selectedFile,
+        title: selectedFile.name
+      });
+
+      console.log('📁 UPLOAD FILE: GraphQL result:', result);
+
+      if (result.uploadVODFile && result.uploadVODFile.success) {
+        await Swal.fire({
+          icon: 'success',
+          title: '파일 업로드',
+          text: 'VOD 파일이 성공적으로 업로드되었습니다.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        setShowUploadModal(false);
+        setSelectedFile(null);
+        loadVODs();
+      }
+    } catch (error) {
+      console.error('📁 UPLOAD FILE: Upload error:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: '업로드 실패',
+        text: '파일 업로드 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
+    }
+  };
+
+  const uploadFromURL = async () => {
+    console.log('🔗 UPLOAD URL: Starting URL upload');
+    console.log('🔗 UPLOAD URL: Title:', urlTitle, 'URL:', urlInput);
+    
+    if (!urlInput.trim() || !urlTitle.trim()) {
+      console.log('🔗 UPLOAD URL: Missing title or URL');
+      await Swal.fire({
+        icon: 'warning',
+        title: '입력 오류',
+        text: 'URL과 제목을 모두 입력해주세요.',
+        confirmButtonText: '확인'
+      });
+      return;
+    }
+
+    try {
+      const result = await enhancedMakeGraphQLRequest(CREATE_VOD_FROM_URL, {
+        url: urlInput,
+        title: urlTitle
+      });
+
+      console.log('🔗 UPLOAD URL: GraphQL result:', result);
+
+      if (result.createVODFromURL && result.createVODFromURL.success) {
+        await Swal.fire({
+          icon: 'success',
+          title: 'URL 등록',
+          text: 'VOD URL이 성공적으로 등록되었습니다.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        setShowURLModal(false);
+        setUrlInput('');
+        setUrlTitle('');
+        loadVODs();
+      }
+    } catch (error) {
+      console.error('🔗 UPLOAD URL: Upload error:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: '등록 실패',
+        text: 'URL 등록 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
+    }
+  };
+
+  const handleVODMenuClick = (vodId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    console.log('👤 VOD MENU: Clicking VOD menu for:', vodId);
+    const vod = vods.find(v => v._id === vodId);
+    if (vod) {
+      console.log('👤 VOD MENU: Found VOD:', vod.title);
+      setSelectedVOD(vod);
+      setShowVODMenu(vodId);
+    } else {
+      console.log('👤 VOD MENU: VOD not found for ID:', vodId);
+    }
+  };
+
+  const closeVODMenu = () => {
+    setShowVODMenu(null);
+    setSelectedVOD(null);
+  };
+
+  const deleteVOD = async (vodId: string) => {
+    console.log('🗑️ DELETE VOD: Starting delete for VOD ID:', vodId);
+    const vod = vods.find(v => v._id === vodId);
+    if (!vod) {
+      console.log('🗑️ DELETE VOD: VOD not found for ID:', vodId);
+      return;
+    }
+
+    console.log('🗑️ DELETE VOD: Found VOD:', vod.title);
+
+    const result = await Swal.fire({
+      title: 'VOD 삭제',
+      text: `"${vod.title}"을(를) 삭제하시겠습니까?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '삭제',
+      cancelButtonText: '취소',
+      confirmButtonColor: '#dc3545'
+    });
+
+    if (result.isConfirmed) {
+      console.log('🗑️ DELETE VOD: User confirmed deletion');
+      try {
+        const deleteResult = await enhancedMakeGraphQLRequest(DELETE_VOD, { id: vodId });
+        console.log('🗑️ DELETE VOD: GraphQL result:', deleteResult);
+        
+        await Swal.fire({
+          icon: 'success',
+          title: '삭제 완료',
+          text: 'VOD가 성공적으로 삭제되었습니다.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        loadVODs();
+      } catch (error) {
+        console.error('🗑️ DELETE VOD: Delete error:', error);
+        await Swal.fire({
+          icon: 'error',
+          title: '삭제 실패',
+          text: 'VOD 삭제 중 오류가 발생했습니다.',
+          confirmButtonText: '확인'
+        });
+      }
+    } else {
+      console.log('🗑️ DELETE VOD: User cancelled deletion');
+    }
+    closeVODMenu();
+  };
+
   const filteredMeetings = meetings.filter(meeting => {
     // Filter by status
     if (activeTab === 'VOD') return false;
@@ -454,48 +643,65 @@ const Dashboard: React.FC = () => {
     return statusMatch && searchMatch;
   });
 
+  const filteredVODs = vods.filter(vod =>
+    !searchQuery || vod.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="loading-container">
         <div className="loading-spinner">Loading...</div>
         <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <p>If this takes too long, try logging in:</p>
           <button 
-            onClick={() => {
-              const email = prompt('Enter email:', 'test@example.com');
-              const password = prompt('Enter password:', 'password123');
-              if (email && password) {
-                // Simple login for testing
-                fetch('http://localhost:3007/graphql', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    query: `
-                      mutation Login($email: String!, $password: String!) {
-                        login(email: $email, password: $password) {
-                          token
-                          user { _id displayName email systemRole }
-                        }
-                      }
-                    `,
-                    variables: { email, password }
-                  })
-                })
-                .then(res => res.json())
-                .then(data => {
-                  if (data.data?.login?.token) {
-                    localStorage.setItem('jwt', data.data.login.token);
-                    window.location.reload();
-                  } else {
-                    alert('Login failed: ' + (data.errors?.[0]?.message || 'Unknown error'));
-                  }
-                })
-                .catch(err => alert('Login error: ' + err.message));
+            onClick={async () => {
+              console.log('🔧 DEBUG: Force login clicked');
+              const authStatus = testAuthStatus();
+              console.log('🔧 DEBUG: Current auth status:', authStatus);
+              
+              if (!authStatus.isAuth) {
+                console.log('🔧 DEBUG: Not authenticated, attempting force login...');
+                const loginResult = await forceLogin();
+                if (loginResult) {
+                  console.log('🔧 DEBUG: Force login successful, reloading page...');
+                  window.location.reload();
+                } else {
+                  console.log('🔧 DEBUG: Force login failed');
+                  alert('Force login failed. Please check console for details.');
+                }
+              } else {
+                console.log('🔧 DEBUG: Already authenticated, reloading page...');
+                window.location.reload();
               }
             }}
-            style={{ padding: '10px 20px', margin: '10px' }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              margin: '10px'
+            }}
           >
-            Quick Login
+            🔧 Debug: Force Login
+          </button>
+          <button 
+            onClick={() => {
+              const authStatus = testAuthStatus();
+              console.log('🔧 DEBUG: Auth status check:', authStatus);
+              alert(`Auth Status:\nAuthenticated: ${authStatus.isAuth}\nToken: ${authStatus.token ? 'Present' : 'Missing'}\nUser: ${authStatus.user ? authStatus.user.displayName : 'None'}`);
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              margin: '10px'
+            }}
+          >
+            🔍 Check Auth Status
           </button>
         </div>
       </div>
@@ -519,165 +725,350 @@ const Dashboard: React.FC = () => {
               alt="Meet: mate"
               width={120}
               height={40}
-              className="logo-image"
             />
           </div>
-          <div className="user-info">
-            {user && <ProfileDropdown user={user} />}
+          <div className="header-actions">
+            <ProfileDropdown user={user} />
           </div>
         </div>
 
-        <div className="dashboard-content">
-          {/* Left Sidebar */}
-          <div className="dashboard-sidebar">
-            <div className="greeting">
-              <h2>{user?.displayName}님, 안녕하세요 👋</h2>
+        {/* Main Content */}
+        <div className="dashboard-main">
+          <div className="meetings-panel">
+            {/* Tabs */}
+            <div className="tabs">
+              <button
+                className={`tab ${activeTab === 'STARTED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('STARTED')}
+              >
+                진행중 ({meetings.filter(m => m.status === 'STARTED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('SCHEDULED')}
+              >
+                예약됨 ({meetings.filter(m => m.status === 'SCHEDULED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'ENDED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('ENDED')}
+              >
+                종료됨 ({meetings.filter(m => m.status === 'ENDED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'VOD' ? 'active' : ''}`}
+                onClick={() => setActiveTab('VOD')}
+              >
+                VOD 관리
+              </button>
             </div>
 
-            {/* Create Room Panel */}
-            <div className="action-panel create-room">
-              <h3>방 만들기</h3>
-              <div className="input-group">
-                <input
-                  type="text"
-                  placeholder="방 이름을 입력하세요"
-                  value={newMeetingTitle}
-                  onChange={(e) => setNewMeetingTitle(e.target.value)}
-                />
-                <button onClick={handleCreateMeeting}>→</button>
-              </div>
+            {/* Search */}
+            <div className="search-bar">
+              <input
+                type="text"
+                placeholder="회의 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button onClick={handleSearch}>🔍</button>
             </div>
 
-            {/* Schedule Panel */}
-            <div className="action-panel schedule">
-              <h3>예약하기</h3>
-              <p>원하는 시간에 회의를 할 수 있습니다</p>
-              <div className="input-group">
-                <input
-                  type="datetime-local"
-                  value={meetingSchedule}
-                  onChange={(e) => setMeetingSchedule(e.target.value)}
-                />
-                <button onClick={handleCreateMeeting}>→</button>
+            {/* Content based on active tab */}
+            {activeTab === 'VOD' ? (
+              /* VOD Management Section */
+              <div>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+                  <button onClick={handleFileUpload} className="btn-primary">
+                    📁 파일 등록
+                  </button>
+                  <button onClick={handleURLUpload} className="btn-secondary">
+                    🔗 URL 등록
+                  </button>
+                </div>
+                <div className="meetings-table">
+                  {filteredVODs.length > 0 ? (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>No.</th>
+                          <th>VOD 제목</th>
+                          <th>용량</th>
+                          <th>비고</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredVODs.map((vod, index) => (
+                          <tr key={vod._id}>
+                            <td>{index + 1}</td>
+                            <td>
+                              <div>
+                                <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
+                                <div style={{ fontSize: '14px', color: '#666' }}>
+                                  {vod.duration && formatDuration(vod.duration)}
+                                  {vod.status === 'UPLOADING' && ' (업로드 중...)'}
+                                  {vod.status === 'PROCESSING' && ' (처리 중...)'}
+                                  {vod.status === 'ERROR' && ' (오류)'}
+                                </div>
+                              </div>
+                            </td>
+                            <td>{formatFileSize(vod.size)}</td>
+                            <td>
+                              <button
+                                className="three-dots"
+                                onClick={(e) => handleVODMenuClick(vod._id, e)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '18px',
+                                  padding: '4px 8px'
+                                }}
+                              >
+                                ⋯
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-icon">✗</div>
+                      <p>등록된 VOD가 없습니다</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="dashboard-main">
-            <div className="meetings-panel">
-              {/* Tabs */}
-              <div className="tabs">
-                <button
-                  className={`tab ${activeTab === 'STARTED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('STARTED')}
-                >
-                  시작된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('SCHEDULED')}
-                >
-                  예약된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'ENDED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('ENDED')}
-                >
-                  종료된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'VOD' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('VOD')}
-                >
-                  VOD 관리
-                </button>
-              </div>
-
-              {/* Search */}
-              <div className="search-bar">
-                <input
-                  type="text"
-                  placeholder="검색어를 입력하세요"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button 
-                  className="search-button"
-                  onClick={handleSearch}
-                  title="검색"
-                >
-                  🔍
-                </button>
-              </div>
-
-              {/* Meetings Table */}
+            ) : (
+              /* Meetings Table */
               <div className="meetings-table">
-                {filteredMeetings.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">✗</div>
-                    <p>등록된 회의가 없습니다</p>
-                  </div>
-                ) : (
+                {filteredMeetings.length > 0 ? (
                   <table>
                     <thead>
                       <tr>
-                        <th>No.</th>
-                        <th>회의 제목</th>
-                        <th>회의시간</th>
+                        <th>방 이름</th>
+                        <th>상태</th>
                         <th>초대코드</th>
-                        <th>비고</th>
+                        <th>참가자</th>
+                        <th>생성일</th>
+                        <th>액션</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMeetings.map((meeting, index) => (
+                      {filteredMeetings.map((meeting) => (
                         <tr key={meeting._id}>
-                          <td>{index + 1}</td>
-                          <td>{meeting.title}</td>
                           <td>
-                            {meeting.schedule 
-                              ? formatDate(meeting.schedule)
-                              : formatDate(meeting.createdAt)
-                            }
+                            <div className="meeting-title">{meeting.title}</div>
+                            {meeting.schedule && (
+                              <div className="meeting-schedule">
+                                예약: {formatDate(meeting.schedule)}
+                              </div>
+                            )}
                           </td>
                           <td>
-                            <span 
-                              className="invite-code"
-                              onClick={() => copyInviteCode(meeting.inviteCode)}
-                            >
-                              {meeting.inviteCode}
+                            <span className={`status-badge status-${meeting.status.toLowerCase()}`}>
+                              {meeting.status === 'STARTED' ? '진행중' : 
+                               meeting.status === 'SCHEDULED' ? '예약됨' : '종료됨'}
                             </span>
                           </td>
                           <td>
-                            <div className="actions">
+                            <div className="invite-code">
+                              <span>{meeting.inviteCode}</span>
+                              <button
+                                onClick={() => copyInviteCode(meeting.inviteCode)}
+                                className="copy-btn"
+                              >
+                                복사
+                              </button>
+                            </div>
+                          </td>
+                          <td>{meeting.participantCount}명</td>
+                          <td>{formatDate(meeting.createdAt)}</td>
+                          <td>
+                            <div className="action-buttons">
                               {meeting.status === 'SCHEDULED' && (
-                                <button 
-                                  className="action-btn start"
+                                <button
                                   onClick={() => handleStartMeeting(meeting._id)}
+                                  className="btn-start"
                                 >
                                   시작
                                 </button>
                               )}
                               {meeting.status === 'STARTED' && (
-                                <button 
-                                  className="action-btn end"
+                                <button
                                   onClick={() => handleEndMeeting(meeting._id)}
+                                  className="btn-end"
                                 >
                                   종료
                                 </button>
                               )}
+                              <button
+                                onClick={() => router.push(`/meeting/${meeting._id}`)}
+                                className="btn-join"
+                              >
+                                참여
+                              </button>
                             </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📅</div>
+                    <p>회의가 없습니다</p>
+                  </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* Create Meeting Form */}
+            {activeTab !== 'VOD' && (
+              <div className="create-meeting-form">
+                <h3>새 회의 만들기</h3>
+                <div className="form-group">
+                  <input
+                    type="text"
+                    placeholder="회의 제목을 입력하세요"
+                    value={newMeetingTitle}
+                    onChange={(e) => setNewMeetingTitle(e.target.value)}
+                  />
+                  <input
+                    type="datetime-local"
+                    value={meetingSchedule}
+                    onChange={(e) => setMeetingSchedule(e.target.value)}
+                    placeholder="예약 시간 (선택사항)"
+                  />
+                  <button onClick={handleCreateRoom} className="btn-create">
+                    회의 만들기
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      {showUploadModal && (
+        <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>파일 업로드</h2>
+            <div className="file-upload-area">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+                id="fileInput"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="file-select-btn"
+              >
+                {selectedFile ? selectedFile.name : '파일을 선택하세요'}
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setShowUploadModal(false)} className="btn-cancel">
+                취소
+              </button>
+              <button onClick={uploadFile} disabled={!selectedFile} className="btn-upload">
+                업로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* URL Upload Modal */}
+      {showURLModal && (
+        <div className="modal-overlay" onClick={() => setShowURLModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>URL 등록</h2>
+            <div className="form-group">
+              <label>VOD 제목</label>
+              <input
+                type="text"
+                value={urlTitle}
+                onChange={(e) => setUrlTitle(e.target.value)}
+                placeholder="VOD 제목을 입력하세요"
+              />
+              <label>URL</label>
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://example.com/video.mp4"
+              />
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setShowURLModal(false)} className="btn-cancel">
+                취소
+              </button>
+              <button onClick={uploadFromURL} className="btn-upload">
+                등록
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VOD Menu Dropdown */}
+      {showVODMenu && selectedVOD && (
+        <div className="modal-overlay" onClick={closeVODMenu}>
+          <div 
+            className="vod-menu"
+            style={{
+              position: 'absolute',
+              top: '100px',
+              left: '50px',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              padding: '8px 0',
+              minWidth: '200px',
+              zIndex: 2001
+            }} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid #eee',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#333'
+            }}>
+              {selectedVOD.title}
+            </div>
+            
+            <button
+              onClick={() => deleteVOD(selectedVOD._id)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#dc3545',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <span>🗑️</span>
+              삭제
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };

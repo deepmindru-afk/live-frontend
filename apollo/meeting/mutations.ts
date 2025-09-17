@@ -4,16 +4,16 @@ import { gql } from '@apollo/client';
 export const CREATE_MEETING = gql`
   mutation CreateMeeting($input: CreateMeetingInput!) {
     createMeeting(input: $input) {
-      success
-      message
-      meeting {
-        _id
-        title
-        status
-        schedule
-        inviteCode
-        createdAt
-      }
+      _id
+      title
+      status
+      scheduledFor
+      inviteCode
+      createdAt
+      notes
+      isPrivate
+      duration
+      maxParticipants
     }
   }
 `;
@@ -22,15 +22,11 @@ export const CREATE_MEETING = gql`
 export const START_MEETING = gql`
   mutation StartMeeting($meetingId: ID!) {
     startMeeting(meetingId: $meetingId) {
-      success
-      message
-      meeting {
-        _id
-        title
-        status
-        inviteCode
-        startedAt
-      }
+      _id
+      title
+      status
+      inviteCode
+      startedAt
     }
   }
 `;
@@ -39,15 +35,11 @@ export const START_MEETING = gql`
 export const END_MEETING = gql`
   mutation EndMeeting($meetingId: ID!) {
     endMeeting(meetingId: $meetingId) {
-      success
-      message
-      meeting {
-        _id
-        title
-        status
-        endedAt
-        duration
-      }
+      _id
+      title
+      status
+      endedAt
+      duration
     }
   }
 `;
@@ -56,8 +48,6 @@ export const END_MEETING = gql`
 export const ROTATE_INVITE_CODE = gql`
   mutation RotateInviteCode($meetingId: ID!) {
     rotateInviteCode(meetingId: $meetingId) {
-      success
-      message
       inviteCode
     }
   }
@@ -75,6 +65,41 @@ export const JOIN_MEETING_BY_CODE = gql`
         status
         inviteCode
       }
+    }
+  }
+`;
+
+// Mutation to join meeting by ID
+export const JOIN_MEETING = gql`
+  mutation JoinMeeting($input: JoinMeetingInput!) {
+    joinMeeting(input: $input) {
+      _id
+      meetingId
+      displayName
+      role
+      micState
+      cameraState
+      userId
+    }
+  }
+`;
+
+// Mutation to leave meeting
+export const LEAVE_MEETING = gql`
+  mutation LeaveMeeting($input: LeaveMeetingInput!) {
+    leaveMeeting(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+// Mutation to delete chat message
+export const DELETE_CHAT_MESSAGE = gql`
+  mutation DeleteChatMessage($messageId: ID!) {
+    deleteChatMessage(messageId: $messageId) {
+      success
+      message
     }
   }
 `;

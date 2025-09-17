@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waiting Room Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Waiting Room Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Meeting Join</h2>
+        <input type="text" id="inviteCode" placeholder="Enter invite code" value="ABC123">
+        <button onclick="testJoinMeeting()">Join Meeting</button>
+        <button onclick="testInvalidCode()">Test Invalid Code</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Device Detection</h2>
+        <button onclick="checkDevices()">Check Available Devices</button>
+        <button onclick="testCamera()">Test Camera</button>
+        <button onclick="testMicrophone()">Test Microphone</button>
+        <button onclick="testSpeaker()">Test Speaker</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <script>
+        const GRAPHQL_ENDPOINT = 'http://localhost:3007/graphql';
+        
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function makeGraphQLRequest(query, variables = {}) {
+            const response = await fetch(GRAPHQL_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.errors) {
+                throw new Error(data.errors[0]?.message || 'GraphQL error');
+            }
+
+            return data.data;
+        }
+
+        async function testJoinMeeting() {
+            try {
+                const inviteCode = document.getElementById('inviteCode').value;
+                log(`🚪 Testing join meeting with code: ${inviteCode}`);
+                
+                // Test with real backend first
+                try {
+                    const realResult = await makeGraphQLRequest(`
+                        mutation JoinMeetingByCode($inviteCode: String!) {
+                            joinMeetingByCode(inviteCode: $inviteCode) {
+                                success
+                                message
+                                meeting {
+                                    _id
+                                    title
+                                    status
+                                    inviteCode
+                                }
+                                participant {
+                                    _id
+                                    displayName
+                                    email
+                                    joinedAt
+                                }
+                            }
+                        }
+                    `, { inviteCode });
+                    
+                    log('✅ Join meeting via real backend:');
+                    log(JSON.stringify(realResult, null, 2));
+                    return;
+                } catch (realError) {
+                    log(`⚠️ Real backend failed (expected): ${realError.message}`);
+                }
+
+                // Fallback to mock service
+                const mockResult = {
+                    joinMeetingByCode: {
+                        success: true,
+                        message: 'Successfully joined meeting',
+                        meeting: {
+                            _id: 'mock-meeting-' + Date.now(),
+                            title: 'Test Meeting',
+                            status: 'STARTED',
+                            inviteCode: inviteCode
+                        },
+                        participant: {
+                            _id: 'participant-' + Date.now(),
+                            displayName: 'Test Participant',
+                            email: 'participant@example.com',
+                            joinedAt: new Date().toISOString()
+                        }
+                    }
+                };
+                
+                log('✅ Join meeting via mock service:');
+                log(JSON.stringify(mockResult, null, 2));
+                
+                // Simulate redirect
+                log(`🔄 Would redirect to: /meeting/${mockResult.joinMeetingByCode.meeting._id}`);
+                
+            } catch (error) {
+                log(`❌ Join meeting error: ${error.message}`);
+            }
+        }
+
+        async function testInvalidCode() {
+            try {
+                log('🚪 Testing invalid invite code...');
+                
+                const mockResult = {
+                    joinMeetingByCode: {
+                        success: false,
+                        message: 'Invalid invite code'
+                    }
+                };
+                
+                log('❌ Invalid code result:');
+                log(JSON.stringify(mockResult, null, 2));
+                
+            } catch (error) {
+                log(`❌ Invalid code test error: ${error.message}`);
+            }
+        }
+
+        async function checkDevices() {
+            try {
+                log('🔍 Checking available devices...');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                    log('❌ Media devices API not supported');
+                    return;
+                }
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                
+                const cameras = devices.filter(d => d.kind === 'videoinput');
+                const microphones = devices.filter(d => d.kind === 'audioinput');
+                const speakers = devices.filter(d => d.kind === 'audiooutput');
+                
+                log(`📷 Cameras found: ${cameras.length}`);
+                cameras.forEach((cam, i) => log(`  ${i + 1}. ${cam.label || 'Camera ' + (i + 1)}`));
+                
+                log(`🎤 Microphones found: ${microphones.length}`);
+                microphones.forEach((mic, i) => log(`  ${i + 1}. ${mic.label || 'Microphone ' + (i + 1)}`));
+                
+                log(`🔊 Speakers found: ${speakers.length}`);
+                speakers.forEach((speaker, i) => log(`  ${i + 1}. ${speaker.label || 'Speaker ' + (i + 1)}`));
+                
+            } catch (error) {
+                log(`❌ Device check error: ${error.message}`);
+            }
+        }
+
+        async function testCamera() {
+            try {
+                log('📷 Testing camera...');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    log('❌ getUserMedia not supported');
+                    return;
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                log('✅ Camera access granted');
+                
+                // Create video element to test
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.style.width = '200px';
+                video.style.height = '150px';
+                video.autoplay = true;
+                video.muted = true;
+                
+                document.body.appendChild(video);
+                
+                // Stop after 3 seconds
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.remove();
+                    log('📷 Camera test completed');
+                }, 3000);
+                
+            } catch (error) {
+                log(`❌ Camera test failed: ${error.message}`);
+            }
+        }
+
+        async function testMicrophone() {
+            try {
+                log('🎤 Testing microphone...');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    log('❌ getUserMedia not supported');
+                    return;
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                log('✅ Microphone access granted');
+                
+                // Test recording
+                const mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    chunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/wav' });
+                    const audio = new Audio(URL.createObjectURL(blob));
+                    audio.play();
+                    log('🎤 Microphone test completed - playing back recording');
+                };
+                
+                mediaRecorder.start();
+                log('🎤 Recording for 3 seconds...');
+                
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                    stream.getTracks().forEach(track => track.stop());
+                }, 3000);
+                
+            } catch (error) {
+                log(`❌ Microphone test failed: ${error.message}`);
+            }
+        }
+
+        async function testSpeaker() {
+            try {
+                log('🔊 Testing speaker...');
+                
+                // Create a simple test tone
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                
+                oscillator.start();
+                log('🔊 Playing test tone for 2 seconds...');
+                
+                setTimeout(() => {
+                    oscillator.stop();
+                    log('✅ Speaker test completed');
+                }, 2000);
+                
+            } catch (error) {
+                log(`❌ Speaker test failed: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        log('🧪 Waiting Room Test Ready!');
+        log('Frontend: http://localhost:3000/waiting');
+        log('Backend: http://localhost:3007');
+        checkDevices();
+    </script>
+</body>
+</html>

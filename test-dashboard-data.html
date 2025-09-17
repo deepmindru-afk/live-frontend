@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Data Loading Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .meeting-item { background-color: #f8f9fa; padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid #007bff; }
+        .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-created { background-color: #28a745; color: white; }
+        .status-scheduled { background-color: #ffc107; color: black; }
+        .status-ended { background-color: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>🔧 Dashboard Data Loading Test</h1>
+        <p>Testing the fixed dashboard data loading without hardcoded data.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>What Was Fixed</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>❌ Before (Broken)</h3>
+                <div class="log" style="background-color: #f8d7da;">
+Problems:
+1. Wrong GraphQL query structure
+   - Used: query { meetings { ... } }
+   - Backend expects: query { getMeetings(input: {}) { meetings { ... } } }
+
+2. Wrong field names
+   - Used: schedule
+   - Backend has: scheduledFor
+
+3. Wrong status mapping
+   - Backend: CREATED, SCHEDULED, ENDED
+   - Frontend expected: STARTED, SCHEDULED, ENDED
+
+4. Hardcoded mock data
+   - Always fell back to fake meetings
+   - Never used real backend data
+
+Result:
+- Dashboard showed fake data
+- Real meetings not displayed
+- No connection to backend
+                </div>
+            </div>
+            <div>
+                <h3>✅ After (Fixed)</h3>
+                <div class="log" style="background-color: #d4edda;">
+Solutions:
+1. Correct GraphQL query
+   - query getMeetings($input: MeetingQueryInput!) {
+     getMeetings(input: $input) {
+       total
+       meetings { ... }
+     }
+   }
+
+2. Correct field mapping
+   - schedule → scheduledFor
+   - Proper status conversion
+
+3. Status mapping
+   - CREATED → STARTED
+   - SCHEDULED → SCHEDULED  
+   - ENDED → ENDED
+
+4. Removed all hardcoded data
+   - Always uses backend
+   - Shows empty state if no data
+   - Real-time data loading
+
+Result:
+- Dashboard shows real data
+- Live backend connection
+- No fake data
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Backend Connection</h2>
+        <button class="btn-primary" onclick="testBackendConnection()">Test Backend</button>
+        <button class="btn-success" onclick="testMeetingsQuery()">Test Meetings Query</button>
+        <button class="btn-warning" onclick="testVODsQuery()">Test VODs Query</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Loaded Meetings</h2>
+        <div id="meetings" class="log">No meetings loaded yet...</div>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function displayMeetings(meetings) {
+            const container = document.getElementById('meetings');
+            if (!meetings || meetings.length === 0) {
+                container.innerHTML = 'No meetings found';
+                return;
+            }
+
+            let html = `Found ${meetings.length} meetings:\n\n`;
+            meetings.forEach((meeting, index) => {
+                const statusClass = meeting.status.toLowerCase();
+                html += `<div class="meeting-item">
+                    <strong>${index + 1}. ${meeting.title}</strong>
+                    <span class="status-badge status-${statusClass}">${meeting.status}</span>
+                    <br>ID: ${meeting._id}
+                    <br>Invite Code: ${meeting.inviteCode}
+                    <br>Participants: ${meeting.participantCount}
+                    <br>Created: ${new Date(meeting.createdAt).toLocaleString()}
+                    ${meeting.scheduledFor ? `<br>Scheduled: ${new Date(meeting.scheduledFor).toLocaleString()}` : ''}
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function testBackendConnection() {
+            log('🔍 BACKEND TEST: Testing backend connection...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query TestQuery {
+                                health
+                            }
+                        `
+                    })
+                });
+
+                const data = await response.json();
+                log(`📡 Response Status: ${response.status}`);
+                log(`📡 Response Data: ${JSON.stringify(data, null, 2)}`);
+
+                if (data.data && data.data.health) {
+                    log('✅ Backend is reachable and healthy!');
+                } else {
+                    log('❌ Backend health check failed');
+                }
+            } catch (error) {
+                log(`❌ Network Error: ${error.message}`);
+            }
+        }
+
+        async function testMeetingsQuery() {
+            log('📊 MEETINGS TEST: Testing meetings query...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetMeetings($input: MeetingQueryInput!) {
+                                getMeetings(input: $input) {
+                                    total
+                                    meetings {
+                                        _id
+                                        title
+                                        status
+                                        scheduledFor
+                                        inviteCode
+                                        createdAt
+                                        participantCount
+                                        duration
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                limit: 50,
+                                offset: 0
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`📡 Response Status: ${response.status}`);
+                log(`📡 Response Data: ${JSON.stringify(data, null, 2)}`);
+
+                if (data.errors) {
+                    log(`❌ GraphQL Errors: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.getMeetings) {
+                    const meetings = data.data.getMeetings.meetings;
+                    log(`✅ Found ${meetings.length} meetings (Total: ${data.data.getMeetings.total})`);
+                    
+                    // Map backend status to frontend status
+                    const mappedMeetings = meetings.map(meeting => ({
+                        ...meeting,
+                        status: meeting.status === 'CREATED' ? 'STARTED' : 
+                                meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                                meeting.status === 'ENDED' ? 'ENDED' : 'STARTED'
+                    }));
+                    
+                    displayMeetings(mappedMeetings);
+                } else {
+                    log('❌ Unexpected response format');
+                }
+            } catch (error) {
+                log(`❌ Network Error: ${error.message}`);
+            }
+        }
+
+        async function testVODsQuery() {
+            log('🎥 VODS TEST: Testing VODs query...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetVODs($pagination: PaginationInput!) {
+                                getAllVods(pagination: $pagination) {
+                                    _id
+                                    title
+                                    size
+                                    duration
+                                    url
+                                    createdAt
+                                    status
+                                }
+                            }
+                        `,
+                        variables: {
+                            pagination: {
+                                limit: 50,
+                                offset: 0
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`📡 Response Status: ${response.status}`);
+                log(`📡 Response Data: ${JSON.stringify(data, null, 2)}`);
+
+                if (data.errors) {
+                    log(`❌ GraphQL Errors: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.getAllVods) {
+                    const vods = data.data.getAllVods;
+                    log(`✅ Found ${vods.length} VODs`);
+                } else {
+                    log('❌ Unexpected response format');
+                }
+            } catch (error) {
+                log(`❌ Network Error: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        log('🧪 Dashboard Data Loading Test Ready!');
+        log('This test verifies the fixed dashboard data loading');
+        log('No more hardcoded data - everything comes from backend');
+        log('');
+        log('Test steps:');
+        log('1. Click "Test Backend" to verify connection');
+        log('2. Click "Test Meetings Query" to load real meetings');
+        log('3. Click "Test VODs Query" to load real VODs');
+    </script>
+</body>
+</html>

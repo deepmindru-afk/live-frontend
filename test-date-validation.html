@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date Validation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        input { padding: 8px; margin: 5px; width: 200px; border: 1px solid #ddd; border-radius: 4px; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>🔧 Date Validation Test</h1>
+        <p>Testing the date validation fix for meeting creation.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Date Validation</h2>
+        <div>
+            <label>Meeting Title:</label>
+            <input type="text" id="meetingTitle" value="Date Test Meeting" placeholder="Enter meeting title">
+        </div>
+        <div>
+            <label>Schedule (datetime-local):</label>
+            <input type="datetime-local" id="meetingSchedule" placeholder="Select schedule">
+        </div>
+        <div>
+            <label>Manual Date Input (for testing):</label>
+            <input type="text" id="manualDate" placeholder="Enter date manually (e.g., 2024-01-20T10:00)" value="2024-01-20T10:00">
+        </div>
+        <button class="btn-primary" onclick="testDateValidation()">Test Date Validation</button>
+        <button class="btn-success" onclick="testInvalidDates()">Test Invalid Dates</button>
+        <button class="btn-warning" onclick="testBackendWithValidDate()">Test Backend with Valid Date</button>
+    </div>
+
+    <div class="test-section">
+        <h2>What Was Fixed</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>❌ Before (Broken)</h3>
+                <div class="log" style="background-color: #f8d7da;">
+Frontend sent invalid dates:
+- "73737-02-06T21:32" (Invalid year)
+- "238732-03-22T15:02" (Invalid year)
+
+Backend received:
+{
+  "scheduledFor": "73737-02-06T21:32"
+}
+
+Result:
+- BadRequestException: Bad Request Exception
+- Meeting creation failed
+                </div>
+            </div>
+            <div>
+                <h3>✅ After (Fixed)</h3>
+                <div class="log" style="background-color: #d4edda;">
+Frontend validates dates:
+- Validates date format
+- Converts to ISO string
+- Sends proper format
+
+Backend receives:
+{
+  "scheduledFor": "2024-01-20T10:00:00.000Z"
+}
+
+Result:
+- Meeting created successfully
+- Proper date handling
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results" class="log">Click a button to test...</div>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function validateAndFormatDate(dateString) {
+            if (!dateString || !dateString.trim()) {
+                return null;
+            }
+
+            try {
+                const date = new Date(dateString);
+                if (isNaN(date.getTime())) {
+                    throw new Error('Invalid date format');
+                }
+                const isoString = date.toISOString();
+                return isoString;
+            } catch (error) {
+                throw new Error(`Date validation error: ${error.message}`);
+            }
+        }
+
+        function testDateValidation() {
+            const title = document.getElementById('meetingTitle').value;
+            const schedule = document.getElementById('meetingSchedule').value;
+            const manualDate = document.getElementById('manualDate').value;
+            
+            log('🔍 DATE VALIDATION: Testing date validation...');
+            log(`📝 Title: ${title}`);
+            log(`📅 Schedule (datetime-local): ${schedule}`);
+            log(`📅 Manual Date: ${manualDate}`);
+            
+            // Test datetime-local input
+            if (schedule) {
+                try {
+                    const formattedSchedule = validateAndFormatDate(schedule);
+                    log(`✅ Datetime-local validation passed: ${formattedSchedule}`);
+                } catch (error) {
+                    log(`❌ Datetime-local validation failed: ${error.message}`);
+                }
+            }
+            
+            // Test manual date input
+            if (manualDate) {
+                try {
+                    const formattedManual = validateAndFormatDate(manualDate);
+                    log(`✅ Manual date validation passed: ${formattedManual}`);
+                } catch (error) {
+                    log(`❌ Manual date validation failed: ${error.message}`);
+                }
+            }
+            
+            // Test empty date
+            try {
+                const emptyDate = validateAndFormatDate('');
+                log(`✅ Empty date validation passed: ${emptyDate}`);
+            } catch (error) {
+                log(`❌ Empty date validation failed: ${error.message}`);
+            }
+        }
+
+        function testInvalidDates() {
+            const invalidDates = [
+                '73737-02-06T21:32',
+                '238732-03-22T15:02',
+                'invalid-date',
+                '2024-13-45T25:70',
+                'not-a-date-at-all'
+            ];
+            
+            log('🚫 INVALID DATES: Testing invalid date handling...');
+            
+            invalidDates.forEach(dateStr => {
+                try {
+                    const result = validateAndFormatDate(dateStr);
+                    log(`❌ Should have failed: ${dateStr} -> ${result}`);
+                } catch (error) {
+                    log(`✅ Correctly rejected: ${dateStr} -> ${error.message}`);
+                }
+            });
+        }
+
+        async function testBackendWithValidDate() {
+            const title = document.getElementById('meetingTitle').value;
+            const schedule = document.getElementById('meetingSchedule').value;
+            
+            log('🌐 BACKEND TEST: Testing backend with valid date...');
+            
+            let formattedSchedule = null;
+            if (schedule) {
+                try {
+                    formattedSchedule = validateAndFormatDate(schedule);
+                    log(`📅 Formatted schedule: ${formattedSchedule}`);
+                } catch (error) {
+                    log(`❌ Date validation failed: ${error.message}`);
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation CreateMeeting($input: CreateMeetingInput!) {
+                                createMeeting(input: $input) {
+                                    _id
+                                    title
+                                    status
+                                    scheduledFor
+                                    inviteCode
+                                    createdAt
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                title: title,
+                                scheduledFor: formattedSchedule,
+                                isPrivate: false,
+                                notes: "Test with valid date"
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`📡 Response Status: ${response.status}`);
+                log(`📡 Response Data: ${JSON.stringify(data, null, 2)}`);
+
+                if (data.errors) {
+                    log(`❌ GraphQL Errors: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.createMeeting) {
+                    log(`✅ Meeting created successfully!`);
+                    log(`🆔 ID: ${data.data.createMeeting._id}`);
+                    log(`📝 Title: ${data.data.createMeeting.title}`);
+                    log(`📅 Scheduled: ${data.data.createMeeting.scheduledFor || 'Immediate'}`);
+                } else {
+                    log(`❌ Unexpected response format`);
+                }
+            } catch (error) {
+                log(`❌ Network Error: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        log('🧪 Date Validation Test Ready!');
+        log('This test validates the date format fix for meeting creation');
+        log('The frontend now validates dates before sending to backend');
+        log('');
+        log('Test steps:');
+        log('1. Click "Test Date Validation" to test date formatting');
+        log('2. Click "Test Invalid Dates" to see error handling');
+        log('3. Click "Test Backend with Valid Date" to test real API');
+    </script>
+</body>
+</html>

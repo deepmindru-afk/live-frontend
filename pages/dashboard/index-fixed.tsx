@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
@@ -63,18 +63,16 @@ const Dashboard: React.FC = () => {
       if (isAuthenticated()) {
         const userData = await getCurrentUser();
         
-        // Only allow TUTOR role to access this instructor dashboard
-        if (userData && userData.systemRole === 'TUTOR') {
-        setUser(userData);
+        // Only allow TUTOR and ADMIN roles to access this dashboard
+        if (userData && (userData.systemRole === 'TUTOR' || userData.systemRole === 'ADMIN')) {
+          setUser(userData);
           await testBackendConnection();
           await fetchMeetings();
           await loadVODs();
         } else {
-          // Redirect based on role
+          // Redirect members to their dashboard
           if (userData && userData.systemRole === 'MEMBER') {
             window.location.href = '/member';
-          } else if (userData && userData.systemRole === 'ADMIN') {
-            window.location.href = '/dashboard';
           } else {
             window.location.href = '/login';
           }
@@ -114,24 +112,6 @@ const Dashboard: React.FC = () => {
       
       console.log('🔍 BACKEND TEST: Backend is reachable:', result);
       
-      // Test if meeting mutations exist
-      try {
-        await enhancedMakeGraphQLRequest(`
-          query TestMeetingQuery {
-            __schema {
-              mutationType {
-                fields {
-                  name
-                }
-              }
-            }
-          }
-        `);
-        console.log('🔍 BACKEND TEST: GraphQL schema accessible');
-      } catch (schemaError) {
-        console.warn('🔍 BACKEND TEST: Cannot access GraphQL schema:', schemaError);
-      }
-      
     } catch (error) {
       console.error('🔍 BACKEND TEST: Backend connection failed:', error);
     }
@@ -139,71 +119,46 @@ const Dashboard: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
-      console.log('📊 DASHBOARD: Fetching meetings...');
+      console.log('📊 DASHBOARD: Fetching meetings from backend...');
       
-      // Get current user info
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const currentUserId = user?._id;
-      
-      if (!currentUserId) {
-        console.warn('📊 DASHBOARD: No user ID found, cannot fetch meetings');
-        setMeetings([]);
-        return;
-      }
-      
-      // Try to fetch meetings via GraphQL first
-      try {
-        const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
-          input: {
-            hostId: currentUserId // Filter by current user
-          }
-        });
-        
-        if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
-          const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => ({
-            _id: meeting._id,
-            title: meeting.title,
-            status: meeting.status === 'CREATED' ? 'STARTED' : 
-                    meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                    meeting.status === 'ENDED' ? 'ENDED' : 'STARTED',
-            schedule: meeting.scheduledFor,
-            inviteCode: meeting.inviteCode,
-            createdAt: meeting.createdAt,
-            updatedAt: meeting.updatedAt || meeting.createdAt,
-            participantCount: meeting.participantCount || 0,
-            duration: meeting.duration
-          }));
-          
-          setMeetings(meetings);
-          console.log('📊 DASHBOARD: Successfully loaded meetings from GraphQL:', meetings.length);
-          return;
+      const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
+        input: {
+          limit: 50,
+          offset: 0
         }
-      } catch (graphqlError) {
-        console.warn('📊 DASHBOARD: GraphQL request failed, falling back to mock data:', graphqlError);
-      }
+      });
       
-      // If GraphQL fails, show empty state (no mock data to avoid showing all meetings)
-      console.warn('📊 DASHBOARD: No meetings found in response');
-      setMeetings([]);
+      console.log('📊 DASHBOARD: Backend response:', result);
+      
+      if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
+        const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => ({
+          _id: meeting._id,
+          title: meeting.title,
+          status: meeting.status === 'CREATED' ? 'STARTED' : 
+                  meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                  meeting.status === 'ENDED' ? 'ENDED' : 'STARTED',
+          schedule: meeting.scheduledFor,
+          inviteCode: meeting.inviteCode,
+          createdAt: meeting.createdAt,
+          updatedAt: meeting.updatedAt || meeting.createdAt,
+          participantCount: meeting.participantCount || 0,
+          duration: meeting.duration
+        }));
+        
+        setMeetings(meetings);
+        console.log('📊 DASHBOARD: Successfully loaded meetings from backend:', meetings.length);
+      } else {
+        console.warn('📊 DASHBOARD: No meetings found in response');
+        setMeetings([]);
+      }
       
     } catch (error) {
       console.error('📊 DASHBOARD: Error fetching meetings:', error);
-      
-      // Show error but don't block the UI
-      await Swal.fire({
-        icon: 'warning',
-        title: '연결 오류',
-        text: '서버에 연결할 수 없습니다. 오프라인 모드로 실행됩니다.',
-        confirmButtonText: '확인'
-      });
-      
-      // Set empty array for now - in production you might want to show cached data
       setMeetings([]);
     }
   };
 
-  const handleCreateMeeting = async () => {
+  const handleCreateRoom = async () => {
     if (!newMeetingTitle.trim()) {
       await Swal.fire({
         icon: 'warning',
@@ -258,7 +213,8 @@ const Dashboard: React.FC = () => {
           const newMeeting: Meeting = {
             _id: result.createMeeting._id,
             title: result.createMeeting.title,
-            status: result.createMeeting.status,
+            status: result.createMeeting.status === 'CREATED' ? 'STARTED' : 
+                    result.createMeeting.status === 'SCHEDULED' ? 'SCHEDULED' : 'STARTED',
             schedule: result.createMeeting.scheduledFor,
             inviteCode: result.createMeeting.inviteCode,
             createdAt: result.createMeeting.createdAt,
@@ -281,52 +237,19 @@ const Dashboard: React.FC = () => {
           setMeetingSchedule('');
 
           console.log('🏠 CREATE MEETING: Meeting created via GraphQL:', newMeeting);
-          
-          // Auto-redirect to meeting room
-          console.log('🏠 CREATE MEETING: Redirecting to meeting room:', newMeeting._id);
-          window.location.href = `/meeting/${newMeeting._id}`;
           return;
         }
       } catch (graphqlError) {
         console.warn('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
-        
-        // Check if it's a "field not found" error (backend doesn't have meeting mutations)
-        if (graphqlError instanceof Error && graphqlError.message.includes('Cannot query field')) {
-          console.warn('🏠 CREATE MEETING: Backend does not have meeting mutations implemented');
-        }
       }
 
-      // Fallback to mock meeting if GraphQL fails
-      const newMeeting: Meeting = {
-        _id: Date.now().toString(),
-        title: newMeetingTitle,
-        status: meetingSchedule ? 'SCHEDULED' : 'STARTED',
-        schedule: meetingSchedule || undefined,
-        inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        participantCount: 0,
-      };
-
-      // Add to existing meetings
-      setMeetings(prev => [newMeeting, ...prev]);
-
+      // If GraphQL fails, show error
       await Swal.fire({
-        icon: 'info',
-        title: '성공',
-        text: '방이 성공적으로 생성되었습니다!',
+        icon: 'error',
+        title: '오류',
+        text: '방 생성 중 오류가 발생했습니다. 다시 시도해주세요.',
         confirmButtonText: '확인'
       });
-
-      // Clear form
-      setNewMeetingTitle('');
-      setMeetingSchedule('');
-
-      console.log('🏠 CREATE MEETING: Mock meeting created:', newMeeting);
-      
-      // Auto-redirect to meeting room
-      console.log('🏠 CREATE MEETING: Redirecting to meeting room:', newMeeting._id);
-      window.location.href = `/meeting/${newMeeting._id}`;
 
     } catch (error: unknown) {
       console.error('🏠 CREATE MEETING: Error:', error);
@@ -380,7 +303,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 시작되었습니다! (모의 서비스)',
+        text: '회의가 시작되었습니다!',
         confirmButtonText: '확인'
       });
 
@@ -438,7 +361,7 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 종료되었습니다! (모의 서비스)',
+        text: '회의가 종료되었습니다!',
         confirmButtonText: '확인'
       });
 
@@ -725,11 +648,11 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Instructor Dashboard</title>
-        <meta name="description" content="Instructor Dashboard for Meet: mate" />
+        <title>Meet: mate - Dashboard</title>
+        <meta name="description" content="Virtual meeting dashboard" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-      
+
       <div className="dashboard-container">
         {/* Header */}
         <div className="dashboard-header">
@@ -739,290 +662,238 @@ const Dashboard: React.FC = () => {
               alt="Meet: mate"
               width={120}
               height={40}
-              className="logo-image"
             />
           </div>
-          <div className="user-info">
-            {user && <ProfileDropdown user={user} />}
+          <div className="header-actions">
+            <ProfileDropdown user={user} />
           </div>
         </div>
 
-        <div className="dashboard-content">
-          {/* Left Sidebar */}
-          <div className="dashboard-sidebar">
-            <div className="greeting">
-              <h2>{user?.displayName}님, 안녕하세요 👋</h2>
+        {/* Main Content */}
+        <div className="dashboard-main">
+          <div className="meetings-panel">
+            {/* Tabs */}
+            <div className="tabs">
+              <button
+                className={`tab ${activeTab === 'STARTED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('STARTED')}
+              >
+                진행중 ({meetings.filter(m => m.status === 'STARTED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('SCHEDULED')}
+              >
+                예약됨 ({meetings.filter(m => m.status === 'SCHEDULED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'ENDED' ? 'active' : ''}`}
+                onClick={() => setActiveTab('ENDED')}
+              >
+                종료됨 ({meetings.filter(m => m.status === 'ENDED').length})
+              </button>
+              <button
+                className={`tab ${activeTab === 'VOD' ? 'active' : ''}`}
+                onClick={() => setActiveTab('VOD')}
+              >
+                VOD 관리
+              </button>
             </div>
 
-            {/* Create Room Panel */}
-            <div className="action-panel create-room">
-              <h3>방 만들기</h3>
-              <div className="input-group">
-                <input
-                  type="text"
-                  placeholder="방 이름을 입력하세요"
-                  value={newMeetingTitle}
-                  onChange={(e) => setNewMeetingTitle(e.target.value)}
-                />
-                <button onClick={handleCreateMeeting}>→</button>
-              </div>
+            {/* Search */}
+            <div className="search-bar">
+              <input
+                type="text"
+                placeholder="회의 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <button onClick={handleSearch}>🔍</button>
             </div>
 
-            {/* Schedule Panel */}
-            <div className="action-panel schedule">
-              <h3>예약하기</h3>
-              <p>원하는 시간에 회의를 할 수 있습니다</p>
-              <div className="input-group">
-                <input
-                  type="datetime-local"
-                  value={meetingSchedule}
-                  onChange={(e) => setMeetingSchedule(e.target.value)}
-                />
-                <button onClick={handleCreateMeeting}>→</button>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="dashboard-main">
-            <div className="meetings-panel">
-              {/* Tabs */}
-              <div className="tabs">
-                <button
-                  className={`tab ${activeTab === 'STARTED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('STARTED')}
-                >
-                  시작된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('SCHEDULED')}
-                >
-                  예약된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'ENDED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('ENDED')}
-                >
-                  종료된 회의
-                </button>
-                <button
-                  className={`tab ${activeTab === 'VOD' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('VOD')}
-                >
-                  VOD 관리
-                </button>
-              </div>
-
-              {/* Search */}
-              <div className="search-bar">
-                <input
-                  type="text"
-                  placeholder="검색어를 입력하세요"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button 
-                  className="search-button"
-                  onClick={handleSearch}
-                  title="검색"
-                >
-                  🔍
-                </button>
-              </div>
-
-              {/* Content based on active tab */}
-              {activeTab === 'VOD' ? (
-                /* VOD Management Section */
-                <div>
-                  {/* Upload Options */}
-                  <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
-                    <button
-                      onClick={handleFileUpload}
-                      style={{
-                        padding: '12px 24px',
-                        backgroundColor: 'white',
-                        border: '2px solid #1976d2',
-                        borderRadius: '8px',
-                        color: '#1976d2',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '16px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      📁 파일 등록
-                    </button>
-                    <button
-                      onClick={handleURLUpload}
-                      style={{
-                        padding: '12px 24px',
-                        backgroundColor: 'white',
-                        border: '2px solid #1976d2',
-                        borderRadius: '8px',
-                        color: '#1976d2',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '16px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      🔗 URL 등록
-                    </button>
-                  </div>
-
-                  {/* VOD Table */}
-                  <div className="meetings-table">
-                    {filteredVODs.length > 0 ? (
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>No.</th>
-                            <th>VOD 제목</th>
-                            <th>용량</th>
-                            <th>비고</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredVODs.map((vod, index) => (
-                            <tr key={vod._id}>
-                              <td>{index + 1}</td>
-                              <td>
-                                <div>
-                                  <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
-                                  <div style={{ fontSize: '14px', color: '#666' }}>
-                                    {vod.duration && formatDuration(vod.duration)}
-                                    {vod.status === 'UPLOADING' && ' (업로드 중...)'}
-                                    {vod.status === 'PROCESSING' && ' (처리 중...)'}
-                                    {vod.status === 'ERROR' && ' (오류)'}
-              </div>
-            </div>
-                              </td>
-                              <td>{formatFileSize(vod.size)}</td>
-                              <td>
-                                <button
-                                  className="three-dots"
-                                  onClick={(e) => handleVODMenuClick(vod._id, e)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '18px',
-                                    color: '#6c757d'
-                                  }}
-                                >
-                                  ⋯
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div className="empty-state">
-                        <div className="empty-icon">✗</div>
-                        <p>등록된 VOD가 없습니다</p>
-                      </div>
-                    )}
-                  </div>
+            {/* Content based on active tab */}
+            {activeTab === 'VOD' ? (
+              /* VOD Management Section */
+              <div>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
+                  <button onClick={handleFileUpload} className="btn-primary">
+                    📁 파일 등록
+                  </button>
+                  <button onClick={handleURLUpload} className="btn-secondary">
+                    🔗 URL 등록
+                  </button>
                 </div>
-              ) : (
-                /* Meetings Table */
                 <div className="meetings-table">
-                  {filteredMeetings.length === 0 ? (
-                    <div className="empty-state">
-                      <div className="empty-icon">✗</div>
-                      <p>등록된 회의가 없습니다</p>
-                    </div>
-                  ) : (
+                  {filteredVODs.length > 0 ? (
                     <table>
                       <thead>
                         <tr>
                           <th>No.</th>
-                          <th>회의 제목</th>
-                          <th>회의시간</th>
-                          <th>초대코드</th>
+                          <th>VOD 제목</th>
+                          <th>용량</th>
                           <th>비고</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredMeetings.map((meeting, index) => (
-                          <tr key={meeting._id}>
+                        {filteredVODs.map((vod, index) => (
+                          <tr key={vod._id}>
                             <td>{index + 1}</td>
-                            <td>{meeting.title}</td>
                             <td>
-                              {meeting.schedule 
-                                ? formatDate(meeting.schedule)
-                                : formatDate(meeting.createdAt)
-                              }
-                            </td>
-                            <td>
-                              <span 
-                                className="invite-code"
-                                onClick={() => copyInviteCode(meeting.inviteCode)}
-                              >
-                                {meeting.inviteCode}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="actions">
-                                {meeting.status === 'SCHEDULED' && (
-                                  <button 
-                                    className="action-btn start"
-                                    onClick={() => handleStartMeeting(meeting._id)}
-                                  >
-                                    시작
-                                  </button>
-                                )}
-                                {meeting.status === 'STARTED' && (
-                                  <button 
-                                    className="action-btn end"
-                                    onClick={() => handleEndMeeting(meeting._id)}
-                                  >
-                                    종료
-                                  </button>
-                                )}
+                              <div>
+                                <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
+                                <div style={{ fontSize: '14px', color: '#666' }}>
+                                  {vod.duration && formatDuration(vod.duration)}
+                                  {vod.status === 'UPLOADING' && ' (업로드 중...)'}
+                                  {vod.status === 'PROCESSING' && ' (처리 중...)'}
+                                  {vod.status === 'ERROR' && ' (오류)'}
+                                </div>
                               </div>
+                            </td>
+                            <td>{formatFileSize(vod.size)}</td>
+                            <td>
+                              <button
+                                className="three-dots"
+                                onClick={(e) => handleVODMenuClick(vod._id, e)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '18px',
+                                  padding: '4px 8px'
+                                }}
+                              >
+                                ⋯
+                              </button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-icon">✗</div>
+                      <p>등록된 VOD가 없습니다</p>
+                    </div>
                   )}
+                </div>
               </div>
-              )}
-            </div>
+            ) : (
+              /* Meetings Table */
+              <div className="meetings-table">
+                {filteredMeetings.length > 0 ? (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>방 이름</th>
+                        <th>상태</th>
+                        <th>초대코드</th>
+                        <th>참가자</th>
+                        <th>생성일</th>
+                        <th>액션</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMeetings.map((meeting) => (
+                        <tr key={meeting._id}>
+                          <td>
+                            <div className="meeting-title">{meeting.title}</div>
+                            {meeting.schedule && (
+                              <div className="meeting-schedule">
+                                예약: {formatDate(meeting.schedule)}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`status-badge status-${meeting.status.toLowerCase()}`}>
+                              {meeting.status === 'STARTED' ? '진행중' : 
+                               meeting.status === 'SCHEDULED' ? '예약됨' : '종료됨'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="invite-code">
+                              <span>{meeting.inviteCode}</span>
+                              <button
+                                onClick={() => copyInviteCode(meeting.inviteCode)}
+                                className="copy-btn"
+                              >
+                                복사
+                              </button>
+                            </div>
+                          </td>
+                          <td>{meeting.participantCount}명</td>
+                          <td>{formatDate(meeting.createdAt)}</td>
+                          <td>
+                            <div className="action-buttons">
+                              {meeting.status === 'SCHEDULED' && (
+                                <button
+                                  onClick={() => handleStartMeeting(meeting._id)}
+                                  className="btn-start"
+                                >
+                                  시작
+                                </button>
+                              )}
+                              {meeting.status === 'STARTED' && (
+                                <button
+                                  onClick={() => handleEndMeeting(meeting._id)}
+                                  className="btn-end"
+                                >
+                                  종료
+                                </button>
+                              )}
+                              <button
+                                onClick={() => router.push(`/meeting/${meeting._id}`)}
+                                className="btn-join"
+                              >
+                                참여
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📅</div>
+                    <p>회의가 없습니다</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Create Meeting Form */}
+            {activeTab !== 'VOD' && (
+              <div className="create-meeting-form">
+                <h3>새 회의 만들기</h3>
+                <div className="form-group">
+                  <input
+                    type="text"
+                    placeholder="회의 제목을 입력하세요"
+                    value={newMeetingTitle}
+                    onChange={(e) => setNewMeetingTitle(e.target.value)}
+                  />
+                  <input
+                    type="datetime-local"
+                    value={meetingSchedule}
+                    onChange={(e) => setMeetingSchedule(e.target.value)}
+                    placeholder="예약 시간 (선택사항)"
+                  />
+                  <button onClick={handleCreateRoom} className="btn-create">
+                    회의 만들기
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* File Upload Modal */}
       {showUploadModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <h2 style={{ margin: '0 0 20px 0' }}>파일 업로드</h2>
-            <div style={{ marginBottom: '20px' }}>
+        <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>파일 업로드</h2>
+            <div className="file-upload-area">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1032,54 +903,17 @@ const Dashboard: React.FC = () => {
                 id="fileInput"
               />
               <button
-                onClick={() => {
-                  console.log('📁 FILE INPUT: Clicking file input');
-                  fileInputRef.current?.click();
-                }}
-                style={{
-                  width: '100%',
-                  padding: '20px',
-                  border: '2px dashed #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: '#f8f9fa',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  color: '#666'
-                }}
+                onClick={() => fileInputRef.current?.click()}
+                className="file-select-btn"
               >
                 {selectedFile ? selectedFile.name : '파일을 선택하세요'}
               </button>
             </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px'
-            }}>
-              <button
-                onClick={() => setShowUploadModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
+            <div className="modal-actions">
+              <button onClick={() => setShowUploadModal(false)} className="btn-cancel">
                 취소
               </button>
-              <button
-                onClick={uploadFile}
-                disabled={!selectedFile}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: !selectedFile ? '#ccc' : '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: !selectedFile ? 'not-allowed' : 'pointer'
-                }}
-              >
+              <button onClick={uploadFile} disabled={!selectedFile} className="btn-upload">
                 업로드
               </button>
             </div>
@@ -1089,90 +923,30 @@ const Dashboard: React.FC = () => {
 
       {/* URL Upload Modal */}
       {showURLModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <h2 style={{ margin: '0 0 20px 0' }}>URL 등록</h2>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                VOD 제목
-              </label>
+        <div className="modal-overlay" onClick={() => setShowURLModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>URL 등록</h2>
+            <div className="form-group">
+              <label>VOD 제목</label>
               <input
                 type="text"
                 value={urlTitle}
                 onChange={(e) => setUrlTitle(e.target.value)}
                 placeholder="VOD 제목을 입력하세요"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  marginBottom: '15px'
-                }}
               />
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-                URL
-              </label>
+              <label>URL</label>
               <input
                 type="url"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="VOD URL을 입력하세요"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
+                placeholder="https://example.com/video.mp4"
               />
             </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px'
-            }}>
-              <button
-                onClick={() => setShowURLModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
+            <div className="modal-actions">
+              <button onClick={() => setShowURLModal(false)} className="btn-cancel">
                 취소
               </button>
-              <button
-                onClick={uploadFromURL}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
+              <button onClick={uploadFromURL} className="btn-upload">
                 등록
               </button>
             </div>
@@ -1182,14 +956,7 @@ const Dashboard: React.FC = () => {
 
       {/* VOD Menu Dropdown */}
       {showVODMenu && selectedVOD && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2000
-        }} onClick={closeVODMenu}>
+        <div className="modal-overlay" onClick={closeVODMenu}>
           <div 
             className="vod-menu"
             style={{
