@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin GraphQL Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="test-section success">
+        <h1>✅ Admin GraphQL Fix Test</h1>
+        <p>Testing the fixed GraphQL queries for admin dashboard.</p>
+    </div>
+
+    <div class="test-section info">
+        <h2>🔧 What Was Fixed</h2>
+        <ul>
+            <li><strong>MeetingStats:</strong> Removed non-existent fields (endedMeetings, meetingsToday, etc.)</li>
+            <li><strong>VodStats:</strong> Updated to use correct fields (fileVods, urlVods, totalSizeBytes)</li>
+            <li><strong>ChatStats:</strong> Updated to use correct fields (activeUsers, averageMessagesPerUser)</li>
+            <li><strong>KPI Cards:</strong> Updated to display available data correctly</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Test Steps</h2>
+        <button class="btn-primary" onclick="step1_loginAsAdmin()">1. Login as Admin</button>
+        <button class="btn-success" onclick="step2_testMeetingStats()">2. Test Meeting Stats</button>
+        <button class="btn-warning" onclick="step3_testVodStats()">3. Test VOD Stats</button>
+        <button class="btn-primary" onclick="step4_testChatStats()">4. Test Chat Stats</button>
+        <button class="btn-success" onclick="step5_openAdminPage()">5. Open Admin Page</button>
+        <div id="results" class="log">Click buttons to test the GraphQL fixes...</div>
+    </div>
+
+    <div class="test-section success">
+        <h2>✅ Expected Results</h2>
+        <ul>
+            <li>✅ No GraphQL field errors</li>
+            <li>✅ Meeting stats load correctly</li>
+            <li>✅ VOD stats load correctly</li>
+            <li>✅ Chat stats load correctly</li>
+            <li>✅ Admin dashboard loads without errors</li>
+        </ul>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        let adminToken = null;
+
+        async function step1_loginAsAdmin() {
+            log('🔐 Step 1: Logging in as admin...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation AdminLogin($email: String!, $password: String!) {
+                                login(email: $email, password: $password) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            email: 'lms1@hrde.co.kr',
+                            password: 'hrde1234!@#$'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.errors) {
+                    log(`❌ Login failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.login) {
+                    const { token, user } = data.data.login;
+                    adminToken = token;
+                    log('✅ Admin login successful!');
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                    
+                    // Store the data
+                    localStorage.setItem('jwt', token);
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    
+                    log('✅ Admin data stored in localStorage');
+                } else {
+                    log('❌ Unexpected login response format');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+            }
+        }
+
+        async function step2_testMeetingStats() {
+            log('📊 Step 2: Testing meeting stats query...');
+            
+            if (!adminToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetMeetingStats {
+                                getMeetingStats {
+                                    totalMeetings
+                                    activeMeetings
+                                    scheduledMeetings
+                                    completedMeetings
+                                    totalParticipants
+                                    averageMeetingDuration
+                                }
+                            }
+                        `
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Meeting stats response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Meeting stats query failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else {
+                    log('✅ Meeting stats query successful!');
+                    if (data.data?.getMeetingStats) {
+                        const stats = data.data.getMeetingStats;
+                        log(`Total Meetings: ${stats.totalMeetings}`);
+                        log(`Active Meetings: ${stats.activeMeetings}`);
+                        log(`Scheduled Meetings: ${stats.scheduledMeetings}`);
+                        log(`Completed Meetings: ${stats.completedMeetings}`);
+                    }
+                }
+            } catch (error) {
+                log(`❌ Meeting stats error: ${error.message}`);
+            }
+        }
+
+        async function step3_testVodStats() {
+            log('🎥 Step 3: Testing VOD stats query...');
+            
+            if (!adminToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetVodStats {
+                                getVodStats {
+                                    totalVods
+                                    fileVods
+                                    urlVods
+                                    totalSizeBytes
+                                    averageDuration
+                                }
+                            }
+                        `
+                    })
+                });
+                
+                const data = await response.json();
+                log(`VOD stats response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ VOD stats query failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else {
+                    log('✅ VOD stats query successful!');
+                    if (data.data?.getVodStats) {
+                        const stats = data.data.getVodStats;
+                        log(`Total VODs: ${stats.totalVods}`);
+                        log(`File VODs: ${stats.fileVods}`);
+                        log(`URL VODs: ${stats.urlVods}`);
+                        log(`Total Size: ${stats.totalSizeBytes} bytes`);
+                    }
+                }
+            } catch (error) {
+                log(`❌ VOD stats error: ${error.message}`);
+            }
+        }
+
+        async function step4_testChatStats() {
+            log('💬 Step 4: Testing chat stats query...');
+            
+            if (!adminToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetChatStats {
+                                getChatStats {
+                                    totalMessages
+                                    messagesToday
+                                    activeUsers
+                                    averageMessagesPerUser
+                                }
+                            }
+                        `
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Chat stats response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Chat stats query failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else {
+                    log('✅ Chat stats query successful!');
+                    if (data.data?.getChatStats) {
+                        const stats = data.data.getChatStats;
+                        log(`Total Messages: ${stats.totalMessages}`);
+                        log(`Messages Today: ${stats.messagesToday}`);
+                        log(`Active Users: ${stats.activeUsers}`);
+                        log(`Avg per User: ${stats.averageMessagesPerUser}`);
+                    }
+                }
+            } catch (error) {
+                log(`❌ Chat stats error: ${error.message}`);
+            }
+        }
+
+        function step5_openAdminPage() {
+            log('🚀 Step 5: Opening admin page...');
+            log('The admin page should now work without GraphQL errors!');
+            log('');
+            log('Expected behavior:');
+            log('1. No GraphQL field errors');
+            log('2. KPI cards display correctly');
+            log('3. Meeting data loads');
+            log('4. All admin features work');
+            
+            // Open admin page
+            window.open('/admin', '_blank');
+        }
+
+        // Auto-run on page load
+        window.onload = function() {
+            log('✅ Admin GraphQL Fix Test Ready!');
+            log('Testing the fixed GraphQL queries for admin dashboard');
+            log('');
+            log('Fixed queries:');
+            log('- MeetingStats: Uses only available fields');
+            log('- VodStats: Uses correct field names');
+            log('- ChatStats: Uses correct field names');
+            log('- KPI Cards: Display available data');
+            log('');
+            log('Test steps:');
+            log('1. Login as Admin - Use correct credentials');
+            log('2. Test Meeting Stats - Verify meeting stats query');
+            log('3. Test VOD Stats - Verify VOD stats query');
+            log('4. Test Chat Stats - Verify chat stats query');
+            log('5. Open Admin Page - Test the actual admin dashboard');
+        };
+    </script>
+</body>
+</html>
+

@@ -402,6 +402,17 @@ const Dashboard: React.FC = () => {
     try {
       console.log('⏹️ END MEETING: Ending meeting:', meetingId);
       
+      // Validate meeting ID format
+      if (!meetingId || meetingId.length < 10) {
+        await Swal.fire({
+          icon: 'error',
+          title: '잘못된 회의 ID',
+          text: '유효하지 않은 회의 ID입니다.',
+          confirmButtonText: '확인'
+        });
+        return;
+      }
+      
       // Try to end meeting via GraphQL first
       try {
         const result = await enhancedMakeGraphQLRequest(END_MEETING, { meetingId });
@@ -424,28 +435,51 @@ const Dashboard: React.FC = () => {
           console.log('⏹️ END MEETING: Meeting ended via GraphQL:', meetingId);
           return;
         }
-      } catch (graphqlError) {
-        console.warn('⏹️ END MEETING: GraphQL request failed, falling back to local update:', graphqlError);
+      } catch (graphqlError: any) {
+        console.warn('⏹️ END MEETING: GraphQL request failed:', graphqlError);
+        
+        // Check if it's a specific error about meeting not found
+        if (graphqlError.message && graphqlError.message.includes('Meeting not found')) {
+          await Swal.fire({
+            icon: 'error',
+            title: '회의를 찾을 수 없음',
+            text: '해당 회의를 찾을 수 없습니다. 회의가 이미 삭제되었거나 존재하지 않습니다.',
+            confirmButtonText: '확인'
+          });
+          return;
+        }
+        
+        // Check for other specific errors
+        if (graphqlError.message && graphqlError.message.includes('Invalid meeting ID')) {
+          await Swal.fire({
+            icon: 'error',
+            title: '잘못된 회의 ID',
+            text: '유효하지 않은 회의 ID입니다.',
+            confirmButtonText: '확인'
+          });
+          return;
+        }
+        
+        // Generic GraphQL error
+        await Swal.fire({
+          icon: 'error',
+          title: '서버 오류',
+          text: `회의 종료 중 서버 오류가 발생했습니다: ${graphqlError.message || '알 수 없는 오류'}`,
+          confirmButtonText: '확인'
+        });
+        return;
       }
       
-      // Fallback to local state update if GraphQL fails
-      setMeetings(prev => prev.map(meeting => 
-        meeting._id === meetingId 
-          ? { ...meeting, status: 'ENDED' as const, duration: 3600 }
-          : meeting
-      ));
-
+      // If we reach here, something unexpected happened
       await Swal.fire({
-        icon: 'success',
-        title: '성공',
-        text: '회의가 종료되었습니다! (모의 서비스)',
+        icon: 'error',
+        title: '예상치 못한 오류',
+        text: '회의 종료 중 예상치 못한 오류가 발생했습니다.',
         confirmButtonText: '확인'
       });
 
-      console.log('⏹️ END MEETING: Mock meeting ended:', meetingId);
-
     } catch (error: unknown) {
-      console.error('⏹️ END MEETING: Error:', error);
+      console.error('⏹️ END MEETING: Unexpected error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',

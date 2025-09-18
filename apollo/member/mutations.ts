@@ -50,3 +50,4 @@ export const DELETE_PROFILE_IMAGE = gql`
     }
   }
 `;
+

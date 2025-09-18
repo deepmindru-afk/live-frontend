@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Admin Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .admin-list { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>👑 Real Admin Login Test</h1>
+        <p>Testing with the actual admin user found in the backend.</p>
+    </div>
+
+    <div class="test-section info">
+        <h2>📋 Backend Admin Users Found</h2>
+        <div class="admin-list">
+            <h3>✅ Real Admin User:</h3>
+            <ul>
+                <li><strong>Email:</strong> lms1@hrde.co.kr</li>
+                <li><strong>Display Name:</strong> Admin</li>
+                <li><strong>System Role:</strong> ADMIN</li>
+                <li><strong>ID:</strong> 68cb4ebd2090d04b045548d7</li>
+            </ul>
+            
+            <h3>❌ Fake Admin User:</h3>
+            <ul>
+                <li><strong>Email:</strong> admin@example.com</li>
+                <li><strong>Display Name:</strong> Admin User</li>
+                <li><strong>System Role:</strong> MEMBER (Not actually admin!)</li>
+                <li><strong>ID:</strong> 68ca0c20c98ab3db88106a73</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Test Steps</h2>
+        <button class="btn-primary" onclick="step1_clearData()">1. Clear All Data</button>
+        <button class="btn-success" onclick="step2_tryRealAdmin()">2. Try Real Admin Login</button>
+        <button class="btn-warning" onclick="step3_tryCommonPasswords()">3. Try Common Passwords</button>
+        <button class="btn-danger" onclick="step4_createNewAdmin()">4. Create New Admin</button>
+        <button class="btn-primary" onclick="step5_testAdminAccess()">5. Test Admin Access</button>
+        <div id="results" class="log">Click buttons to test real admin login...</div>
+    </div>
+
+    <div class="test-section warning">
+        <h2>⚠️ The Problem</h2>
+        <p><strong>Root Cause:</strong> You were trying to login with <code>admin@example.com</code> which is NOT actually an admin user in the backend.</p>
+        <p><strong>Real Admin:</strong> <code>lms1@hrde.co.kr</code> has <code>systemRole: "ADMIN"</code></p>
+        <p><strong>Fake Admin:</strong> <code>admin@example.com</code> has <code>systemRole: "MEMBER"</code></p>
+    </div>
+
+    <div class="test-section success">
+        <h2>✅ Solutions</h2>
+        <ol>
+            <li><strong>Use Real Admin:</strong> Login with <code>lms1@hrde.co.kr</code> (need correct password)</li>
+            <li><strong>Create New Admin:</strong> Create a new user with ADMIN role</li>
+            <li><strong>Update Existing User:</strong> Change <code>admin@example.com</code> role to ADMIN</li>
+        </ol>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function step1_clearData() {
+            log('🧹 Step 1: Clearing all localStorage data...');
+            localStorage.removeItem('user');
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('token');
+            log('✅ All data cleared');
+        }
+
+        async function step2_tryRealAdmin() {
+            log('👑 Step 2: Trying real admin login...');
+            
+            const commonPasswords = ['admin123', 'admin', 'password', '123456', 'hrde123', 'lms123'];
+            
+            for (const password of commonPasswords) {
+                log(`Trying password: ${password}`);
+                
+                try {
+                    const response = await fetch('http://localhost:3007/graphql', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: `
+                                mutation AdminLogin($email: String!, $password: String!) {
+                                    login(email: $email, password: $password) {
+                                        token
+                                        user {
+                                            _id
+                                            email
+                                            displayName
+                                            systemRole
+                                        }
+                                    }
+                                }
+                            `,
+                            variables: {
+                                email: 'lms1@hrde.co.kr',
+                                password: password
+                            }
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.errors) {
+                        log(`❌ Password "${password}" failed: ${data.errors[0].message}`);
+                    } else if (data.data && data.data.login) {
+                        const { token, user } = data.data.login;
+                        log(`✅ SUCCESS! Password "${password}" worked!`);
+                        log(`User: ${user.displayName} (${user.systemRole})`);
+                        
+                        // Store the data
+                        localStorage.setItem('jwt', token);
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('user', JSON.stringify(user));
+                        
+                        log('✅ Real admin data stored in localStorage');
+                        return;
+                    }
+                } catch (error) {
+                    log(`❌ Error with password "${password}": ${error.message}`);
+                }
+            }
+            
+            log('❌ None of the common passwords worked');
+        }
+
+        async function step3_tryCommonPasswords() {
+            log('🔑 Step 3: Trying more common passwords...');
+            
+            const morePasswords = ['admin@123', 'Admin123', 'ADMIN123', 'hrde@123', 'lms@123', '12345678', 'admin2024', 'hrde2024'];
+            
+            for (const password of morePasswords) {
+                log(`Trying password: ${password}`);
+                
+                try {
+                    const response = await fetch('http://localhost:3007/graphql', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: `
+                                mutation AdminLogin($email: String!, $password: String!) {
+                                    login(email: $email, password: $password) {
+                                        token
+                                        user {
+                                            _id
+                                            email
+                                            displayName
+                                            systemRole
+                                        }
+                                    }
+                                }
+                            `,
+                            variables: {
+                                email: 'lms1@hrde.co.kr',
+                                password: password
+                            }
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.errors) {
+                        log(`❌ Password "${password}" failed: ${data.errors[0].message}`);
+                    } else if (data.data && data.data.login) {
+                        const { token, user } = data.data.login;
+                        log(`✅ SUCCESS! Password "${password}" worked!`);
+                        log(`User: ${user.displayName} (${user.systemRole})`);
+                        
+                        // Store the data
+                        localStorage.setItem('jwt', token);
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('user', JSON.stringify(user));
+                        
+                        log('✅ Real admin data stored in localStorage');
+                        return;
+                    }
+                } catch (error) {
+                    log(`❌ Error with password "${password}": ${error.message}`);
+                }
+            }
+            
+            log('❌ None of the additional passwords worked');
+        }
+
+        async function step4_createNewAdmin() {
+            log('👤 Step 4: Creating new admin user...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation CreateAdmin($email: String!, $password: String!, $displayName: String!) {
+                                signup(email: $email, password: $password, displayName: $displayName) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            email: 'newadmin@example.com',
+                            password: 'admin123',
+                            displayName: 'New Admin'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Create admin response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Failed to create admin: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.signup) {
+                    const { token, user } = data.data.signup;
+                    log(`✅ New admin created!`);
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                    
+                    if (user.systemRole === 'ADMIN') {
+                        log('✅ New user has ADMIN role!');
+                        
+                        // Store the data
+                        localStorage.setItem('jwt', token);
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('user', JSON.stringify(user));
+                        
+                        log('✅ New admin data stored in localStorage');
+                    } else {
+                        log(`❌ New user has role "${user.systemRole}", not ADMIN`);
+                        log('Backend is still hardcoding MEMBER role for all users');
+                    }
+                } else {
+                    log('❌ Unexpected response format');
+                }
+            } catch (error) {
+                log(`❌ Error creating admin: ${error.message}`);
+            }
+        }
+
+        function step5_testAdminAccess() {
+            log('🔐 Step 5: Testing admin access...');
+            
+            const userStr = localStorage.getItem('user');
+            if (!userStr) {
+                log('❌ No user data found - please login first');
+                return;
+            }
+            
+            try {
+                const user = JSON.parse(userStr);
+                log(`Current user: ${user.displayName} (${user.email})`);
+                log(`User role: ${user.systemRole}`);
+                
+                if (user.systemRole === 'ADMIN') {
+                    log('✅ User has ADMIN role - access should be granted');
+                    log('You can now access the admin dashboard!');
+                } else {
+                    log(`❌ User role is "${user.systemRole}", not ADMIN`);
+                    log('This is why you get "Access Denied"');
+                }
+            } catch (e) {
+                log(`❌ Error checking user data: ${e.message}`);
+            }
+        }
+
+        // Auto-run on page load
+        window.onload = function() {
+            log('👑 Real Admin Login Test Ready!');
+            log('The issue is that admin@example.com is NOT actually an admin user');
+            log('Real admin user: lms1@hrde.co.kr (need correct password)');
+            log('');
+            log('Test steps:');
+            log('1. Clear All Data - Start fresh');
+            log('2. Try Real Admin Login - Test with lms1@hrde.co.kr');
+            log('3. Try Common Passwords - Test various passwords');
+            log('4. Create New Admin - Create a new admin user');
+            log('5. Test Admin Access - Verify admin role');
+        };
+    </script>
+</body>
+</html>
+

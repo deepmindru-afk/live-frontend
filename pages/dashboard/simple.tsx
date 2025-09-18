@@ -75,28 +75,28 @@ const SimpleDashboard: React.FC = () => {
         const result = await enhancedMakeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
-            scheduledStartAt: meetingSchedule || null,
+            scheduledFor: meetingSchedule || null,
             isPrivate: false,
             notes: null
           }
         });
 
-        if (result.createMeeting && result.createMeeting.success) {
+        if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
-            _id: result.createMeeting.meeting._id,
-            title: result.createMeeting.meeting.title,
-            status: result.createMeeting.meeting.status,
-            schedule: result.createMeeting.meeting.schedule,
-            inviteCode: result.createMeeting.meeting.inviteCode,
-            createdAt: result.createMeeting.meeting.createdAt,
-            updatedAt: result.createMeeting.meeting.createdAt,
+            _id: result.createMeeting._id,
+            title: result.createMeeting.title,
+            status: result.createMeeting.status,
+            schedule: result.createMeeting.scheduledFor,
+            inviteCode: result.createMeeting.inviteCode,
+            createdAt: result.createMeeting.createdAt,
+            updatedAt: result.createMeeting.createdAt,
             participantCount: 0,
           };
 
           setMeetings([...meetings, newMeeting]);
           setNewMeetingTitle('');
           setMeetingSchedule('');
-          alert('Meeting created successfully! (Mock Service)');
+          alert('Meeting created successfully!');
           return;
         }
       } catch (graphqlError) {

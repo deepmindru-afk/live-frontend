@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import Image from 'next/image';
 import { handleTutorLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { LoginCredentials } from '../../lib/simple-auth-handlers';
+import Swal from 'sweetalert2';
 
 const InstructorLoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({
@@ -73,8 +75,31 @@ const InstructorLoginPage: React.FC = () => {
           window.location.href = '/instructor';
         }
       }
-    } catch (error) {
-      console.error('Tutor login error:', error);
+    } catch (error: any) {
+      console.error('🔐 INSTRUCTOR LOGIN: Caught error in handleSubmit:', error);
+      console.error('🔐 INSTRUCTOR LOGIN: Error message:', error.message);
+      console.error('🔐 INSTRUCTOR LOGIN: Error type:', typeof error);
+      
+      // Handle different types of errors with SweetAlert
+      let errorMessage = '로그인 중 오류가 발생했습니다.';
+      
+      if (error.message && error.message.includes('Invalid credentials')) {
+        errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.';
+      } else if (error.message && error.message.includes('UNAUTHENTICATED')) {
+        errorMessage = '인증에 실패했습니다. 다시 시도해주세요.';
+      } else if (error.message && error.message.includes('GraphQL errors')) {
+        errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      }
+      
+      console.log('🔐 INSTRUCTOR LOGIN: Showing SweetAlert with message:', errorMessage);
+      
+      await Swal.fire({
+        icon: 'error',
+        title: '로그인 실패',
+        text: errorMessage,
+        confirmButtonText: '확인',
+        confirmButtonColor: '#d32f2f'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -83,20 +108,23 @@ const InstructorLoginPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Instructor Login</title>
-        <meta name="description" content="Instructor login to Meet: mate" />
+        <title>HRDE - Instructor Login</title>
+        <meta name="description" content="Instructor login to HRDE" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       
       <div className="auth-container instructor-auth">
         <div className="auth-modal">
           <div className="logo">
-            <h1 className="app-name">
-              <span className="meet">Meet:</span>
-              <span className="mate">
-                <span className="stylized-m">m</span>ate
-              </span>
-            </h1>
+            <Image
+              src="/logoHRDe.png"
+              alt="HRDE"
+              width={150}
+              height={69}
+              style={{
+                objectFit: 'contain'
+              }}
+            />
           </div>
 
           <div className="form-section">

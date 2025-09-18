@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import Image from 'next/image';
 import { handleTutorSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { SignupData } from '../../lib/simple-auth-handlers';
 
@@ -123,20 +124,23 @@ const InstructorSignupPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Instructor Signup</title>
-        <meta name="description" content="Instructor signup for Meet: mate" />
+        <title>HRDE - Instructor Signup</title>
+        <meta name="description" content="Instructor signup for HRDE" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       
       <div className="auth-container instructor-auth">
         <div className="auth-modal">
           <div className="logo">
-            <h1 className="app-name">
-              <span className="meet">Meet:</span>
-              <span className="mate">
-                <span className="stylized-m">m</span>ate
-              </span>
-            </h1>
+            <Image
+              src="/logoHRDe.png"
+              alt="HRDE"
+              width={150}
+              height={69}
+              style={{
+                objectFit: 'contain'
+              }}
+            />
           </div>
 
           <div className="form-section">

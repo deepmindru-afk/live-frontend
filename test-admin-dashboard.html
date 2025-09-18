@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .feature-card { padding: 15px; border-radius: 8px; border-left: 4px solid #28a745; background-color: #d4edda; }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h1>👑 Admin Dashboard Test</h1>
+        <p>Testing the new admin dashboard with meeting management functionality.</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 Admin Dashboard Features</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>📊 Meeting Management</h3>
+                <ul>
+                    <li>View all meetings with filters</li>
+                    <li>Delete meetings</li>
+                    <li>Rotate invite codes</li>
+                    <li>Force end active meetings</li>
+                    <li>View meeting details</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>👥 Member Management</h3>
+                <ul>
+                    <li>View all members</li>
+                    <li>Search by name/email</li>
+                    <li>View member roles</li>
+                    <li>Edit member status</li>
+                    <li>Delete members</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>📈 KPI Dashboard</h3>
+                <ul>
+                    <li>Meeting statistics</li>
+                    <li>VOD statistics</li>
+                    <li>Chat statistics</li>
+                    <li>Real-time metrics</li>
+                    <li>Visual charts</li>
+                </ul>
+            </div>
+            <div class="feature-card">
+                <h3>🎥 VOD Management</h3>
+                <ul>
+                    <li>Total VOD count</li>
+                    <li>Storage usage</li>
+                    <li>Upload statistics</li>
+                    <li>Average duration</li>
+                    <li>Daily/weekly/monthly stats</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Test Admin Dashboard</h2>
+        <button class="btn-primary" onclick="testAdminLogin()">1. Login as Admin</button>
+        <button class="btn-success" onclick="testAdminAccess()">2. Test Admin Access</button>
+        <button class="btn-warning" onclick="testMeetingManagement()">3. Test Meeting Management</button>
+        <button class="btn-info" onclick="openAdminDashboard()">4. Open Admin Dashboard</button>
+        <div id="results" class="log">Click buttons to test admin dashboard functionality...</div>
+    </div>
+
+    <div class="test-section info">
+        <h2>📋 Admin Dashboard Structure</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <h3>🎨 UI Components</h3>
+                <ul>
+                    <li>✅ Left sidebar navigation</li>
+                    <li>✅ User profile card</li>
+                    <li>✅ KPI cards with metrics</li>
+                    <li>✅ Data tables with actions</li>
+                    <li>✅ Search and filter controls</li>
+                    <li>✅ Action buttons (view, edit, delete)</li>
+                </ul>
+            </div>
+            <div>
+                <h3>🔧 GraphQL Integration</h3>
+                <ul>
+                    <li>✅ getAllMeetings with filters</li>
+                    <li>✅ getMeetingStats</li>
+                    <li>✅ getVodStats</li>
+                    <li>✅ getChatStats</li>
+                    <li>✅ deleteMeeting mutation</li>
+                    <li>✅ rotateInviteCode mutation</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testToken = null;
+
+        function log(message) {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function testAdminLogin() {
+            log('👑 Testing admin login...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation Login($input: LoginInput!) {
+                                login(input: $input) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: { 
+                                email: 'admin@example.com', 
+                                password: 'admin123' 
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                log(`Login response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Login failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.login) {
+                    const { token, user } = data.data.login;
+                    
+                    // Store token
+                    testToken = token;
+                    localStorage.setItem('jwt', token);
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    
+                    log('✅ Admin login successful!');
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                } else {
+                    log('❌ Unexpected login response format');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`);
+            }
+        }
+
+        async function testAdminAccess() {
+            log('🔐 Testing admin access control...');
+            
+            if (!testToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+
+            const userStr = localStorage.getItem('user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            
+            if (user && user.systemRole === 'ADMIN') {
+                log('✅ Admin access confirmed!');
+                log(`User role: ${user.systemRole}`);
+                log('User should be redirected to /admin dashboard');
+            } else {
+                log('❌ Admin access denied');
+                log(`Current role: ${user?.systemRole || 'Unknown'}`);
+            }
+        }
+
+        async function testMeetingManagement() {
+            log('📊 Testing meeting management queries...');
+            
+            if (!testToken) {
+                log('❌ No token found - please login first');
+                return;
+            }
+
+            try {
+                // Test getAllMeetings query
+                const meetingsResponse = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${testToken}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query GetAllMeetingsAdmin($input: MeetingQueryInput!) {
+                                getMeetings(input: $input) {
+                                    total
+                                    meetings {
+                                        _id
+                                        title
+                                        status
+                                        inviteCode
+                                        participantCount
+                                        host {
+                                            displayName
+                                            email
+                                        }
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                limit: 10,
+                                offset: 0
+                            }
+                        }
+                    })
+                });
+
+                const meetingsData = await meetingsResponse.json();
+                log(`Meetings query response: ${JSON.stringify(meetingsData, null, 2)}`);
+                
+                if (meetingsData.errors) {
+                    log(`❌ Meetings query failed: ${JSON.stringify(meetingsData.errors, null, 2)}`);
+                } else {
+                    log('✅ Meetings query successful!');
+                    log(`Found ${meetingsData.data?.getMeetings?.total || 0} meetings`);
+                }
+            } catch (error) {
+                log(`❌ Meeting management test error: ${error.message}`);
+            }
+        }
+
+        function openAdminDashboard() {
+            log('🚀 Opening admin dashboard...');
+            log('You should see:');
+            log('1. Professional admin interface');
+            log('2. Left sidebar with navigation');
+            log('3. KPI cards with statistics');
+            log('4. Meetings table with actions');
+            log('5. Search and filter controls');
+            log('6. Action buttons for each meeting');
+            
+            // Open admin dashboard in new tab
+            window.open('/admin', '_blank');
+        }
+
+        // Auto-run on page load
+        window.onload = function() {
+            log('🧪 Admin Dashboard Test Ready!');
+            log('This test verifies the new admin dashboard functionality');
+            log('');
+            log('Test steps:');
+            log('1. Click "Login as Admin" to authenticate as admin');
+            log('2. Click "Test Admin Access" to verify role-based access');
+            log('3. Click "Test Meeting Management" to test GraphQL queries');
+            log('4. Click "Open Admin Dashboard" to see the full interface');
+        };
+    </script>
+</body>
+</html>
+

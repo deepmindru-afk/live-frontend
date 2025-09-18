@@ -19,8 +19,8 @@ const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhos
 
 // Login mutation
 const LOGIN_MUTATION = `
-  mutation Login($input: LoginInput!) {
-    login(input: $input) {
+  mutation Login($email: String!, $password: String!) {
+    login(email: $email, password: $password) {
       token
       user {
         _id
@@ -141,25 +141,37 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
 
   let data;
   try {
+    console.log('🌐 GRAPHQL: About to parse JSON response...');
     data = await response.json();
     console.log('🌐 GRAPHQL: Response data preview:', JSON.stringify(data, null, 2).substring(0, 1000) + '...');
-    
-    // Check for GraphQL errors
-    if (data.errors) {
-      console.error('🌐 GRAPHQL: GraphQL errors in response:', data.errors);
-      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-    }
-    
   } catch (jsonError) {
     console.error('🌐 GRAPHQL: Failed to parse JSON response:', jsonError);
     throw new Error('Invalid JSON response from server');
   }
   
+  // Check for GraphQL errors after successful JSON parsing
   if (data.errors) {
-    console.error('🌐 GRAPHQL: GraphQL errors:', data.errors);
-    const errorMessage = data.errors[0]?.message || 'Unknown GraphQL error';
-    throw new Error(errorMessage);
+    console.error('🌐 GRAPHQL: GraphQL errors in response:', data.errors);
+    
+    // Handle specific authentication errors
+    const firstError = data.errors[0];
+    console.log('🌐 GRAPHQL: First error details:', {
+      message: firstError.message,
+      code: firstError.extensions?.code
+    });
+    
+    if (firstError.message === 'Invalid credentials' || firstError.extensions?.code === 'UNAUTHENTICATED') {
+      console.log('🌐 GRAPHQL: Throwing Invalid credentials error');
+      throw new Error('Invalid credentials');
+    }
+    
+    // For other GraphQL errors, throw with the original message
+    console.log('🌐 GRAPHQL: Throwing generic GraphQL error');
+    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
   }
+  
+  console.log('🌐 GRAPHQL: No errors found, returning data');
+  
 
   return data.data;
 }
@@ -171,10 +183,8 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
     console.log('🔐 LOGIN: GraphQL endpoint:', GRAPHQL_ENDPOINT);
     
     const data = await makeGraphQLRequest(LOGIN_MUTATION, {
-      input: {
-        email: credentials.email,
-        password: credentials.password,
-      }
+      email: credentials.email,
+      password: credentials.password,
     });
 
     console.log('🔐 LOGIN: Response received:', data);
@@ -182,6 +192,10 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
     if (data.login && data.login.token) {
       // Save JWT to localStorage
       setAuthToken(data.login.token);
+      
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(data.login.user));
+      console.log('🔐 LOGIN: User data stored in localStorage');
       
       // Show success message
       alert(`Welcome back, ${data.login.user.displayName}!`);
@@ -192,8 +206,8 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
     }
   } catch (error: any) {
     console.error('Login error:', error);
-    alert(`Login failed: ${error.message}`);
-    return false;
+    // Re-throw the error so the calling function can handle it with SweetAlert
+    throw error;
   }
 };
 
@@ -216,6 +230,10 @@ export const handleTutorLogin = async (credentials: LoginCredentials): Promise<b
       // Save JWT to localStorage
       setAuthToken(data.tutorLogin.token);
       
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(data.tutorLogin.user));
+      console.log('🎓 TUTOR LOGIN: User data stored in localStorage');
+      
       // Show success message
       alert(`Welcome back, Tutor ${data.tutorLogin.user.displayName}!`);
       
@@ -224,9 +242,11 @@ export const handleTutorLogin = async (credentials: LoginCredentials): Promise<b
       throw new Error('Tutor login failed - no token received');
     }
   } catch (error: any) {
-    console.error('Tutor login error:', error);
-    alert(`Tutor login failed: ${error.message}`);
-    return false;
+    console.error('🎓 TUTOR LOGIN: Caught error in handleTutorLogin:', error);
+    console.error('🎓 TUTOR LOGIN: Error message:', error.message);
+    console.error('🎓 TUTOR LOGIN: Error type:', typeof error);
+    // Re-throw the error so the calling function can handle it with SweetAlert
+    throw error;
   }
 };
 
@@ -248,6 +268,10 @@ export const handleSignup = async (input: SignupData): Promise<boolean> => {
       // Save JWT to localStorage
       setAuthToken(data.signup.token);
       
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(data.signup.user));
+      console.log('🚀 SIGNUP: User data stored in localStorage');
+      
       // Show success message
       alert(`Welcome to Meet: mate, ${data.signup.user.displayName}!`);
       
@@ -257,8 +281,8 @@ export const handleSignup = async (input: SignupData): Promise<boolean> => {
     }
   } catch (error: any) {
     console.error('Signup error:', error);
-    alert(`Signup failed: ${error.message}`);
-    return false;
+    // Re-throw the error so the calling function can handle it with SweetAlert
+    throw error;
   }
 };
 
@@ -281,6 +305,10 @@ export const handleTutorSignup = async (input: SignupData): Promise<boolean> => 
       // Save JWT to localStorage
       setAuthToken(data.tutorSignup.token);
       
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(data.tutorSignup.user));
+      console.log('🎓 TUTOR SIGNUP: User data stored in localStorage');
+      
       // Show success message
       alert(`Welcome to Meet: mate as a Tutor, ${data.tutorSignup.user.displayName}!`);
       
@@ -290,8 +318,8 @@ export const handleTutorSignup = async (input: SignupData): Promise<boolean> => 
     }
   } catch (error: any) {
     console.error('Tutor signup error:', error);
-    alert(`Tutor signup failed: ${error.message}`);
-    return false;
+    // Re-throw the error so the calling function can handle it with SweetAlert
+    throw error;
   }
 };
 

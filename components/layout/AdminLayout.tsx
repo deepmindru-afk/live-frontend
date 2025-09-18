@@ -30,8 +30,8 @@ import {
   AdminPanelSettings,
 } from '@mui/icons-material';
 import { useRouter } from 'next/router';
-import { logoutUser, getCurrentUser } from '../../lib/auth';
 import { User } from '../../apollo/types';
+import { getCurrentUser } from '../../lib/simple-auth-handlers';
 
 const drawerWidth = 240;
 
@@ -220,3 +220,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title = 'Admin Dash
 };
 
 export default AdminLayout;
+function logoutUser() {
+  throw new Error('Function not implemented.');
+}
+

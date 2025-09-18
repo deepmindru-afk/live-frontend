@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import Image from 'next/image';
 import { handleSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../lib/simple-auth-handlers';
 import { SignupData } from '../lib/simple-auth-handlers';
+import Swal from 'sweetalert2';
 
 const SignupPage: React.FC = () => {
   const [formData, setFormData] = useState<SignupData>({
@@ -119,8 +121,29 @@ const SignupPage: React.FC = () => {
           router.push('/');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('🚀 SIGNUP FORM: Signup error:', error);
+      
+      // Handle different types of errors with SweetAlert
+      let errorMessage = '회원가입 중 오류가 발생했습니다.';
+      
+      if (error.message && error.message.includes('Email already exists')) {
+        errorMessage = '이미 사용 중인 이메일입니다.';
+      } else if (error.message && error.message.includes('Invalid email')) {
+        errorMessage = '올바른 이메일 형식을 입력해주세요.';
+      } else if (error.message && error.message.includes('Password too weak')) {
+        errorMessage = '비밀번호가 너무 약합니다. 더 강한 비밀번호를 사용해주세요.';
+      } else if (error.message && error.message.includes('GraphQL errors')) {
+        errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      }
+      
+      await Swal.fire({
+        icon: 'error',
+        title: '회원가입 실패',
+        text: errorMessage,
+        confirmButtonText: '확인',
+        confirmButtonColor: '#d32f2f'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -129,20 +152,23 @@ const SignupPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Member Signup</title>
-        <meta name="description" content="Sign up for Meet: mate" />
+        <title>HRDE - Member Signup</title>
+        <meta name="description" content="Sign up for HRDE" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       
       <div className="auth-container">
         <div className="auth-modal">
           <div className="logo">
-            <h1 className="app-name">
-              <span className="meet">Meet:</span>
-              <span className="mate">
-                <span className="stylized-m">m</span>ate
-              </span>
-            </h1>
+            <Image
+              src="/logoHRDe.png"
+              alt="HRDE"
+              width={150}
+              height={69}
+              style={{
+                objectFit: 'contain'
+              }}
+            />
           </div>
 
           <div className="form-section">

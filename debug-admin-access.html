@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Access Debug Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .debug-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        .log { background-color: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .data-display { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .step { margin: 10px 0; padding: 10px; border-left: 4px solid #007bff; background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="debug-section">
+        <h1>🔍 Admin Access Debug Tool</h1>
+        <p>This tool will help diagnose why admin access is being denied.</p>
+    </div>
+
+    <div class="debug-section">
+        <h2>🧪 Debug Steps</h2>
+        <button class="btn-primary" onclick="step1_checkLocalStorage()">1. Check LocalStorage Data</button>
+        <button class="btn-success" onclick="step2_testBackendAuth()">2. Test Backend Authentication</button>
+        <button class="btn-warning" onclick="step3_createAdminUser()">3. Create Admin User</button>
+        <button class="btn-info" onclick="step4_testAdminLogin()">4. Test Admin Login</button>
+        <button class="btn-danger" onclick="step5_clearAndRetry()">5. Clear Data & Retry</button>
+        <div id="debugResults" class="log">Click buttons to debug admin access issues...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📊 Current Data Status</h2>
+        <div id="currentData" class="data-display">Click "Check LocalStorage Data" to see current status</div>
+    </div>
+
+    <div class="debug-section info">
+        <h2>🔧 Backend Data to Check</h2>
+        <div class="step">
+            <h3>1. Check User Creation in Backend</h3>
+            <p>Run this query in your backend GraphQL playground:</p>
+            <div class="data-display">
+                <strong>Query:</strong><br>
+                <code>
+query GetAllUsers {<br>
+&nbsp;&nbsp;getMembers(input: { limit: 100, offset: 0 }) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;total<br>
+&nbsp;&nbsp;&nbsp;&nbsp;members {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;email<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;displayName<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;systemRole<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;createdAt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+                </code>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>2. Check Admin User Exists</h3>
+            <p>Look for a user with <code>systemRole: "ADMIN"</code> in the response above.</p>
+        </div>
+
+        <div class="step">
+            <h3>3. Test Admin Login</h3>
+            <p>Try logging in with admin credentials:</p>
+            <div class="data-display">
+                <strong>Mutation:</strong><br>
+                <code>
+mutation AdminLogin($input: LoginInput!) {<br>
+&nbsp;&nbsp;login(input: $input) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;token<br>
+&nbsp;&nbsp;&nbsp;&nbsp;user {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_id<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;email<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;displayName<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;systemRole<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+                </code><br><br>
+                <strong>Variables:</strong><br>
+                <code>
+{<br>
+&nbsp;&nbsp;"input": {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"email": "admin@example.com",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"password": "admin123"<br>
+&nbsp;&nbsp;}<br>
+}
+                </code>
+            </div>
+        </div>
+
+        <div class="step">
+            <h3>4. Check Backend Schema</h3>
+            <p>Verify that the backend supports the ADMIN role:</p>
+            <div class="data-display">
+                <strong>Check SystemRole enum in backend:</strong><br>
+                <code>
+enum SystemRole {<br>
+&nbsp;&nbsp;ADMIN<br>
+&nbsp;&nbsp;TUTOR<br>
+&nbsp;&nbsp;MEMBER<br>
+}
+                </code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('debugResults');
+            const timestamp = new Date().toISOString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function updateCurrentData() {
+            const currentData = document.getElementById('currentData');
+            const userStr = localStorage.getItem('user');
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            
+            let dataHtml = '<h3>LocalStorage Status:</h3>';
+            dataHtml += `<strong>User Data:</strong> ${userStr ? 'Present' : 'Missing'}<br>`;
+            dataHtml += `<strong>Token:</strong> ${token ? 'Present' : 'Missing'}<br><br>`;
+            
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    dataHtml += '<h3>User Details:</h3>';
+                    dataHtml += `<strong>ID:</strong> ${user._id || 'N/A'}<br>`;
+                    dataHtml += `<strong>Email:</strong> ${user.email || 'N/A'}<br>`;
+                    dataHtml += `<strong>Display Name:</strong> ${user.displayName || 'N/A'}<br>`;
+                    dataHtml += `<strong>System Role:</strong> <span style="color: ${user.systemRole === 'ADMIN' ? 'green' : 'red'}">${user.systemRole || 'N/A'}</span><br>`;
+                    dataHtml += `<strong>Department:</strong> ${user.department || 'N/A'}<br>`;
+                } catch (e) {
+                    dataHtml += `<strong>Error parsing user data:</strong> ${e.message}<br>`;
+                }
+            }
+            
+            currentData.innerHTML = dataHtml;
+        }
+
+        async function step1_checkLocalStorage() {
+            log('🔍 Step 1: Checking LocalStorage data...');
+            updateCurrentData();
+            
+            const userStr = localStorage.getItem('user');
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            
+            if (!userStr) {
+                log('❌ No user data found in localStorage');
+                log('This means the user is not logged in or data was cleared');
+                return;
+            }
+            
+            if (!token) {
+                log('❌ No token found in localStorage');
+                log('This means authentication token is missing');
+                return;
+            }
+            
+            try {
+                const user = JSON.parse(userStr);
+                log(`✅ User data found: ${user.displayName} (${user.email})`);
+                log(`Role: ${user.systemRole}`);
+                
+                if (user.systemRole !== 'ADMIN') {
+                    log(`❌ User role is '${user.systemRole}', not 'ADMIN'`);
+                    log('This is why access is denied!');
+                } else {
+                    log('✅ User has ADMIN role - access should be allowed');
+                }
+            } catch (e) {
+                log(`❌ Error parsing user data: ${e.message}`);
+            }
+        }
+
+        async function step2_testBackendAuth() {
+            log('🌐 Step 2: Testing backend authentication...');
+            
+            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+            if (!token) {
+                log('❌ No token available for testing');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            query Me {
+                                me {
+                                    _id
+                                    email
+                                    displayName
+                                    systemRole
+                                }
+                            }
+                        `
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Backend auth response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Backend authentication failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.me) {
+                    const user = data.data.me;
+                    log(`✅ Backend confirms user: ${user.displayName} (${user.systemRole})`);
+                    
+                    if (user.systemRole !== 'ADMIN') {
+                        log(`❌ Backend says user role is '${user.systemRole}', not 'ADMIN'`);
+                    } else {
+                        log('✅ Backend confirms ADMIN role');
+                    }
+                } else {
+                    log('❌ Unexpected backend response format');
+                }
+            } catch (error) {
+                log(`❌ Backend connection error: ${error.message}`);
+            }
+        }
+
+        async function step3_createAdminUser() {
+            log('👑 Step 3: Creating admin user...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation CreateAdmin($input: MemberInput!) {
+                                signup(input: $input) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                email: 'admin@example.com',
+                                password: 'admin123',
+                                displayName: 'System Administrator',
+                                department: 'IT'
+                            }
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Create admin response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Failed to create admin: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.signup) {
+                    const { token, user } = data.data.signup;
+                    log(`✅ Admin user created successfully!`);
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                    
+                    // Store the admin data
+                    localStorage.setItem('jwt', token);
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(user));
+                    
+                    log('✅ Admin data stored in localStorage');
+                    updateCurrentData();
+                } else {
+                    log('❌ Unexpected response format');
+                }
+            } catch (error) {
+                log(`❌ Error creating admin: ${error.message}`);
+            }
+        }
+
+        async function step4_testAdminLogin() {
+            log('🔐 Step 4: Testing admin login...');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation AdminLogin($input: LoginInput!) {
+                                login(input: $input) {
+                                    token
+                                    user {
+                                        _id
+                                        email
+                                        displayName
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: {
+                            input: {
+                                email: 'admin@example.com',
+                                password: 'admin123'
+                            }
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Admin login response: ${JSON.stringify(data, null, 2)}`);
+                
+                if (data.errors) {
+                    log(`❌ Admin login failed: ${JSON.stringify(data.errors, null, 2)}`);
+                } else if (data.data && data.data.login) {
+                    const { token, user } = data.data.login;
+                    log(`✅ Admin login successful!`);
+                    log(`User: ${user.displayName} (${user.systemRole})`);
+                    
+                    if (user.systemRole !== 'ADMIN') {
+                        log(`❌ Login returned role '${user.systemRole}', not 'ADMIN'`);
+                        log('This suggests the backend is not assigning ADMIN role correctly');
+                    } else {
+                        log('✅ Login returned correct ADMIN role');
+                        
+                        // Store the admin data
+                        localStorage.setItem('jwt', token);
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('user', JSON.stringify(user));
+                        
+                        log('✅ Admin data stored in localStorage');
+                        updateCurrentData();
+                    }
+                } else {
+                    log('❌ Unexpected login response format');
+                }
+            } catch (error) {
+                log(`❌ Error during admin login: ${error.message}`);
+            }
+        }
+
+        async function step5_clearAndRetry() {
+            log('🧹 Step 5: Clearing data and retrying...');
+            
+            // Clear all localStorage data
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            localStorage.removeItem('jwt');
+            
+            log('✅ Cleared all localStorage data');
+            updateCurrentData();
+            
+            // Wait a moment then try to create admin again
+            setTimeout(async () => {
+                log('🔄 Retrying admin creation...');
+                await step3_createAdminUser();
+            }, 1000);
+        }
+
+        // Auto-run on page load
+        window.onload = function() {
+            log('🔍 Admin Access Debug Tool Ready!');
+            log('This tool will help diagnose why admin access is being denied');
+            log('');
+            log('Debug steps:');
+            log('1. Check LocalStorage Data - See what user data is stored');
+            log('2. Test Backend Auth - Verify token works with backend');
+            log('3. Create Admin User - Create a new admin user');
+            log('4. Test Admin Login - Test logging in as admin');
+            log('5. Clear Data & Retry - Clear everything and start fresh');
+            log('');
+            updateCurrentData();
+        };
+    </script>
+</body>
+</html>
+

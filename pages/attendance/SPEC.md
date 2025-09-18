@@ -9,3 +9,4 @@ UI:
 - Top summary: title, 참가자 수, 진행 시간
 - Table: No, 참가자, 참석 시간, 참여 시간(= left-joined), 비고
 - 버튼: "엑셀 다운로드" (front generates csv/xlsx), Search box (filter table)
+

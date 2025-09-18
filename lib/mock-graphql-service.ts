@@ -92,8 +92,8 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
     const newMeeting: MockMeeting = {
       _id: `mock-${Date.now()}`,
       title: input.title,
-      status: input.scheduledStartAt ? 'SCHEDULED' : 'STARTED',
-      schedule: input.scheduledStartAt,
+      status: input.scheduledFor ? 'SCHEDULED' : 'STARTED',
+      schedule: input.scheduledFor,
       inviteCode: generateInviteCode(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

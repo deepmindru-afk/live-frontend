@@ -404,7 +404,13 @@ const MyPage: React.FC = () => {
                 )}
               </div>
               <div className="user-details">
-                <h2 className="user-name">{user.displayName}</h2>
+                <h2 
+                  className="user-name clickable"
+                  onClick={() => user.systemRole === 'ADMIN' ? router.push('/admin') : null}
+                  style={{ cursor: user.systemRole === 'ADMIN' ? 'pointer' : 'default' }}
+                >
+                  {user.displayName}
+                </h2>
                 <p className="user-email">{user.email}</p>
                 <span className="user-role">{user.systemRole}</span>
               </div>
@@ -679,11 +685,11 @@ const MyPage: React.FC = () => {
         }
 
         .my-page-header {
-          background: rgba(255, 255, 255, 0.9);
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           backdrop-filter: blur(15px);
           padding: 20px 0;
-          border-bottom: 2px solid rgba(66, 165, 245, 0.3);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .header-content {
@@ -705,7 +711,7 @@ const MyPage: React.FC = () => {
           padding: 12px;
           border-radius: 50%;
           transition: all 0.3s ease;
-          color: #333;
+          color: white;
           backdrop-filter: blur(10px);
         }
 
@@ -801,22 +807,29 @@ const MyPage: React.FC = () => {
         .user-details h2 {
           margin: 0;
           font-size: 18px;
-          color: #333;
+          color: white;
+          transition: all 0.3s ease;
+        }
+
+        .user-details h2.clickable:hover {
+          color: rgba(255, 255, 255, 0.8);
+          transform: translateY(-1px);
         }
 
         .user-details p {
           margin: 2px 0;
-          color: #666;
+          color: rgba(255, 255, 255, 0.8);
           font-size: 14px;
         }
 
         .user-role {
-          background: #e3f2fd;
-          color: #1976d2;
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
           padding: 2px 8px;
           border-radius: 12px;
           font-size: 12px;
           font-weight: 500;
+          border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
         .my-page-content {

@@ -36,6 +36,8 @@ const MemberDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'meetings' | 'profile' | 'join'>('meetings');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [profileData, setProfileData] = useState({
     displayName: '',
@@ -98,16 +100,31 @@ const MemberDashboard: React.FC = () => {
         }));
         
         setMeetings(meetings);
+        setFilteredMeetings(meetings);
         console.log('📊 MEMBER DASHBOARD: Successfully loaded meetings:', meetings.length);
       } else {
         console.warn('📊 MEMBER DASHBOARD: No meetings found in response');
         setMeetings([]);
+        setFilteredMeetings([]);
       }
     } catch (error) {
       console.error('📊 MEMBER DASHBOARD: Error fetching meetings:', error);
       setMeetings([]);
+      setFilteredMeetings([]);
     }
   };
+
+  // Filter meetings based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredMeetings(meetings);
+    } else {
+      const filtered = meetings.filter(meeting =>
+        meeting.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredMeetings(filtered);
+    }
+  }, [searchQuery, meetings]);
 
   const handleJoinByCode = async () => {
     if (!inviteCode.trim()) {
@@ -124,15 +141,9 @@ const MemberDashboard: React.FC = () => {
       const result = await enhancedMakeGraphQLRequest(JOIN_MEETING_BY_CODE, { inviteCode });
       
       if (result.joinMeetingByCode && result.joinMeetingByCode.success) {
-        await Swal.fire({
-          icon: 'success',
-          title: '미팅 참여 성공',
-          text: '미팅에 성공적으로 참여했습니다!',
-          confirmButtonText: '확인'
-        });
-        
-        // Redirect to meeting page
-        router.push(`/meeting/${result.joinMeetingByCode.meeting._id}`);
+        // Redirect to pre-join device check page
+        const meetingId = result.joinMeetingByCode.meeting._id;
+        router.push(`/prejoin/${meetingId}`);
       } else {
         throw new Error(result.joinMeetingByCode?.message || '미팅 참여에 실패했습니다.');
       }
@@ -312,16 +323,19 @@ const MemberDashboard: React.FC = () => {
         }}>
           {/* Logo */}
           <div style={{
-            marginBottom: '40px'
+            marginBottom: '40px',
+            display: 'flex',
+            justifyContent: 'center'
           }}>
-            <h1 style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              margin: 0,
-              color: '#333'
-            }}>
-              Meet: <span style={{ color: '#4285f4' }}>mate</span>
-            </h1>
+            <Image
+              src="/logoHRDe.png"
+              alt="HRDE"
+              width={120}
+              height={55}
+              style={{
+                objectFit: 'contain'
+              }}
+            />
           </div>
 
           {/* Welcome Message */}
@@ -494,12 +508,34 @@ const MemberDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {meetings.length > 0 ? (
+              {/* Search Input */}
+              <div style={{
+                marginBottom: '20px',
+                maxWidth: '400px'
+              }}>
+                <input
+                  type="text"
+                  placeholder="미팅 제목으로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    backgroundColor: '#f8f9fa',
+                    transition: 'all 0.3s ease'
+                  }}
+                />
+              </div>
+
+              {filteredMeetings.length > 0 ? (
                 <div style={{
                   display: 'grid',
                   gap: '20px'
                 }}>
-                  {meetings.map((meeting) => (
+                  {filteredMeetings.map((meeting) => (
                     <div
                       key={meeting._id}
                       style={{
@@ -577,9 +613,30 @@ const MemberDashboard: React.FC = () => {
                     fontSize: '48px',
                     marginBottom: '20px'
                   }}>
-                    📅
+                    {searchQuery.trim() ? '🔍' : '📅'}
                   </div>
-                  <p>참여한 미팅이 없습니다.</p>
+                  <p>
+                    {searchQuery.trim() 
+                      ? `"${searchQuery}"에 대한 검색 결과가 없습니다.`
+                      : '참여한 미팅이 없습니다.'
+                    }
+                  </p>
+                  {searchQuery.trim() && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      style={{
+                        marginTop: '15px',
+                        padding: '8px 16px',
+                        backgroundColor: '#6c757d',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      검색 초기화
+                    </button>
+                  )}
                 </div>
               )}
             </div>
