@@ -510,6 +510,28 @@ const AdminDashboard: React.FC = () => {
       </Head>
       
       <div className="admin-dashboard">
+        {/* Header */}
+        <div className="admin-header">
+          <div className="admin-logo">
+            <Image
+              src="/logoHRDe.png"
+              alt="Meet: mate"
+              width={120}
+              height={40}
+              className="logo-image"
+            />
+          </div>
+          <div className="admin-user-info">
+            <div className="user-avatar">
+              <span>{user?.displayName?.charAt(0) || 'A'}</span>
+            </div>
+            <div className="user-details">
+              <div className="user-name">{user?.displayName || 'Admin'}</div>
+              <div className="user-role">Administrator</div>
+            </div>
+          </div>
+        </div>
+
         <div className="admin-content">
           {/* Sidebar */}
           <div className="admin-sidebar">
@@ -517,13 +539,7 @@ const AdminDashboard: React.FC = () => {
               {/* Logo Section */}
               <div className="sidebar-logo">
                 <div className="logo-container">
-                  <Image
-                    src="/logoHRDe.png"
-                    alt="HRDE"
-                    width={100}
-                    height={46}
-                    className="logo-image"
-                  />
+                  <div className="logo-icon">👁️</div>
                 </div>
               </div>
               
@@ -692,7 +708,7 @@ const AdminDashboard: React.FC = () => {
                                 }}
                                 title="View Details"
                               >
-                                👀
+                                👁️
                               </button>
                               <button
                                 className="action-btn rotate"
@@ -944,11 +960,56 @@ const AdminDashboard: React.FC = () => {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
+        .admin-header {
+          background: white;
+          padding: 1rem 2rem;
+          border-bottom: 1px solid #e5e7eb;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
 
+        .admin-logo {
+          display: flex;
+          align-items: center;
+        }
+
+        .admin-user-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .user-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #3b82f6;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+        }
+
+        .user-details {
+          text-align: right;
+        }
+
+        .user-name {
+          font-weight: 600;
+          color: white;
+        }
+
+        .user-role {
+          font-size: 0.875rem;
+          color: #6b7280;
+        }
 
         .admin-content {
           display: flex;
-          min-height: 100vh;
+          min-height: calc(100vh - 80px);
         }
 
         .admin-sidebar {
@@ -963,15 +1024,6 @@ const AdminDashboard: React.FC = () => {
           background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(10px);
           border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-          text-align: center;
-        }
-
-        .logo-tagline {
-          font-size: 0.9rem;
-          color: rgba(255, 255, 255, 0.8);
-          font-style: italic;
-          margin-bottom: 1rem;
-          font-weight: 300;
         }
 
         .logo-container {
@@ -980,19 +1032,17 @@ const AdminDashboard: React.FC = () => {
           justify-content: center;
         }
 
-        .logo-container .logo-image {
-          width: 100px;
-          height: 46px;
-          border-radius: 8px;
+        .logo-icon {
+          width: 60px;
+          height: 60px;
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.8rem;
           border: 2px solid rgba(255, 255, 255, 0.3);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          object-fit: contain;
-          transition: all 0.3s ease;
-        }
-
-        .logo-container .logo-image:hover {
-          transform: scale(1.05);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
         }
 
 

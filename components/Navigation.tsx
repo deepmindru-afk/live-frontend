@@ -6,7 +6,7 @@ export default function Navigation() {
     <nav className={styles.navigation}>
       <div className={styles.container}>
         <Link href="/" className={styles.logo}>
-          Meet: mate
+          HRDe Live
         </Link>
         <div className={styles.links}>
           <Link href="/login" className={styles.link}>

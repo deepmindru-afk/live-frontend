@@ -295,7 +295,7 @@ const VODPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>VOD 관리 - Meet: mate</title>
+        <title>VOD 관리 - HRDe Live</title>
         <meta name="description" content="VOD 관리 및 업로드" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>

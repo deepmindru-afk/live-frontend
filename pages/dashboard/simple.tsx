@@ -230,7 +230,7 @@ const SimpleDashboard: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Dashboard</title>
+        <title>HRDe Live - Dashboard</title>
         <meta name="description" content="Virtual meeting dashboard" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -239,7 +239,7 @@ const SimpleDashboard: React.FC = () => {
         {/* Header */}
         <div className="dashboard-header">
           <div className="logo">
-            <h1>Meet: mate</h1>
+            <h1>HRDe Live</h1>
           </div>
           <div className="user-info">
             {user && <ProfileDropdown user={user} />}

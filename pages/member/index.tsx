@@ -305,8 +305,8 @@ const MemberDashboard: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Member Dashboard</title>
-        <meta name="description" content="Member dashboard for Meet: mate" />
+        <title>HRDe Live - Member Dashboard</title>
+        <meta name="description" content="Member dashboard for HRDe Live" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       

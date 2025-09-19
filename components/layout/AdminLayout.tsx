@@ -84,7 +84,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, title = 'Admin Dash
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div" sx={{ color: 'white' }}>
-          Meet: mate Admin
+          HRDe Live
         </Typography>
       </Toolbar>
       <Divider />

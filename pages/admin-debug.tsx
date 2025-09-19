@@ -79,7 +79,7 @@ const AdminDebugPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Admin Debug Page - Meet: mate</title>
+        <title>Admin Debug Page - HRDe Live</title>
         <meta name="description" content="Admin Debug Page" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>

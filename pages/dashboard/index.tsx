@@ -462,7 +462,7 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Dashboard</title>
+        <title>HRDe Live - Dashboard</title>
         <meta name="description" content="Virtual meeting dashboard" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
@@ -473,7 +473,7 @@ const Dashboard: React.FC = () => {
           <div className="logo" onClick={() => router.push('/dashboard')}>
             <Image
               src="/logoHRDe.png"
-              alt="Meet: mate"
+              alt="HRDe Live"
               width={120}
               height={40}
               className="logo-image"

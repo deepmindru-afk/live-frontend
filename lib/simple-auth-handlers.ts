@@ -115,6 +115,7 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'apollo-require-preflight': 'true',
   };
   
   if (token) {
@@ -273,7 +274,7 @@ export const handleSignup = async (input: SignupData): Promise<boolean> => {
       console.log('🚀 SIGNUP: User data stored in localStorage');
       
       // Show success message
-      alert(`Welcome to Meet: mate, ${data.signup.user.displayName}!`);
+      alert(`Welcome to HRDe Live, ${data.signup.user.displayName}!`);
       
       return true;
     } else {
@@ -310,7 +311,7 @@ export const handleTutorSignup = async (input: SignupData): Promise<boolean> => 
       console.log('🎓 TUTOR SIGNUP: User data stored in localStorage');
       
       // Show success message
-      alert(`Welcome to Meet: mate as a Tutor, ${data.tutorSignup.user.displayName}!`);
+      alert(`Welcome to HRDe Live as a Tutor, ${data.tutorSignup.user.displayName}!`);
       
       return true;
     } else {

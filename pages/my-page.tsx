@@ -366,7 +366,7 @@ const MyPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>내 페이지 - Meet: mate</title>
+        <title>내 페이지 - HRDe Live</title>
         <meta name="description" content="프로필 및 계정 설정 관리" />
       </Head>
       
@@ -386,7 +386,7 @@ const MyPage: React.FC = () => {
             <div className="logo-container" onClick={() => router.push('/dashboard')}>
               <Image
                 src="/logoHRDe.png"
-                alt="Meet: mate"
+                alt="HRDe Live"
                 width={140}
                 height={45}
                 className="logo"

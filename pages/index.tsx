@@ -13,7 +13,7 @@ const HomePage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Virtual Meeting Platform</title>
+        <title>HRDe Live - Virtual Meeting Platform</title>
         <meta name="description" content="Connect, learn, and grow together in our virtual meeting platform" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>

@@ -773,8 +773,8 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Meet: mate - Instructor Dashboard</title>
-        <meta name="description" content="Instructor Dashboard for Meet: mate" />
+        <title>HRDe Live - Instructor Dashboard</title>
+        <meta name="description" content="Instructor Dashboard for HRDe Live" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       
@@ -784,7 +784,7 @@ const Dashboard: React.FC = () => {
           <div className="logo" onClick={() => router.push('/dashboard')}>
             <Image
               src="/logoHRDe.png"
-              alt="Meet: mate"
+              alt="HRDe Live"
               width={120}
               height={40}
               className="logo-image"
@@ -1038,6 +1038,22 @@ const Dashboard: React.FC = () => {
                                 )}
                                 {meeting.status === 'STARTED' && (
                                   <>
+                                    <button 
+                                      onClick={() => window.location.href = `/livestream/${meeting._id}`}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#ff6b35',
+                                        color: 'white',
+                                        marginRight: '8px'
+                                      }}
+                                    >
+                                      🎥 Live Room
+                                    </button>
                                     <button 
                                       onClick={() => window.location.href = `/prejoin/${meeting._id}`}
                                       style={{
