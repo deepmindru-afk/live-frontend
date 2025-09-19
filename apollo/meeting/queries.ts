@@ -79,7 +79,7 @@ export const GET_MEETING = gql`
 // Query to get meeting by ID (for meeting page)
 export const GET_MEETING_BY_ID = gql`
   query GetMeetingById($meetingId: ID!) {
-    meeting(meetingId: $meetingId) {
+    getMeetingById(meetingId: $meetingId) {
       _id
       title
       status

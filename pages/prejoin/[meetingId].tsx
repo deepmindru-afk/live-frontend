@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { enhancedMakeGraphQLRequest } from '../../../lib/mock-graphql-service';
+import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
+import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
 import Swal from 'sweetalert2';
 
 interface DeviceInfo {
@@ -47,9 +48,6 @@ const PreJoinPage: React.FC = () => {
     joinWithSpeakerOff: false
   });
   
-  const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isMicOn, setIsMicOn] = useState(true);
-  
   const [meetingInfo, setMeetingInfo] = useState<MeetingInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
@@ -68,15 +66,28 @@ const PreJoinPage: React.FC = () => {
 
   const fetchMeetingInfo = async () => {
     try {
-      // This would be a real GraphQL query in production
-      // For now, we'll use mock data
-      const mockMeeting: MeetingInfo = {
-        _id: meetingId as string,
-        title: 'Sample Meeting',
-        status: 'SCHEDULED', // This would come from the backend
-        inviteCode: 'ABC123'
-      };
-      setMeetingInfo(mockMeeting);
+      console.log('🔍 PREJOIN: Fetching meeting info for ID:', meetingId);
+      
+      const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+        meetingId: meetingId as string
+      });
+      
+      console.log('🔍 PREJOIN: Backend response:', result);
+      
+      if (result.getMeetingById) {
+        const meeting: MeetingInfo = {
+          _id: result.getMeetingById._id,
+          title: result.getMeetingById.title,
+          status: result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
+                  result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                  result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED',
+          inviteCode: result.getMeetingById.inviteCode
+        };
+        setMeetingInfo(meeting);
+        console.log('🔍 PREJOIN: Successfully loaded meeting:', meeting);
+      } else {
+        throw new Error('Meeting not found');
+      }
     } catch (error) {
       console.error('Error fetching meeting info:', error);
       await Swal.fire({
@@ -85,7 +96,7 @@ const PreJoinPage: React.FC = () => {
         text: '미팅 정보를 가져올 수 없습니다.',
         confirmButtonText: '확인'
       });
-      router.push('/dashboard');
+      router.push('/member'); // Default to member dashboard
     } finally {
       setIsLoading(false);
     }
@@ -150,10 +161,10 @@ const PreJoinPage: React.FC = () => {
       }
 
       const constraints: MediaStreamConstraints = {
-        video: (deviceSettings.cameraEnabled && isVideoOn) ? {
+        video: deviceSettings.cameraEnabled ? {
           deviceId: selectedDevices.camera ? { exact: selectedDevices.camera } : undefined
         } : false,
-        audio: (deviceSettings.microphoneEnabled && isMicOn) ? {
+        audio: deviceSettings.microphoneEnabled ? {
           deviceId: selectedDevices.microphone ? { exact: selectedDevices.microphone } : undefined
         } : false
       };
@@ -265,7 +276,21 @@ const PreJoinPage: React.FC = () => {
         selectedDevices
       }));
       
-      // Check meeting status and redirect accordingly
+      // Check if user is authenticated and get their role
+      const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
+      
+      if (isAuthenticated()) {
+        const currentUser = await getCurrentUser();
+        
+        // If user is TUTOR (host), go directly to meeting room
+        if (currentUser && currentUser.systemRole === 'TUTOR') {
+          console.log('🎯 PREJOIN: User is TUTOR, going directly to meeting room');
+          router.push(`/meeting/${meetingInfo._id}`);
+          return;
+        }
+      }
+      
+      // For students/members, check meeting status and redirect accordingly
       if (meetingInfo.status === 'STARTED') {
         // Meeting is already started, go directly to meeting
         router.push(`/meeting/${meetingInfo._id}`);
@@ -307,7 +332,7 @@ const PreJoinPage: React.FC = () => {
     return (
       <div className="error-container">
         <h2>미팅을 찾을 수 없습니다</h2>
-        <button onClick={() => router.push('/dashboard')}>대시보드로 돌아가기</button>
+        <button onClick={() => router.push('/member')}>대시보드로 돌아가기</button>
       </div>
     );
   }
@@ -322,14 +347,32 @@ const PreJoinPage: React.FC = () => {
       
       <div className="prejoin-container">
         <div className="prejoin-content">
-          {/* Header */}
-          <div className="prejoin-header">
-            <h1>{meetingInfo.title}</h1>
-            <p>미팅 참여 전 장치를 확인하세요</p>
+          {/* Left Panel - Meeting Info and Join Button */}
+          <div className="meeting-info-panel">
+            <div className="meeting-header">
+              <div className="connection-icon">📎</div>
+              <h1>장치 연결</h1>
+              <p>미팅 시작 전 장치가 정상적으로 연결 되었는지 확인하세요.</p>
+            </div>
+            
+            <div className="meeting-details">
+              <h3>{meetingInfo.title}</h3>
+              <p>미팅 ID: {meetingInfo._id.slice(-8)}</p>
+              <p>상태: {meetingInfo.status === 'STARTED' ? '진행 중' : '대기 중'}</p>
+            </div>
+            
+            <button 
+              className="join-button"
+              onClick={handleJoinMeeting}
+              disabled={isJoining}
+            >
+              {isJoining ? '참여 중...' : '미팅 입장하기'} →
+            </button>
           </div>
 
-          {/* Main Video Preview Area */}
-          <div className="video-preview-container">
+          {/* Right Panel - Device Controls */}
+          <div className="device-controls-panel">
+            {/* Video Preview */}
             <div className="video-preview">
               <video
                 ref={videoRef}
@@ -338,116 +381,158 @@ const PreJoinPage: React.FC = () => {
                 playsInline
                 className="preview-video"
               />
-              {!isVideoOn && (
+              {!deviceSettings.cameraEnabled && (
                 <div className="camera-off-overlay">
                   <div className="camera-off-icon">📷</div>
-                  <p>카메라가 꺼져있습니다</p>
                 </div>
               )}
             </div>
 
-            {/* Control Buttons */}
-            <div className="control-buttons">
-              <button 
-                className={`control-button ${isVideoOn ? 'active' : 'inactive'}`}
-                onClick={() => {
-                  setIsVideoOn(!isVideoOn);
-                  startPreview();
-                }}
-              >
-                <span className="button-icon">
-                  {isVideoOn ? '📹' : '📷'}
-                </span>
-                <span className="button-text">
-                  {isVideoOn ? 'Video' : 'Video'}
-                </span>
-              </button>
-
-              <button 
-                className={`control-button ${isMicOn ? 'active' : 'inactive'}`}
-                onClick={() => {
-                  setIsMicOn(!isMicOn);
-                  startPreview();
-                }}
-              >
-                <span className="button-icon">
-                  {isMicOn ? '🎤' : '🎤'}
-                </span>
-                <span className="button-text">
-                  {isMicOn ? 'Audio' : 'Audio'}
-                </span>
-              </button>
-
-              <button className="control-button backgrounds">
-                <span className="button-icon">🎨</span>
-                <span className="button-text">Backgrounds</span>
-              </button>
-            </div>
-
-            {/* Device Selection */}
-            <div className="device-selection">
-              <div className="device-dropdown">
-                <label>Audio</label>
-                <select
-                  value={selectedDevices.microphone}
-                  onChange={(e) => handleDeviceChange('microphone', e.target.value)}
-                  className="device-select"
-                >
-                  {devices.microphones.map((mic) => (
-                    <option key={mic.deviceId} value={mic.deviceId}>
-                      {mic.label}
-                    </option>
-                  ))}
-                </select>
+            {/* Device Controls */}
+            <div className="device-controls">
+              {/* Camera Control */}
+              <div className="device-control">
+                <div className="device-header">
+                  <span className="device-icon">📷</span>
+                  <span>카메라</span>
+                </div>
+                
+                {devices.cameras.length > 0 ? (
+                  <div className="device-selection">
+                    <select
+                      value={selectedDevices.camera}
+                      onChange={(e) => handleDeviceChange('camera', e.target.value)}
+                      className="device-select"
+                    >
+                      {devices.cameras.map((camera) => (
+                        <option key={camera.deviceId} value={camera.deviceId}>
+                          {camera.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button 
+                      onClick={startPreview}
+                      className="test-button"
+                    >
+                      미리보기
+                    </button>
+                  </div>
+                ) : (
+                  <div className="device-error">
+                    <span>미디어 디바이스를 찾을 수 없습니다</span>
+                  </div>
+                )}
+                
+                <label className="device-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={deviceSettings.joinWithCameraOff}
+                    onChange={(e) => handleSettingChange('joinWithCameraOff', e.target.checked)}
+                  />
+                  입장시 카메라 끄기
+                </label>
               </div>
 
-              <div className="device-dropdown">
-                <label>Video</label>
-                <select
-                  value={selectedDevices.camera}
-                  onChange={(e) => handleDeviceChange('camera', e.target.value)}
-                  className="device-select"
-                >
-                  {devices.cameras.map((camera) => (
-                    <option key={camera.deviceId} value={camera.deviceId}>
-                      {camera.label}
-                    </option>
-                  ))}
-                </select>
+              {/* Microphone Control */}
+              <div className="device-control">
+                <div className="device-header">
+                  <span className="device-icon">🎤</span>
+                  <span>마이크</span>
+                </div>
+                
+                {devices.microphones.length > 0 ? (
+                  <div className="device-selection">
+                    <select
+                      value={selectedDevices.microphone}
+                      onChange={(e) => handleDeviceChange('microphone', e.target.value)}
+                      className="device-select"
+                    >
+                      {devices.microphones.map((mic) => (
+                        <option key={mic.deviceId} value={mic.deviceId}>
+                          {mic.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button 
+                      onClick={testMicrophone}
+                      className="test-button"
+                    >
+                      TEST
+                    </button>
+                  </div>
+                ) : (
+                  <div className="device-error">
+                    <span>미디어 디바이스를 찾을 수 없습니다</span>
+                  </div>
+                )}
+                
+                <label className="device-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={deviceSettings.joinWithMicOff}
+                    onChange={(e) => handleSettingChange('joinWithMicOff', e.target.checked)}
+                  />
+                  입장시 마이크 끄기
+                </label>
+                
+                <div className="audio-level">
+                  <div className="level-bar"></div>
+                </div>
+              </div>
+
+              {/* Speaker Control */}
+              <div className="device-control">
+                <div className="device-header">
+                  <span className="device-icon">🔊</span>
+                  <span>스피커</span>
+                </div>
+                
+                {devices.speakers.length > 0 ? (
+                  <div className="device-selection">
+                    <select
+                      value={selectedDevices.speaker}
+                      onChange={(e) => handleDeviceChange('speaker', e.target.value)}
+                      className="device-select"
+                    >
+                      {devices.speakers.map((speaker) => (
+                        <option key={speaker.deviceId} value={speaker.deviceId}>
+                          {speaker.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button 
+                      onClick={testSpeaker}
+                      className="test-button"
+                    >
+                      TEST
+                    </button>
+                  </div>
+                ) : (
+                  <div className="device-error">
+                    <span>미디어 디바이스를 찾을 수 없습니다</span>
+                  </div>
+                )}
+                
+                <label className="device-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={deviceSettings.joinWithSpeakerOff}
+                    onChange={(e) => handleSettingChange('joinWithSpeakerOff', e.target.checked)}
+                  />
+                  입장시 스피커 끄기
+                </label>
+                
+                <div className="volume-control">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    defaultValue="70"
+                    className="volume-slider"
+                  />
+                </div>
               </div>
             </div>
-
-            {/* Settings */}
-            <div className="settings-section">
-              <label className="setting-checkbox">
-                <input
-                  type="checkbox"
-                  checked={deviceSettings.joinWithCameraOff}
-                  onChange={(e) => handleSettingChange('joinWithCameraOff', e.target.checked)}
-                />
-                입장시 카메라 끄기
-              </label>
-              
-              <label className="setting-checkbox">
-                <input
-                  type="checkbox"
-                  checked={deviceSettings.joinWithMicOff}
-                  onChange={(e) => handleSettingChange('joinWithMicOff', e.target.checked)}
-                />
-                입장시 마이크 끄기
-              </label>
-            </div>
-          </div>
-
-          {/* Join Button */}
-          <div className="join-section">
-            <button 
-              className="join-button"
-              onClick={handleJoinMeeting}
-              disabled={isJoining}
-            >
-              {isJoining ? '참여 중...' : 'Join Room'}
-            </button>
           </div>
         </div>
       </div>
@@ -455,7 +540,7 @@ const PreJoinPage: React.FC = () => {
       <style jsx>{`
         .prejoin-container {
           min-height: 100vh;
-          background: #1a1a1a;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -463,53 +548,104 @@ const PreJoinPage: React.FC = () => {
         }
 
         .prejoin-content {
-          background: #2d2d2d;
+          display: flex;
+          background: white;
           border-radius: 20px;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
           overflow: hidden;
-          max-width: 800px;
+          max-width: 1200px;
           width: 100%;
           min-height: 600px;
-          display: flex;
-          flex-direction: column;
         }
 
-        .prejoin-header {
-          padding: 30px 40px 20px;
-          text-align: center;
-          border-bottom: 1px solid #404040;
-        }
-
-        .prejoin-header h1 {
-          font-size: 1.8rem;
-          color: white;
-          margin: 0 0 10px 0;
-          font-weight: 600;
-        }
-
-        .prejoin-header p {
-          color: #ccc;
-          font-size: 1rem;
-          margin: 0;
-        }
-
-        .video-preview-container {
+        .meeting-info-panel {
           flex: 1;
           padding: 40px;
           display: flex;
           flex-direction: column;
-          align-items: center;
+          justify-content: space-between;
+          background: #f8f9ff;
+        }
+
+        .meeting-header {
+          text-align: center;
+        }
+
+        .connection-icon {
+          font-size: 48px;
+          margin-bottom: 20px;
+        }
+
+        .meeting-header h1 {
+          font-size: 2rem;
+          color: #333;
+          margin-bottom: 10px;
+        }
+
+        .meeting-header p {
+          color: #666;
+          font-size: 1rem;
+          line-height: 1.5;
+        }
+
+        .meeting-details {
+          background: white;
+          padding: 20px;
+          border-radius: 10px;
+          margin: 20px 0;
+        }
+
+        .meeting-details h3 {
+          margin: 0 0 10px 0;
+          color: #333;
+        }
+
+        .meeting-details p {
+          margin: 5px 0;
+          color: #666;
+          font-size: 0.9rem;
+        }
+
+        .join-button {
+          background: linear-gradient(135deg, #4A90E2, #357ABD);
+          color: white;
+          border: none;
+          padding: 15px 30px;
+          border-radius: 10px;
+          font-size: 1.1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .join-button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #357ABD, #2E6BA8);
+          transform: translateY(-2px);
+          box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .join-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .device-controls-panel {
+          flex: 1;
+          padding: 40px;
+          display: flex;
+          flex-direction: column;
         }
 
         .video-preview {
           width: 100%;
-          height: 300px;
+          height: 200px;
           background: #000;
-          border-radius: 15px;
+          border-radius: 10px;
           margin-bottom: 30px;
           position: relative;
           overflow: hidden;
-          border: 2px solid #404040;
         }
 
         .preview-video {
@@ -525,159 +661,137 @@ const PreJoinPage: React.FC = () => {
           right: 0;
           bottom: 0;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
           background: #333;
-          color: #ccc;
         }
 
         .camera-off-icon {
           font-size: 48px;
-          margin-bottom: 10px;
-          opacity: 0.7;
+          opacity: 0.5;
         }
 
-        .camera-off-overlay p {
-          margin: 0;
-          font-size: 14px;
-        }
-
-        .control-buttons {
-          display: flex;
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .control-button {
+        .device-controls {
+          flex: 1;
           display: flex;
           flex-direction: column;
+          gap: 20px;
+        }
+
+        .device-control {
+          border: 2px solid #e1e5e9;
+          border-radius: 10px;
+          padding: 20px;
+        }
+
+        .device-header {
+          display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 15px 20px;
-          background: #404040;
-          border: 2px solid #555;
-          border-radius: 12px;
-          color: white;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          min-width: 80px;
+          gap: 10px;
+          margin-bottom: 15px;
+          font-weight: 600;
+          color: #333;
         }
 
-        .control-button:hover {
-          background: #505050;
-          transform: translateY(-2px);
-        }
-
-        .control-button.active {
-          background: #4A90E2;
-          border-color: #357ABD;
-        }
-
-        .control-button.inactive {
-          background: #dc3545;
-          border-color: #c82333;
-        }
-
-        .control-button.backgrounds {
-          background: #6c757d;
-          border-color: #5a6268;
-        }
-
-        .button-icon {
-          font-size: 24px;
-        }
-
-        .button-text {
-          font-size: 12px;
-          font-weight: 500;
+        .device-icon {
+          font-size: 20px;
         }
 
         .device-selection {
           display: flex;
-          gap: 20px;
-          margin-bottom: 30px;
-          width: 100%;
-          max-width: 400px;
-        }
-
-        .device-dropdown {
-          flex: 1;
-        }
-
-        .device-dropdown label {
-          display: block;
-          color: #ccc;
-          font-size: 14px;
-          margin-bottom: 8px;
-          font-weight: 500;
+          gap: 10px;
+          margin-bottom: 15px;
         }
 
         .device-select {
-          width: 100%;
-          padding: 10px 12px;
-          background: #404040;
-          border: 1px solid #555;
-          border-radius: 8px;
-          color: white;
+          flex: 1;
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
           font-size: 14px;
         }
 
-        .device-select:focus {
-          outline: none;
-          border-color: #4A90E2;
+        .test-button {
+          padding: 8px 16px;
+          background: #6c757d;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: background 0.3s ease;
         }
 
-        .settings-section {
-          display: flex;
-          gap: 30px;
-          margin-bottom: 30px;
+        .test-button:hover {
+          background: #5a6268;
         }
 
-        .setting-checkbox {
+        .device-error {
+          background: #fee;
+          color: #c33;
+          padding: 12px;
+          border-radius: 6px;
+          margin-bottom: 15px;
+          text-align: center;
+          font-size: 14px;
+        }
+
+        .device-checkbox {
           display: flex;
           align-items: center;
           gap: 8px;
-          color: #ccc;
           font-size: 14px;
+          color: #666;
           cursor: pointer;
         }
 
-        .setting-checkbox input[type="checkbox"] {
+        .device-checkbox input[type="checkbox"] {
           margin: 0;
-          accent-color: #4A90E2;
         }
 
-        .join-section {
-          padding: 20px 40px 40px;
-          text-align: center;
+        .audio-level {
+          margin-top: 10px;
         }
 
-        .join-button {
-          background: linear-gradient(135deg, #4A90E2, #357ABD);
-          color: white;
-          border: none;
-          padding: 15px 40px;
-          border-radius: 12px;
-          font-size: 1.1rem;
-          font-weight: 600;
+        .level-bar {
+          height: 4px;
+          background: #e1e5e9;
+          border-radius: 2px;
+          position: relative;
+        }
+
+        .level-bar::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          height: 100%;
+          width: 30%;
+          background: #4A90E2;
+          border-radius: 2px;
+        }
+
+        .volume-control {
+          margin-top: 10px;
+        }
+
+        .volume-slider {
+          width: 100%;
+          height: 4px;
+          background: #e1e5e9;
+          border-radius: 2px;
+          outline: none;
+          -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          background: #4A90E2;
+          border-radius: 50%;
           cursor: pointer;
-          transition: all 0.3s ease;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          min-width: 200px;
-        }
-
-        .join-button:hover:not(:disabled) {
-          background: linear-gradient(135deg, #357ABD, #2E6BA8);
-          transform: translateY(-2px);
-          box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
-        }
-
-        .join-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
         }
 
         .loading-container, .error-container {
@@ -686,7 +800,7 @@ const PreJoinPage: React.FC = () => {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          background: #1a1a1a;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
         }
 
@@ -707,30 +821,12 @@ const PreJoinPage: React.FC = () => {
 
         @media (max-width: 768px) {
           .prejoin-content {
+            flex-direction: column;
             max-width: 500px;
           }
           
-          .prejoin-header, .video-preview-container, .join-section {
+          .meeting-info-panel, .device-controls-panel {
             padding: 20px;
-          }
-
-          .control-buttons {
-            gap: 15px;
-          }
-
-          .control-button {
-            min-width: 70px;
-            padding: 12px 15px;
-          }
-
-          .device-selection {
-            flex-direction: column;
-            gap: 15px;
-          }
-
-          .settings-section {
-            flex-direction: column;
-            gap: 15px;
           }
         }
       `}</style>

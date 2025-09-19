@@ -17,3 +17,6 @@ UI:
 - Table: No, VOD title, Size, Notes (three dots menu)
 - Empty state: "등록된 VOD가 없습니다" with X icon
 
+
+
+

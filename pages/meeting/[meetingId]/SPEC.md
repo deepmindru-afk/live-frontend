@@ -23,3 +23,6 @@ UI:
 - Bottom controls: mic on/off, camera on/off, screen share, chat toggle, leave button.
 - If ADMIN/HOST show: "모두 음소거", "카메라 끄기(대상)", "참여자 내보내기(대상)".
 
+
+
+

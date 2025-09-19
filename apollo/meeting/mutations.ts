@@ -14,11 +14,6 @@ export const CREATE_MEETING = gql`
       isPrivate
       duration
       maxParticipants
-      host {
-        _id
-        displayName
-        email
-      }
     }
   }
 `;

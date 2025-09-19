@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
-import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/queries';
+import { makeGraphQLRequest, enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
+import { JOIN_MEETING_BY_CODE, GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
 import Swal from 'sweetalert2';
 
 interface MeetingInfo {
@@ -35,22 +35,59 @@ const WaitingRoomPage: React.FC = () => {
 
   const checkMeetingStatus = async (meetingId: string) => {
     try {
-      // This would be a real GraphQL query in production
-      // For now, we'll use mock data
-      const mockMeeting: MeetingInfo = {
-        _id: meetingId,
-        title: 'Sample Meeting',
-        status: 'SCHEDULED', // This would come from the backend
-        inviteCode: inviteCode
-      };
-      setMeetingInfo(mockMeeting);
+      // Check if user is authenticated and get their role
+      const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
       
-      if (mockMeeting.status === 'STARTED') {
-        // Meeting is already started, redirect to meeting
-        router.push(`/meeting/${meetingId}`);
+      if (isAuthenticated()) {
+        const currentUser = await getCurrentUser();
+        
+        // If user is TUTOR (host), go directly to meeting room
+        if (currentUser && currentUser.systemRole === 'TUTOR') {
+          console.log('🎯 WAITING: User is TUTOR, going directly to meeting room');
+          router.push(`/meeting/${meetingId}`);
+          return;
+        }
+      }
+
+      // Fetch real meeting data from backend
+      console.log('🚪 WAITING: Fetching meeting info for ID:', meetingId);
+      
+      const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+        meetingId: meetingId
+      });
+      
+      console.log('🚪 WAITING: Backend response:', result);
+      
+      if (result.getMeetingById) {
+        const meeting: MeetingInfo = {
+          _id: result.getMeetingById._id,
+          title: result.getMeetingById.title,
+          status: result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
+                  result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                  result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED',
+          inviteCode: result.getMeetingById.inviteCode
+        };
+        setMeetingInfo(meeting);
+        console.log('🚪 WAITING: Successfully loaded meeting:', meeting);
+        
+        // For now, all meetings from backend are CREATED status
+        // We'll show waiting room for all non-ENDED meetings
+        // In the future, we might need to check if host has actually started the meeting
+        if (meeting.status === 'ENDED') {
+          // Meeting is ended, show error or redirect
+          await Swal.fire({
+            icon: 'info',
+            title: '미팅 종료',
+            text: '이미 종료된 미팅입니다.',
+            confirmButtonText: '확인'
+          });
+          router.push('/member');
+        } else {
+          // Meeting is created/scheduled, show waiting room
+          setIsWaitingForMeeting(true);
+        }
       } else {
-        // Meeting not started yet, show waiting room
-        setIsWaitingForMeeting(true);
+        throw new Error('Meeting not found');
       }
     } catch (error) {
       console.error('Error checking meeting status:', error);
@@ -71,7 +108,7 @@ const WaitingRoomPage: React.FC = () => {
     try {
       console.log('🚪 WAITING ROOM: Attempting to join meeting with code:', inviteCode);
       
-      const result = await enhancedMakeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
+      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
         inviteCode: inviteCode.trim() 
       });
       
@@ -158,25 +195,61 @@ const WaitingRoomPage: React.FC = () => {
             
             {isWaitingForMeeting ? (
               <div className="waiting-content">
+                {/* Header with tagline and logo */}
+                <div className="waiting-header">
+                  <div className="tagline">Let's go together</div>
+                  <div className="logo-section">
+                    <div className="logo-icon">O</div>
+                    <span className="logo-text">HRDe</span>
+                  </div>
+                </div>
+
                 {meetingInfo && (
-                  <div className="meeting-info">
+                  <div className="meeting-info-card">
                     <h3>{meetingInfo.title}</h3>
-                    <p>미팅 ID: {meetingInfo._id.slice(-8)}</p>
-                    <p>상태: 대기 중</p>
+                    <p>Meeting ID: {meetingInfo._id.slice(-8)}</p>
+                    <p>Status: Pending</p>
                   </div>
                 )}
                 
                 <div className="waiting-animation">
                   <div className="spinner"></div>
-                  <p>미팅 시작을 기다리는 중...</p>
+                  <p>Waiting for the meeting to start...</p>
                 </div>
                 
-                <button 
-                  onClick={() => router.push('/dashboard')}
-                  className="back-button"
-                >
-                  대시보드로 돌아가기
-                </button>
+                <div className="navigation-buttons">
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
+                        if (isAuthenticated()) {
+                          const currentUser = await getCurrentUser();
+                          if (currentUser?.systemRole === 'TUTOR') {
+                            router.push('/instructor');
+                          } else if (currentUser?.systemRole === 'ADMIN') {
+                            router.push('/admin');
+                          } else {
+                            router.push('/member');
+                          }
+                        } else {
+                          router.push('/member');
+                        }
+                      } catch (error) {
+                        console.error('Error getting user role:', error);
+                        router.push('/member');
+                      }
+                    }}
+                    className="nav-button dashboard"
+                  >
+                    Back to Dashboard
+                  </button>
+                  <button 
+                    onClick={() => router.push(`/prejoin/${meetingInfo?._id}`)}
+                    className="nav-button test"
+                  >
+                    Back to Test
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleJoinMeeting}>
@@ -450,26 +523,67 @@ const WaitingRoomPage: React.FC = () => {
 
         .waiting-content {
           text-align: center;
+          padding: 0 20px;
         }
 
-        .meeting-info {
-          background: #f8f9ff;
-          padding: 20px;
-          border-radius: 10px;
+        .waiting-header {
           margin-bottom: 30px;
-          border: 1px solid #e1e5e9;
         }
 
-        .meeting-info h3 {
-          margin: 0 0 10px 0;
-          color: #333;
+        .tagline {
+          font-family: 'Brush Script MT', cursive;
+          font-size: 1.2rem;
+          color: #666;
+          margin-bottom: 15px;
+          font-weight: 300;
+        }
+
+        .logo-section {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          margin-bottom: 20px;
+        }
+
+        .logo-icon {
+          width: 40px;
+          height: 40px;
+          background: #4A90E2;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
           font-size: 1.2rem;
         }
 
-        .meeting-info p {
+        .logo-text {
+          font-size: 1.5rem;
+          font-weight: bold;
+          color: #4A90E2;
+        }
+
+        .meeting-info-card {
+          background: #f8f9fa;
+          padding: 20px;
+          border-radius: 12px;
+          margin-bottom: 30px;
+          border: 1px solid #e9ecef;
+        }
+
+        .meeting-info-card h3 {
+          margin: 0 0 10px 0;
+          color: #333;
+          font-size: 1.3rem;
+          font-weight: bold;
+        }
+
+        .meeting-info-card p {
           margin: 5px 0;
           color: #666;
-          font-size: 0.9rem;
+          font-size: 0.95rem;
         }
 
         .waiting-animation {
@@ -479,11 +593,11 @@ const WaitingRoomPage: React.FC = () => {
         .spinner {
           width: 40px;
           height: 40px;
-          border: 4px solid #e1e5e9;
-          border-top: 4px solid #4A90E2;
+          border: 3px solid #f0f0f0;
+          border-top: 3px solid #4A90E2;
           border-radius: 50%;
           animation: spin 1s linear infinite;
-          margin: 0 auto 20px;
+          margin: 0 auto 15px;
         }
 
         @keyframes spin {
@@ -497,20 +611,41 @@ const WaitingRoomPage: React.FC = () => {
           margin: 0;
         }
 
-        .back-button {
-          background: #6c757d;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 8px;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          margin-top: 20px;
+        .navigation-buttons {
+          display: flex;
+          gap: 15px;
+          justify-content: center;
+          margin-top: 30px;
         }
 
-        .back-button:hover {
+        .nav-button {
+          padding: 12px 20px;
+          border: none;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          min-width: 140px;
+        }
+
+        .nav-button.dashboard {
+          background: #6c757d;
+          color: white;
+        }
+
+        .nav-button.dashboard:hover {
           background: #5a6268;
+          transform: translateY(-1px);
+        }
+
+        .nav-button.test {
+          background: #007bff;
+          color: white;
+        }
+
+        .nav-button.test:hover {
+          background: #0056b3;
           transform: translateY(-1px);
         }
 
@@ -518,6 +653,39 @@ const WaitingRoomPage: React.FC = () => {
           .auth-container {
             padding: 16px;
           }
+
+          .navigation-buttons {
+            flex-direction: column;
+            align-items: center;
+          }
+
+          .nav-button {
+            width: 100%;
+            max-width: 200px;
+          }
+
+          .waiting-header {
+            margin-bottom: 20px;
+          }
+
+          .tagline {
+            font-size: 1rem;
+          }
+
+          .logo-section {
+            margin-bottom: 15px;
+          }
+
+          .logo-icon {
+            width: 35px;
+            height: 35px;
+            font-size: 1rem;
+          }
+
+          .logo-text {
+            font-size: 1.3rem;
+          }
+        }
 
           .auth-modal {
             padding: 30px 20px;

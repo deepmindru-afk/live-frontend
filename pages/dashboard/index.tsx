@@ -36,6 +36,20 @@ const Dashboard: React.FC = () => {
       if (isAuthenticated()) {
         const userData = await getCurrentUser();
         setUser(userData);
+        
+        // Redirect users to their appropriate dashboard based on role
+        if (userData?.systemRole === 'MEMBER') {
+          router.push('/member');
+          return;
+        } else if (userData?.systemRole === 'ADMIN') {
+          router.push('/admin');
+          return;
+        } else if (userData?.systemRole === 'TUTOR') {
+          router.push('/instructor');
+          return;
+        }
+        
+        // Only allow access to dashboard if user has no specific role or is a legacy user
         await testBackendConnection();
         await fetchMeetings();
       } else {
@@ -44,7 +58,7 @@ const Dashboard: React.FC = () => {
       setLoading(false);
     };
     checkAuth();
-  }, []);
+  }, [router]);
 
   const testBackendConnection = async () => {
     try {
@@ -170,10 +184,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleCreateMeeting = async () => {
-    console.log('🏠 CREATE MEETING: Function called with title:', newMeetingTitle, 'schedule:', meetingSchedule);
-    
     if (!newMeetingTitle.trim()) {
-      console.log('🏠 CREATE MEETING: No title provided, showing warning');
       await Swal.fire({
         icon: 'warning',
         title: '입력 필요',
@@ -201,15 +212,15 @@ const Dashboard: React.FC = () => {
 
         console.log('🏠 CREATE MEETING: GraphQL response received:', result);
 
-        if (result.createMeeting && result.createMeeting._id) {
+        if (result.createMeeting && result.createMeeting.success) {
           const newMeeting: Meeting = {
-            _id: result.createMeeting._id,
-            title: result.createMeeting.title,
-            status: result.createMeeting.status,
-            schedule: result.createMeeting.scheduledFor,
-            inviteCode: result.createMeeting.inviteCode,
-            createdAt: result.createMeeting.createdAt,
-            updatedAt: result.createMeeting.createdAt,
+            _id: result.createMeeting.meeting._id,
+            title: result.createMeeting.meeting.title,
+            status: result.createMeeting.meeting.status,
+            schedule: result.createMeeting.meeting.schedule,
+            inviteCode: result.createMeeting.meeting.inviteCode,
+            createdAt: result.createMeeting.meeting.createdAt,
+            updatedAt: result.createMeeting.meeting.createdAt,
             participantCount: 0,
           };
 
@@ -219,7 +230,7 @@ const Dashboard: React.FC = () => {
           await Swal.fire({
             icon: 'success',
             title: '성공',
-            text: '방이 성공적으로 생성되었습니다!',
+            text: '방이 성공적으로 생성되었습니다! (모의 서비스)',
             confirmButtonText: '확인'
           });
 
@@ -489,7 +500,6 @@ const Dashboard: React.FC = () => {
                   placeholder="방 이름을 입력하세요"
                   value={newMeetingTitle}
                   onChange={(e) => setNewMeetingTitle(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateMeeting()}
                 />
                 <button onClick={handleCreateMeeting}>→</button>
               </div>
@@ -504,7 +514,6 @@ const Dashboard: React.FC = () => {
                   type="datetime-local"
                   value={meetingSchedule}
                   onChange={(e) => setMeetingSchedule(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateMeeting()}
                 />
                 <button onClick={handleCreateMeeting}>→</button>
               </div>

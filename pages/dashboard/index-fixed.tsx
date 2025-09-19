@@ -63,27 +63,30 @@ const Dashboard: React.FC = () => {
       if (isAuthenticated()) {
         const userData = await getCurrentUser();
         
-        // Only allow TUTOR and ADMIN roles to access this dashboard
-        if (userData && (userData.systemRole === 'TUTOR' || userData.systemRole === 'ADMIN')) {
-          setUser(userData);
-          await testBackendConnection();
-          await fetchMeetings();
-          await loadVODs();
-        } else {
-          // Redirect members to their dashboard
-          if (userData && userData.systemRole === 'MEMBER') {
-            window.location.href = '/member';
-          } else {
-            window.location.href = '/login';
-          }
+        // Redirect users to their appropriate dashboard based on role
+        if (userData?.systemRole === 'MEMBER') {
+          router.push('/member');
+          return;
+        } else if (userData?.systemRole === 'ADMIN') {
+          router.push('/admin');
+          return;
+        } else if (userData?.systemRole === 'TUTOR') {
+          router.push('/instructor');
+          return;
         }
+        
+        // Only allow access to dashboard if user has no specific role or is a legacy user
+        setUser(userData);
+        await testBackendConnection();
+        await fetchMeetings();
+        await loadVODs();
       } else {
         window.location.href = '/login';
       }
       setLoading(false);
     };
     checkAuth();
-  }, []);
+  }, [router]);
 
   // Close VOD menu when clicking outside
   useEffect(() => {
@@ -1011,4 +1014,7 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
+
+
 

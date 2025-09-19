@@ -152,9 +152,10 @@ const Dashboard: React.FC = () => {
         return;
       }
       
-      // Try to fetch meetings via GraphQL first
+      // Try to fetch meetings via GraphQL first (use real backend)
       try {
-        const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
+        const { makeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
+        const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
           input: {
             hostId: currentUserId // Filter by current user
           }
@@ -240,10 +241,11 @@ const Dashboard: React.FC = () => {
         }
       }
 
-      // Try to create meeting via GraphQL first
+      // Try to create meeting via GraphQL first (use real backend for meeting creation)
       try {
-        console.log('🏠 CREATE MEETING: Attempting GraphQL request...');
-        const result = await enhancedMakeGraphQLRequest(CREATE_MEETING, {
+        console.log('🏠 CREATE MEETING: Attempting GraphQL request to real backend...');
+        const { makeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
+        const result = await makeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
             scheduledFor: formattedSchedule,
@@ -282,9 +284,15 @@ const Dashboard: React.FC = () => {
 
           console.log('🏠 CREATE MEETING: Meeting created via GraphQL:', newMeeting);
           
-          // Auto-redirect to meeting room
-          console.log('🏠 CREATE MEETING: Redirecting to meeting room:', newMeeting._id);
-          window.location.href = `/meeting/${newMeeting._id}`;
+          // Only redirect to pre-join page for immediate meetings (not scheduled)
+          if (!formattedSchedule) {
+            console.log('🏠 CREATE MEETING: Immediate meeting, redirecting to pre-join page:', newMeeting._id);
+            window.location.href = `/prejoin/${newMeeting._id}`;
+          } else {
+            console.log('🏠 CREATE MEETING: Scheduled meeting created, staying on dashboard');
+            // Refresh the meetings list to show the new scheduled meeting
+            await fetchMeetings();
+          }
           return;
         }
       } catch (graphqlError) {
@@ -324,9 +332,15 @@ const Dashboard: React.FC = () => {
 
       console.log('🏠 CREATE MEETING: Mock meeting created:', newMeeting);
       
-      // Auto-redirect to meeting room
-      console.log('🏠 CREATE MEETING: Redirecting to meeting room:', newMeeting._id);
-      window.location.href = `/meeting/${newMeeting._id}`;
+      // Only redirect to pre-join page for immediate meetings (not scheduled)
+      if (!formattedSchedule) {
+        console.log('🏠 CREATE MEETING: Immediate meeting, redirecting to pre-join page:', newMeeting._id);
+        window.location.href = `/prejoin/${newMeeting._id}`;
+      } else {
+        console.log('🏠 CREATE MEETING: Scheduled meeting created, staying on dashboard');
+        // Refresh the meetings list to show the new scheduled meeting
+        await fetchMeetings();
+      }
 
     } catch (error: unknown) {
       console.error('🏠 CREATE MEETING: Error:', error);
@@ -1006,19 +1020,56 @@ const Dashboard: React.FC = () => {
                               <div className="actions">
                                 {meeting.status === 'SCHEDULED' && (
                                   <button 
-                                    className="action-btn start"
                                     onClick={() => handleStartMeeting(meeting._id)}
+                                    style={{
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                      fontWeight: '500',
+                                      background: '#28a745',
+                                      color: 'white',
+                                      marginRight: '8px'
+                                    }}
                                   >
                                     시작
                                   </button>
                                 )}
                                 {meeting.status === 'STARTED' && (
-                                  <button 
-                                    className="action-btn end"
-                                    onClick={() => handleEndMeeting(meeting._id)}
-                                  >
-                                    종료
-                                  </button>
+                                  <>
+                                    <button 
+                                      onClick={() => window.location.href = `/prejoin/${meeting._id}`}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#007bff',
+                                        color: 'white',
+                                        marginRight: '8px'
+                                      }}
+                                    >
+                                      참여
+                                    </button>
+                                    <button 
+                                      onClick={() => handleEndMeeting(meeting._id)}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#dc3545',
+                                        color: 'white'
+                                      }}
+                                    >
+                                      종료
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>

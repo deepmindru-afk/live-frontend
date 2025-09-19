@@ -27,7 +27,6 @@ import {
   Logout,
   AccountCircle,
   School,
-  AdminPanelSettings,
 } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import { User } from '../../apollo/types';

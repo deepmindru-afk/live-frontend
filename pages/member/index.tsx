@@ -3,7 +3,7 @@ import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, handleLogout } from '../../lib/simple-auth-handlers';
-import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
+import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MY_MEETINGS, GET_MEETING_BY_ID, JOIN_MEETING_BY_CODE, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { UPDATE_PROFILE, UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE } from '../../apollo/member/mutations';
 import Swal from 'sweetalert2';
@@ -62,8 +62,10 @@ const MemberDashboard: React.FC = () => {
           // Redirect non-members to appropriate dashboard
           if (userData?.systemRole === 'TUTOR') {
             router.push('/instructor');
+          } else if (userData?.systemRole === 'ADMIN') {
+            router.push('/admin');
           } else {
-            router.push('/dashboard');
+            router.push('/login'); // Redirect to login if unknown role
           }
         }
       } else {
@@ -78,7 +80,7 @@ const MemberDashboard: React.FC = () => {
     try {
       console.log('📊 MEMBER DASHBOARD: Fetching meetings...');
       
-      const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
+      const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
         input: {}
       });
       
@@ -138,7 +140,7 @@ const MemberDashboard: React.FC = () => {
     }
 
     try {
-      const result = await enhancedMakeGraphQLRequest(JOIN_MEETING_BY_CODE, { inviteCode });
+      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { inviteCode });
       
       if (result.joinMeetingByCode && result.joinMeetingByCode.success) {
         // Redirect to pre-join device check page
@@ -160,7 +162,7 @@ const MemberDashboard: React.FC = () => {
 
   const handleUpdateProfile = async () => {
     try {
-      const result = await enhancedMakeGraphQLRequest(UPDATE_PROFILE, {
+      const result = await makeGraphQLRequest(UPDATE_PROFILE, {
         input: profileData
       });
 
@@ -196,7 +198,7 @@ const MemberDashboard: React.FC = () => {
     if (!file) return;
 
     try {
-      const result = await enhancedMakeGraphQLRequest(UPLOAD_PROFILE_IMAGE, {
+      const result = await makeGraphQLRequest(UPLOAD_PROFILE_IMAGE, {
         file: file
       });
 
@@ -239,7 +241,7 @@ const MemberDashboard: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        await enhancedMakeGraphQLRequest(DELETE_PROFILE_IMAGE);
+        await makeGraphQLRequest(DELETE_PROFILE_IMAGE);
         
         await Swal.fire({
           icon: 'success',
@@ -584,22 +586,21 @@ const MemberDashboard: React.FC = () => {
                           <div>예약일: {formatDate(meeting.schedule)}</div>
                         )}
                       </div>
-                      {meeting.status === 'STARTED' && (
-                        <button
-                          onClick={() => router.push(`/meeting/${meeting._id}`)}
-                          style={{
-                            marginTop: '15px',
-                            padding: '8px 16px',
-                            backgroundColor: '#28a745',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          미팅 참여
-                        </button>
-                      )}
+                      <button
+                        onClick={() => router.push(`/prejoin/${meeting._id}`)}
+                        style={{
+                          marginTop: '15px',
+                          padding: '8px 16px',
+                          backgroundColor: meeting.status === 'STARTED' ? '#28a745' : '#007bff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        Join
+                      </button>
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING } from '../../apollo/meeting/mutations';
@@ -19,6 +20,7 @@ interface Meeting {
 }
 
 const SimpleDashboard: React.FC = () => {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'STARTED' | 'SCHEDULED' | 'ENDED' | 'VOD'>('STARTED');
@@ -32,6 +34,19 @@ const SimpleDashboard: React.FC = () => {
       if (isAuthenticated()) {
         const userData = await getCurrentUser();
         setUser(userData);
+        
+        // Redirect users to their appropriate dashboard based on role
+        if (userData?.systemRole === 'MEMBER') {
+          router.push('/member');
+          return;
+        } else if (userData?.systemRole === 'ADMIN') {
+          router.push('/admin');
+          return;
+        } else if (userData?.systemRole === 'TUTOR') {
+          router.push('/instructor');
+          return;
+        }
+        
         // Mock data for now
         setMeetings([
           {
@@ -61,7 +76,7 @@ const SimpleDashboard: React.FC = () => {
       setLoading(false);
     };
     checkAuth();
-  }, []);
+  }, [router]);
 
   const handleCreateMeeting = async () => {
     if (!newMeetingTitle.trim()) {
@@ -81,22 +96,22 @@ const SimpleDashboard: React.FC = () => {
           }
         });
 
-        if (result.createMeeting && result.createMeeting._id) {
+        if (result.createMeeting && result.createMeeting.success) {
           const newMeeting: Meeting = {
-            _id: result.createMeeting._id,
-            title: result.createMeeting.title,
-            status: result.createMeeting.status,
-            schedule: result.createMeeting.scheduledFor,
-            inviteCode: result.createMeeting.inviteCode,
-            createdAt: result.createMeeting.createdAt,
-            updatedAt: result.createMeeting.createdAt,
+            _id: result.createMeeting.meeting._id,
+            title: result.createMeeting.meeting.title,
+            status: result.createMeeting.meeting.status,
+            schedule: result.createMeeting.meeting.schedule,
+            inviteCode: result.createMeeting.meeting.inviteCode,
+            createdAt: result.createMeeting.meeting.createdAt,
+            updatedAt: result.createMeeting.meeting.createdAt,
             participantCount: 0,
           };
 
           setMeetings([...meetings, newMeeting]);
           setNewMeetingTitle('');
           setMeetingSchedule('');
-          alert('Meeting created successfully!');
+          alert('Meeting created successfully! (Mock Service)');
           return;
         }
       } catch (graphqlError) {
