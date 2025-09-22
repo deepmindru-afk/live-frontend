@@ -28,3 +28,4 @@ const SimpleLiveStreamRoomPage: React.FC = () => {
 };
 
 export default SimpleLiveStreamRoomPage;
+

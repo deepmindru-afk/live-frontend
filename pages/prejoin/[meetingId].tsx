@@ -282,10 +282,10 @@ const PreJoinPage: React.FC = () => {
       if (isAuthenticated()) {
         const currentUser = await getCurrentUser();
         
-        // If user is TUTOR (host), go directly to meeting room
-        if (currentUser && currentUser.systemRole === 'TUTOR') {
-          console.log('🎯 PREJOIN: User is TUTOR, going directly to meeting room');
-          router.push(`/meeting/${meetingInfo._id}`);
+        // If user is TUTOR or ADMIN, go directly to live room
+        if (currentUser && (currentUser.systemRole === 'TUTOR' || currentUser.systemRole === 'ADMIN')) {
+          console.log('🎯 PREJOIN: User is TUTOR/ADMIN, going directly to live room');
+          router.push(`/livestream/${meetingInfo._id}`);
           return;
         }
       }

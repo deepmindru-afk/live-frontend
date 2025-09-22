@@ -38,3 +38,4 @@ const SimpleLiveStreamRoom: React.FC<SimpleLiveStreamRoomProps> = ({ meetingId }
 };
 
 export default SimpleLiveStreamRoom;
+

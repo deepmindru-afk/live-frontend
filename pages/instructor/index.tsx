@@ -1039,22 +1039,6 @@ const Dashboard: React.FC = () => {
                                 {meeting.status === 'STARTED' && (
                                   <>
                                     <button 
-                                      onClick={() => window.location.href = `/livestream/${meeting._id}`}
-                                      style={{
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#ff6b35',
-                                        color: 'white',
-                                        marginRight: '8px'
-                                      }}
-                                    >
-                                      🎥 Live Room
-                                    </button>
-                                    <button 
                                       onClick={() => window.location.href = `/prejoin/${meeting._id}`}
                                       style={{
                                         padding: '6px 12px',

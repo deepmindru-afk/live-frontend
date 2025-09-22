@@ -2,22 +2,34 @@ import React, { useState, useEffect } from 'react';
 
 interface ProfessionalLiveStreamRoomProps {
   meetingId?: string;
+  role?: 'HOST' | 'PARTICIPANT';
+  userId?: string; // identify current user
 }
 
-const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({ meetingId }) => {
+const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
+  meetingId,
+  role = 'HOST',
+  userId = 'p1'
+}) => {
   const [actualMeetingId, setActualMeetingId] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'participants' | 'waiting' | 'chat' | 'analytics'>('participants');
+  const [activeTab, setActiveTab] = useState<'participants' | 'waiting' | 'chat' | 'analytics' | null>(
+    role === 'HOST' ? 'participants' : null
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [raiseHands, setRaiseHands] = useState<string[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<string | null>(null);
-  const [participantChat, setParticipantChat] = useState<{[key: string]: any[]}>({});
+  const [participantChat, setParticipantChat] = useState<{
+    [key: string]: { _id: string; text: string; displayName: string; createdAt: string }[];
+  }>({});
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'students'>('students');
   const [mainVideoParticipant, setMainVideoParticipant] = useState<string | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isVideoOn, setIsVideoOn] = useState(true);
+
   // Mock data
   const mockMeetingData = {
     _id: meetingId || '68cb9c9cd2d6ea30031d018a',
@@ -26,33 +38,71 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   };
 
   const mockParticipants = [
-    { _id: 'p1', email: 'student1@demo.com', displayName: 'Demo Student 1', micState: 'MUTED', cameraState: 'ON', role: 'PARTICIPANT' },
-    { _id: 'p2', email: 'student2@demo.com', displayName: 'Demo Student 2', micState: 'MUTED', cameraState: 'ON', role: 'PARTICIPANT' }
+    {
+      _id: 'p1',
+      email: 'student1@demo.com',
+      displayName: 'Demo Student 1',
+      micState: 'MUTED',
+      cameraState: 'ON',
+      role: 'PARTICIPANT'
+    },
+    {
+      _id: 'p2',
+      email: 'student2@demo.com',
+      displayName: 'Demo Student 2',
+      micState: 'MUTED',
+      cameraState: 'ON',
+      role: 'PARTICIPANT'
+    }
   ];
 
   // Mock raised hands data
-  const mockRaisedHands = ['p1']; // Student 1 has raised hand
+  const mockRaisedHands = raiseHands;
 
   const mockWaitingParticipants = [
-    { _id: 'w1', email: 'student3@demo.com', displayName: 'Demo Student 3', joinedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString() }
+    {
+      _id: 'w1',
+      email: 'student3@demo.com',
+      displayName: 'Demo Student 3',
+      joinedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString()
+    }
   ];
 
   const mockChatMessages = [
-    { _id: 'c1', text: 'Welcome to the demo meeting!', displayName: 'Admin', createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString() },
-    { _id: 'c2', text: 'Hello everyone!', displayName: 'Demo Student 1', createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString() },
-    { _id: 'c3', text: 'Ready to start the session', displayName: 'Demo Student 2', createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString() }
+    {
+      _id: 'c1',
+      text: 'Welcome to the demo meeting!',
+      displayName: 'Admin',
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    },
+    {
+      _id: 'c2',
+      text: 'Hello everyone!',
+      displayName: 'Demo Student 1',
+      createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString()
+    },
+    {
+      _id: 'c3',
+      text: 'Ready to start the session',
+      displayName: 'Demo Student 2',
+      createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString()
+    }
   ];
 
-  // Mock private chat messages for participants
   const mockPrivateChats = {
-    'p1': [
-      { _id: 'pc1', text: 'Hi, I have a question about the assignment', displayName: 'Demo Student 1', createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString() },
-      { _id: 'pc2', text: 'Sure, what would you like to know?', displayName: 'Host', createdAt: new Date(Date.now() - 14 * 60 * 1000).toISOString() },
-      { _id: 'pc3', text: 'Can you explain the grading criteria?', displayName: 'Demo Student 1', createdAt: new Date(Date.now() - 13 * 60 * 1000).toISOString() }
-    ],
-    'p2': [
-      { _id: 'pc4', text: 'Hello, I need help with the project', displayName: 'Demo Student 2', createdAt: new Date(Date.now() - 8 * 60 * 1000).toISOString() },
-      { _id: 'pc5', text: 'I can help you with that. What specific part?', displayName: 'Host', createdAt: new Date(Date.now() - 7 * 60 * 1000).toISOString() }
+    p1: [
+      {
+        _id: 'pc1',
+        text: 'Hi, I have a question about the assignment',
+        displayName: 'Demo Student 1',
+        createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString()
+      },
+      {
+        _id: 'pc2',
+        text: 'Sure, what would you like to know?',
+        displayName: 'Host',
+        createdAt: new Date(Date.now() - 14 * 60 * 1000).toISOString()
+      }
     ]
   };
 
@@ -78,28 +128,40 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: '#1a1a1a',
-        color: 'white',
-        flexDirection: 'column'
-      }}>
-        <div style={{
-          width: '50px',
-          height: '50px',
-          border: '3px solid #333',
-          borderTop: '3px solid #007bff',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto 20px'
-        }}></div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          backgroundColor: '#1a1a1a',
+          color: 'white',
+          flexDirection: 'column'
+        }}
+      >
+        <div
+          style={{
+            width: '50px',
+            height: '50px',
+            border: '3px solid #333',
+            borderTop: '3px solid #007bff',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 20px'
+          }}
+        ></div>
         <p>Loading Live Stream Room...</p>
       </div>
     );
   }
+
+  const isHandRaised = raiseHands.includes(userId);
+
+  const toggleHandRaise = () => {
+    setRaiseHands(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
 
   return (
     <div style={{
@@ -159,7 +221,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                   width: '28px', 
                   height: '28px',
                   objectFit: 'contain'
-                }} 
+                }}
               />
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -206,7 +268,41 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               whiteSpace: 'nowrap',
               boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
             }}>
-              <span style={{ width: '6px', height: '6px', backgroundColor: 'white', borderRadius: '50%' }}></span>
+              <div style={{ 
+                position: 'relative', 
+                width: '8px', 
+                height: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <div style={{
+                  width: '4px',
+                  height: '4px',
+                  backgroundColor: 'white',
+                  borderRadius: '50%',
+                  zIndex: 3,
+                  position: 'relative'
+                }}></div>
+                <div style={{
+                  position: 'absolute',
+                  width: '8px',
+                  height: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.8)',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite',
+                  zIndex: 1
+                }}></div>
+                <div style={{
+                  position: 'absolute',
+                  width: '12px',
+                  height: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite 0.5s',
+                  zIndex: 0
+                }}></div>
+              </div>
               {isRecording ? (isRecordingPaused ? 'Paused' : 'Recording') : 'Live'}
             </div>
             
@@ -384,41 +480,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 <span style={{ 
                   color: participant.micState === 'MUTED' ? '#dc3545' : '#28a745',
                   fontSize: '8px',
-                  position: 'relative'
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}>
-                  {participant.micState === 'MUTED' ? (
-                    <>
-                      🎙
-                      <div style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%) rotate(45deg)',
-                        width: '10px',
-                        height: '1px',
-                        backgroundColor: '#dc3545'
-                      }}></div>
-                    </>
-                  ) : '🎙'}
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                  </svg>
+                  {participant.micState === 'MUTED' && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%) rotate(45deg)',
+                      width: '10px',
+                      height: '1px',
+                      backgroundColor: '#dc3545',
+                      zIndex: 1
+                    }}></div>
+                  )}
                 </span>
                 <span style={{ 
                   color: participant.cameraState === 'ON' ? '#007bff' : '#dc3545',
                   fontSize: '8px',
-                  position: 'relative'
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}>
-                  {participant.cameraState === 'ON' ? '📹' : (
-                    <>
-                      📹
-                      <div style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%) rotate(45deg)',
-                        width: '10px',
-                        height: '1px',
-                        backgroundColor: '#dc3545'
-                      }}></div>
-                    </>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                  </svg>
+                  {participant.cameraState !== 'ON' && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%) rotate(45deg)',
+                      width: '10px',
+                      height: '1px',
+                      backgroundColor: '#dc3545',
+                      zIndex: 1
+                    }}></div>
                   )}
                 </span>
               </div>
@@ -547,11 +651,51 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                     alignItems: 'center',
                     gap: '5px'
                   }}>
-                    <span style={{ color: mockParticipants.find(p => p._id === mainVideoParticipant)?.micState === 'MUTED' ? '#dc3545' : '#28a745' }}>
-                      {mockParticipants.find(p => p._id === mainVideoParticipant)?.micState === 'MUTED' ? '🔇' : '🎙'}
+                    <span style={{ 
+                      color: mockParticipants.find(p => p._id === mainVideoParticipant)?.micState === 'MUTED' ? '#dc3545' : '#28a745',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                      </svg>
+                      {mockParticipants.find(p => p._id === mainVideoParticipant)?.micState === 'MUTED' && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%) rotate(45deg)',
+                          width: '14px',
+                          height: '1.5px',
+                          backgroundColor: '#dc3545',
+                          zIndex: 1
+                        }}></div>
+                      )}
                     </span>
-                    <span style={{ color: mockParticipants.find(p => p._id === mainVideoParticipant)?.cameraState === 'ON' ? '#007bff' : '#dc3545' }}>
-                      {mockParticipants.find(p => p._id === mainVideoParticipant)?.cameraState === 'ON' ? '📹' : '📷'}
+                    <span style={{ 
+                      color: mockParticipants.find(p => p._id === mainVideoParticipant)?.cameraState === 'ON' ? '#007bff' : '#dc3545',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                      </svg>
+                      {mockParticipants.find(p => p._id === mainVideoParticipant)?.cameraState !== 'ON' && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%) rotate(45deg)',
+                          width: '14px',
+                          height: '1.5px',
+                          backgroundColor: '#dc3545',
+                          zIndex: 1
+                        }}></div>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -603,8 +747,52 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                     alignItems: 'center',
                     gap: '5px'
                   }}>
-                    <span style={{ color: '#28a745' }}>🎙</span>
-                    <span style={{ color: '#007bff' }}>📹</span>
+                    <span style={{ 
+                      color: isMicOn ? '#28a745' : '#dc3545',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                      </svg>
+                      {!isMicOn && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%) rotate(45deg)',
+                          width: '14px',
+                          height: '1.5px',
+                          backgroundColor: '#dc3545',
+                          zIndex: 1
+                        }}></div>
+                      )}
+                    </span>
+                    <span style={{ 
+                      color: isVideoOn ? '#007bff' : '#dc3545',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                      </svg>
+                      {!isVideoOn && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%) rotate(45deg)',
+                          width: '14px',
+                          height: '1.5px',
+                          backgroundColor: '#dc3545',
+                          zIndex: 1
+                        }}></div>
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -625,7 +813,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               alignItems: 'center',
               gap: '4px'
             }}>
-              <span style={{ width: '6px', height: '6px', backgroundColor: 'white', borderRadius: '50%' }}></span>
+              <div style={{ 
+                position: 'relative', 
+                width: '8px', 
+                height: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                {/* Inner dot */}
+                <div style={{
+                  width: '4px',
+                  height: '4px',
+                  backgroundColor: 'white',
+                  borderRadius: '50%',
+                  zIndex: 3,
+                  position: 'relative'
+                }}></div>
+                {/* Pulsing rings */}
+                <div style={{
+                  position: 'absolute',
+                  width: '8px',
+                  height: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.8)',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite',
+                  zIndex: 1
+                }}></div>
+                <div style={{
+                  position: 'absolute',
+                  width: '12px',
+                  height: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite 0.5s',
+                  zIndex: 0
+                }}></div>
+              </div>
               {isScreenSharing ? 'Screen Sharing' : (mainVideoParticipant ? 'Participant Video' : 'Host Video')}
             </div>
 
@@ -652,41 +876,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
 
         </div>
 
-        {/* Bottom Control Panel - Minimalistic */}
-        <div className="control-panel" style={{
-          height: '70px',
-          backgroundColor: '#ffffff',
-          margin: '0 12px 12px 12px',
-          marginRight: ((activeTab && activeTab !== 'chat' && !selectedParticipant) || selectedParticipant) ? '12px' : '12px',
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 20px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-          transition: 'margin-right 0.3s ease',
-          flexShrink: 0,
-          minHeight: '70px'
-        }}>
-          {/* Left - Empty */}
-          <div className="control-left" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          </div>
-
-          {/* Center - All Controls */}
-          <div className="control-center" style={{ 
-            display: 'flex', 
-            gap: '8px',
-            flexWrap: 'nowrap',
+        {/* Control Panel */}
+        <div
+          style={{
+            height: '70px',
+            backgroundColor: '#ffffff',
+            margin: '0 12px 12px 12px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
-            overflowX: 'auto',
-            padding: '0 10px',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            minWidth: 0,
-            flex: 1,
-            alignItems: 'center'
-          }}>
+            gap: '10px',
+            padding: '0 20px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+            flexShrink: 0
+          }}
+        >
+          {role === 'HOST' ? (
+            <>
+              {/* Host sees all controls */}
             {/* Participant Count */}
             <div style={{
               display: 'flex',
@@ -713,41 +922,96 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 {mockParticipants.length + mockWaitingParticipants.length}
               </span>
             </div>
-            <button style={{
-              width: '40px',
-              height: '40px',
-              backgroundColor: '#f8fafc',
-              color: '#64748b',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              transition: 'all 0.2s ease'
-            }}>
-              🎤
+            {/* Microphone Button */}
+            <button 
+              onClick={() => setIsMicOn(!isMicOn)}
+              style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: isMicOn ? '#f8fafc' : '#fef2f2',
+                color: isMicOn ? '#64748b' : '#ef4444',
+                border: isMicOn ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
+            >
+              {isMicOn ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                </svg>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                  </svg>
+                  {/* Red cross line */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%) rotate(45deg)',
+                    width: '20px',
+                    height: '2px',
+                    backgroundColor: '#ef4444',
+                    zIndex: 1
+                  }}></div>
+                </>
+              )}
             </button>
-            <button style={{
-              width: '40px',
-              height: '40px',
-              backgroundColor: '#f8fafc',
-              color: '#64748b',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              transition: 'all 0.2s ease'
-            }}>
-              📹
+            
+            {/* Video Camera Button */}
+            <button 
+              onClick={() => setIsVideoOn(!isVideoOn)}
+              style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: isVideoOn ? '#f8fafc' : '#fef2f2',
+                color: isVideoOn ? '#64748b' : '#ef4444',
+                border: isVideoOn ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              title={isVideoOn ? 'Turn Off Camera' : 'Turn On Camera'}
+            >
+              {isVideoOn ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                </svg>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                  </svg>
+                  {/* Red cross line */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%) rotate(45deg)',
+                    width: '20px',
+                    height: '2px',
+                    backgroundColor: '#ef4444',
+                    zIndex: 1
+                  }}></div>
+                </>
+              )}
             </button>
             <button 
               onClick={() => setIsScreenSharing(!isScreenSharing)}
@@ -833,12 +1097,110 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             }}>
               📞
             </button>
-
-          </div>
-
-          {/* Right - Empty */}
-          <div className="control-right" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          </div>
+            </>
+          ) : (
+            <>
+              {/* Participant only sees raise hand + mic + video */}
+              <button 
+                onClick={() => setIsMicOn(!isMicOn)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  backgroundColor: isMicOn ? '#f8fafc' : '#fef2f2',
+                  color: isMicOn ? '#64748b' : '#ef4444',
+                  border: isMicOn ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isMicOn ? '🎤' : '🔇'}
+              </button>
+              <button 
+                onClick={() => setIsVideoOn(!isVideoOn)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  backgroundColor: isVideoOn ? '#f8fafc' : '#fef2f2',
+                  color: isVideoOn ? '#64748b' : '#ef4444',
+                  border: isVideoOn ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isVideoOn ? '📹' : '🚫'}
+              </button>
+              <button
+                onClick={toggleHandRaise}
+                style={{
+                  backgroundColor: isHandRaised ? '#f59e0b' : '#f8fafc',
+                  color: isHandRaised ? 'white' : '#333',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                ✋ {isHandRaised ? 'Lower Hand' : 'Raise Hand'}
+              </button>
+              <button 
+                onClick={() => setActiveTab(activeTab === 'chat' ? null : 'chat')}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  backgroundColor: activeTab === 'chat' ? '#dbeafe' : '#f8fafc',
+                  color: activeTab === 'chat' ? '#2563eb' : '#64748b',
+                  border: activeTab === 'chat' ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                💬
+              </button>
+              <button 
+                style={{ 
+                  backgroundColor: '#ef4444', 
+                  color: 'white',
+                  width: '40px',
+                  height: '40px',
+                  border: '1px solid #dc2626',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                📞
+              </button>
+            </>
+          )}
         </div>
 
 
@@ -911,7 +1273,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               overflowY: 'auto',
               backgroundColor: 'white'
             }}>
-              {(mockPrivateChats[selectedParticipant] || []).map((message) => (
+              {((selectedParticipant && mockPrivateChats[selectedParticipant as keyof typeof mockPrivateChats]) || []).map((message: {_id: string; text: string; displayName: string; createdAt: string}) => (
                 <div key={message._id} style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ fontWeight: 'bold', fontSize: '12px', color: '#007bff' }}>
@@ -1060,7 +1422,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                           )}
                           <div>{message.text}</div>
                           <div style={{ fontSize: '10px', color: isOwnMessage ? 'rgba(255,255,255,0.7)' : '#999', marginTop: '2px' }}>
-                            {message.timestamp}
+                            {new Date(message.createdAt).toLocaleTimeString()}
                           </div>
                           {isOwnMessage && (
                             <button
@@ -1284,21 +1646,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                               }}
                               title={participant.micState === 'MUTED' ? 'Unmute' : 'Force Mute'}
                             >
-                              {participant.micState === 'MUTED' ? (
-                                <>
-                                  🎙
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%) rotate(45deg)',
-                                    width: '16px',
-                                    height: '2px',
-                                    backgroundColor: '#dc3545',
-                                    zIndex: 1
-                                  }}></div>
-                                </>
-                              ) : '🎙'}
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                              </svg>
+                              {participant.micState === 'MUTED' && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  left: '50%',
+                                  transform: 'translate(-50%, -50%) rotate(45deg)',
+                                  width: '16px',
+                                  height: '2px',
+                                  backgroundColor: '#dc3545',
+                                  zIndex: 1
+                                }}></div>
+                              )}
                             </button>
                             
                             {/* Camera Control */}
@@ -1325,20 +1687,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                               }}
                               title={participant.cameraState === 'ON' ? 'Camera Off' : 'Camera On'}
                             >
-                              {participant.cameraState === 'ON' ? '📹' : (
-                                <>
-                                  📹
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%) rotate(45deg)',
-                                    width: '16px',
-                                    height: '2px',
-                                    backgroundColor: '#dc3545',
-                                    zIndex: 1
-                                  }}></div>
-                                </>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                              </svg>
+                              {participant.cameraState !== 'ON' && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  left: '50%',
+                                  transform: 'translate(-50%, -50%) rotate(45deg)',
+                                  width: '16px',
+                                  height: '2px',
+                                  backgroundColor: '#dc3545',
+                                  zIndex: 1
+                                }}></div>
                               )}
                             </button>
                             
@@ -1687,152 +2049,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         )}
       </div>
       
-      {/* Mobile Responsive Styles */}
+      {/* CSS Animations */}
       <style jsx>{`
-        @media (max-width: 768px) {
-          .main-content {
-            margin-right: 0 !important;
+        @keyframes pulse {
+          0% {
+            transform: scale(1);
+            opacity: 1;
           }
-          
-          .side-panel {
-            width: 100vw !important;
-            max-width: 100vw !important;
-            border-radius: 0 !important;
+          50% {
+            transform: scale(1.5);
+            opacity: 0.3;
           }
-          
-          .header-content {
-            flex-direction: column !important;
-            gap: 10px !important;
-            padding: 10px !important;
+          100% {
+            transform: scale(2);
+            opacity: 0;
           }
-          
-          .header-left {
-            width: 100% !important;
-          }
-          
-          .header-right {
-            width: 100% !important;
-            justify-content: center !important;
-          }
-          
-          .control-panel {
-            flex-direction: row !important;
-            height: 70px !important;
-            padding: 8px 12px !important;
-            gap: 8px !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            justify-content: flex-start !important;
-            align-items: center !important;
-          }
-          
-          .control-left {
-            order: 1 !important;
-            flex-shrink: 0 !important;
-            min-width: fit-content !important;
-          }
-          
-          .control-center {
-            order: 2 !important;
-            flex: 1 !important;
-            justify-content: flex-start !important;
-            min-width: 0 !important;
-            overflow-x: auto !important;
-            scrollbar-width: none !important;
-            -ms-overflow-style: none !important;
-          }
-          
-          .control-right {
-            order: 3 !important;
-            flex-shrink: 0 !important;
-            gap: 6px !important;
-            min-width: fit-content !important;
-          }
-          
-          .video-grid {
-            height: 80px !important;
-            padding: 5px !important;
-          }
-          
-          .video-tile {
-            width: 60px !important;
-            height: 60px !important;
-            min-width: 60px !important;
-          }
-          
-          .main-video {
-            margin: 5px !important;
-          }
-          
-          .participant-card {
-            flex-direction: column !important;
-            text-align: center !important;
-            padding: 10px !important;
-          }
-          
-          .participant-controls {
-            justify-content: center !important;
-            margin-top: 10px !important;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .header-title {
-            font-size: 14px !important;
-          }
-          
-          .header-subtitle {
-            font-size: 10px !important;
-          }
-          
-          .recording-status {
-            font-size: 10px !important;
-            padding: 3px 6px !important;
-          }
-          
-          .control-button {
-            width: 35px !important;
-            height: 35px !important;
-            font-size: 14px !important;
-          }
-          
-          .video-tile {
-            width: 50px !important;
-            height: 50px !important;
-            min-width: 50px !important;
-          }
-          
-          .main-video-avatar {
-            width: 150px !important;
-            height: 150px !important;
-          }
-          
-          .control-panel {
-            flex-direction: column !important;
-            height: auto !important;
-            padding: 10px !important;
-            gap: 10px !important;
-          }
-          
-          .control-center {
-            overflow-x: auto !important;
-            scrollbar-width: none !important;
-            -ms-overflow-style: none !important;
-          }
-          
-          .control-center::-webkit-scrollbar {
-            display: none !important;
-          }
-        }
-        
-        /* Hide scrollbars for horizontal scrolling */
-        .control-center::-webkit-scrollbar {
-          display: none;
-        }
-        
-        .control-center {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
         }
       `}</style>
     </div>
