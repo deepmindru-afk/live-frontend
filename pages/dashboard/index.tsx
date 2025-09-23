@@ -212,16 +212,16 @@ const Dashboard: React.FC = () => {
 
         console.log('🏠 CREATE MEETING: GraphQL response received:', result);
 
-        if (result.createMeeting && result.createMeeting.success) {
+        if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
-            _id: result.createMeeting.meeting._id,
-            title: result.createMeeting.meeting.title,
-            status: result.createMeeting.meeting.status,
-            schedule: result.createMeeting.meeting.schedule,
-            inviteCode: result.createMeeting.meeting.inviteCode,
-            createdAt: result.createMeeting.meeting.createdAt,
-            updatedAt: result.createMeeting.meeting.createdAt,
-            participantCount: 0,
+            _id: result.createMeeting._id,
+            title: result.createMeeting.title,
+            status: result.createMeeting.status,
+            schedule: result.createMeeting.scheduledFor,
+            inviteCode: result.createMeeting.inviteCode,
+            createdAt: result.createMeeting.createdAt,
+            updatedAt: result.createMeeting.updatedAt,
+            participantCount: result.createMeeting.participantCount || 0,
           };
 
           // Add to existing meetings
@@ -298,7 +298,7 @@ const Dashboard: React.FC = () => {
       try {
         const result = await enhancedMakeGraphQLRequest(START_MEETING, { meetingId });
         
-        if (result.startMeeting && result.startMeeting.success) {
+        if (result.startMeeting && result.startMeeting._id) {
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
@@ -356,11 +356,11 @@ const Dashboard: React.FC = () => {
       try {
         const result = await enhancedMakeGraphQLRequest(END_MEETING, { meetingId });
         
-        if (result.endMeeting && result.endMeeting.success) {
+        if (result.endMeeting && result.endMeeting._id) {
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
-              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.meeting.duration || 3600 }
+              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.durationMin || 3600 }
               : meeting
           ));
 

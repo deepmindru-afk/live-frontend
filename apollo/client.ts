@@ -6,7 +6,7 @@ import { onError } from '@apollo/client/link/error';
 
 // HTTP Link for queries and mutations
 const httpLink = createHttpLink({
-  uri: process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql',
+  uri: process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT || process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql',
 });
 
 // WebSocket Link removed for now to fix build issues

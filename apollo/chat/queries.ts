@@ -3,18 +3,31 @@ import { gql } from '@apollo/client';
 // ===== CHAT QUERIES =====
 
 export const GET_CHAT_HISTORY = gql`
-  query GetChatHistory($meetingId: ID!, $limit: Int, $offset: Int) {
-    getChatHistory(meetingId: $meetingId, limit: $limit, offset: $offset) {
-      _id
-      meetingId
-      userId
-      displayName
-      message
-      messageType
-      isModerated
-      isDeleted
-      createdAt
-      updatedAt
+  query GetChatHistory($input: ChatHistoryInput!) {
+    getChatHistory(input: $input) {
+      messages {
+        _id
+        text
+        userId
+        displayName
+        user {
+          _id
+          displayName
+          avatarUrl
+        }
+        replyToMessageId
+        replyToMessage {
+          _id
+          text
+          displayName
+        }
+        createdAt
+        updatedAt
+      }
+      total
+      hasMore
+      limit
+      nextCursor
     }
   }
 `;

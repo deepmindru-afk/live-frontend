@@ -1,48 +1,66 @@
 import { gql } from '@apollo/client';
 
-// Query to get VODs with pagination
+// Query to get VODs with pagination - Updated to match backend schema
 export const GET_VODS = gql`
-  query GetVODs($pagination: PaginationInput!) {
-    vods(pagination: $pagination) {
-      _id
-      title
-      size
-      duration
-      url
-      filePath
-      createdAt
-      updatedAt
-      status
+  query GetAllVods($input: VodQueryInput!) {
+    getAllVods(input: $input) {
+      vods {
+        _id
+        title
+        meetingId
+        source
+        storageKey
+        sizeBytes
+        durationSec
+        notes
+        createdAt
+        updatedAt
+        meeting {
+          _id
+          title
+          status
+          inviteCode
+        }
+      }
+      total
+      hasMore
     }
   }
 `;
 
-// Query to get a specific VOD
+// Query to get a specific VOD - Updated to match backend schema
 export const GET_VOD_BY_ID = gql`
-  query GetVODById($id: ID!) {
-    vod(id: $id) {
+  query GetVodById($vodId: ID!) {
+    getVodById(vodId: $vodId) {
       _id
       title
-      size
-      duration
-      url
-      filePath
+      meetingId
+      source
+      storageKey
+      sizeBytes
+      durationSec
+      notes
       createdAt
       updatedAt
-      status
+      meeting {
+        _id
+        title
+        status
+        inviteCode
+      }
     }
   }
 `;
 
-// Query to get VOD statistics
+// Query to get VOD statistics - Updated to match backend schema
 export const GET_VOD_STATS = gql`
-  query GetVODStats {
-    vodStats {
-      totalVODs
-      totalSize
-      totalDuration
-      averageSize
-      averageDuration
+  query GetVodStats {
+    getVodStats {
+      totalVods
+      totalSizeBytes
+      totalDurationSec
+      averageSizeBytes
+      averageDurationSec
     }
   }
 `;

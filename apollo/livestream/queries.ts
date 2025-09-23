@@ -387,12 +387,10 @@ export const HEALTH_CHECK = gql`
 
 // LiveKit Queries
 export const CREATE_LIVEKIT_TOKEN = gql`
-  mutation CreateLivekitToken($meetingId: ID!) {
-    createLivekitToken(meetingId: $meetingId) {
+  mutation CreateLivekitToken($input: GenerateTokenInput!) {
+    createLivekitToken(input: $input) {
+      wsUrl
       token
-      roomName
-      participantName
-      participantIdentity
     }
   }
 `;

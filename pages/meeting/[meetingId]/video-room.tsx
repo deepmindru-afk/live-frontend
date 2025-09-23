@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { enhancedMakeGraphQLRequest } from '../../../../lib/mock-graphql-service';
-import { JOIN_MEETING, LEAVE_MEETING } from '../../../../apollo/meeting/mutations';
-import { GET_MEETING_BY_ID } from '../../../../apollo/meeting/queries';
+import { enhancedMakeGraphQLRequest } from '../../../lib/mock-graphql-service';
+import { JOIN_MEETING, LEAVE_MEETING } from '../../../apollo/meeting/mutations';
+import { GET_MEETING_BY_ID } from '../../../apollo/meeting/queries';
+import { UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../../apollo/vod/mutations';
 import Swal from 'sweetalert2';
 
 interface Participant {
@@ -39,6 +40,11 @@ const VideoRoomPage: React.FC = () => {
   const [participantCount, setParticipantCount] = useState(0);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
+  const [showVODUpload, setShowVODUpload] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlTitle, setUrlTitle] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -95,7 +101,7 @@ const VideoRoomPage: React.FC = () => {
       // Auto-join the meeting
       await joinMeeting();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading meeting:', error);
     } finally {
       setLoading(false);
@@ -143,7 +149,7 @@ const VideoRoomPage: React.FC = () => {
       } else {
         throw new Error('Failed to join video room');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Join video room error:', error);
       await Swal.fire({
         icon: 'error',
@@ -257,6 +263,100 @@ const VideoRoomPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Error leaving meeting:', error);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadVODFile = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    try {
+      const result = await enhancedMakeGraphQLRequest(UPLOAD_VOD_FILE, {
+        input: {
+          title: selectedFile.name,
+          meetingId: meetingId as string,
+          notes: `Uploaded from meeting: ${meeting?.title || 'Unknown Meeting'}`
+        },
+        file: selectedFile
+      });
+
+      if (result.uploadVodFile && result.uploadVodFile.success) {
+        await Swal.fire({
+          icon: 'success',
+          title: 'VOD 업로드',
+          text: 'VOD 파일이 성공적으로 업로드되었습니다.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        setShowVODUpload(false);
+        setSelectedFile(null);
+      }
+    } catch (error) {
+      console.error('VOD upload error:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: '업로드 실패',
+        text: 'VOD 파일 업로드 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const uploadVODFromURL = async () => {
+    if (!urlInput.trim() || !urlTitle.trim()) {
+      await Swal.fire({
+        icon: 'warning',
+        title: '입력 오류',
+        text: 'URL과 제목을 모두 입력해주세요.',
+        confirmButtonText: '확인'
+      });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const result = await enhancedMakeGraphQLRequest(CREATE_VOD_FROM_URL, {
+        input: {
+          url: urlInput,
+          title: urlTitle,
+          meetingId: meetingId as string,
+          notes: `Created from URL for meeting: ${meeting?.title || 'Unknown Meeting'}`
+        }
+      });
+
+      if (result.createVodFromUrl && result.createVodFromUrl.success) {
+        await Swal.fire({
+          icon: 'success',
+          title: 'VOD URL 등록',
+          text: 'VOD URL이 성공적으로 등록되었습니다.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        
+        setShowVODUpload(false);
+        setUrlInput('');
+        setUrlTitle('');
+      }
+    } catch (error) {
+      console.error('VOD URL upload error:', error);
+      await Swal.fire({
+        icon: 'error',
+        title: '등록 실패',
+        text: 'VOD URL 등록 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -407,6 +507,25 @@ const VideoRoomPage: React.FC = () => {
               {isScreenSharing ? '🖥️' : '📺'}
             </button>
             
+            {isHost && (
+              <button
+                onClick={() => setShowVODUpload(true)}
+                style={{
+                  background: '#8b5cf6',
+                  color: 'white',
+                  border: 'none',
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '1.2rem'
+                }}
+                title="VOD 업로드"
+              >
+                📁
+              </button>
+            )}
+            
             <button
               onClick={() => setShowChat(!showChat)}
               style={{
@@ -484,12 +603,152 @@ const VideoRoomPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* VOD Upload Modal */}
+        {showVODUpload && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: '#1f2937',
+              borderRadius: '12px',
+              padding: '30px',
+              maxWidth: '500px',
+              width: '90%',
+              color: 'white'
+            }}>
+              <h2 style={{ margin: '0 0 20px 0', color: 'white' }}>VOD 업로드</h2>
+              
+              {/* File Upload Tab */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#e5e7eb' }}>파일 업로드</h3>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileSelect}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '6px',
+                    color: 'white',
+                    marginBottom: '15px'
+                  }}
+                />
+                {selectedFile && (
+                  <p style={{ margin: '0 0 15px 0', color: '#9ca3af' }}>
+                    선택된 파일: {selectedFile.name}
+                  </p>
+                )}
+                <button
+                  onClick={uploadVODFile}
+                  disabled={!selectedFile || uploading}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: uploading ? '#6b7280' : '#8b5cf6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    marginBottom: '20px'
+                  }}
+                >
+                  {uploading ? '업로드 중...' : '파일 업로드'}
+                </button>
+              </div>
+
+              {/* URL Upload Tab */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#e5e7eb' }}>URL 등록</h3>
+                <input
+                  type="text"
+                  value={urlTitle}
+                  onChange={(e) => setUrlTitle(e.target.value)}
+                  placeholder="VOD 제목을 입력하세요"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '6px',
+                    color: 'white',
+                    marginBottom: '10px'
+                  }}
+                />
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="VOD URL을 입력하세요"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: '#374151',
+                    border: '1px solid #4b5563',
+                    borderRadius: '6px',
+                    color: 'white',
+                    marginBottom: '15px'
+                  }}
+                />
+                <button
+                  onClick={uploadVODFromURL}
+                  disabled={uploading}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: uploading ? '#6b7280' : '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    marginBottom: '20px'
+                  }}
+                >
+                  {uploading ? '등록 중...' : 'URL 등록'}
+                </button>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '10px'
+              }}>
+                <button
+                  onClick={() => setShowVODUpload(false)}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
 };
 
 export default VideoRoomPage;
+
+
 
 
 

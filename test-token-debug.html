@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Token Debug Test</h1>
+    <p>This test checks which token the frontend is actually using and tests it with the backend.</p>
+    
+    <div>
+        <button onclick="checkAllTokens()">Check All Tokens</button>
+        <button onclick="testFrontendToken()">Test Frontend Token</button>
+        <button onclick="testCorrectToken()">Test Correct Token</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = message;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        function checkAllTokens() {
+            log('🔍 Checking all tokens in localStorage...', 'info');
+            
+            const accessToken = localStorage.getItem('accessToken');
+            const jwt = localStorage.getItem('jwt');
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            log(`<strong>accessToken:</strong><br><pre>${accessToken || 'null'}</pre>`, accessToken ? 'info' : 'error');
+            log(`<strong>jwt:</strong><br><pre>${jwt || 'null'}</pre>`, jwt ? 'success' : 'error');
+            log(`<strong>token:</strong><br><pre>${token || 'null'}</pre>`, token ? 'success' : 'error');
+            log(`<strong>user:</strong><br><pre>${user || 'null'}</pre>`, user ? 'success' : 'error');
+            
+            // Check which token the frontend would use
+            const frontendToken = jwt || token;
+            log(`<strong>Frontend would use:</strong> ${frontendToken ? 'jwt || token' : 'null'}`, frontendToken ? 'success' : 'error');
+            
+            if (frontendToken) {
+                log(`<strong>Frontend token preview:</strong><br><pre>${frontendToken.substring(0, 50)}...</pre>`, 'info');
+            }
+        }
+        
+        function testFrontendToken() {
+            log('🧪 Testing the token that the frontend would use...', 'info');
+            
+            const frontendToken = localStorage.getItem('jwt') || localStorage.getItem('token');
+            
+            if (!frontendToken) {
+                log('❌ No token found for frontend to use', 'error');
+                return;
+            }
+            
+            log(`<strong>Testing token:</strong><br><pre>${frontendToken.substring(0, 50)}...</pre>`, 'info');
+            
+            // Test with a simple query
+            fetch('http://localhost:3007/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${frontendToken}`
+                },
+                body: JSON.stringify({
+                    query: 'query { me { _id displayName email systemRole } }'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    log(`❌ Frontend token rejected: ${firstError.message}`, 'error');
+                    
+                    if (firstError.message.includes('jwt malformed')) {
+                        log('🔍 The frontend token is malformed', 'error');
+                    } else if (firstError.message.includes('jwt expired')) {
+                        log('🔍 The frontend token has expired', 'error');
+                    } else if (firstError.message.includes('jwt signature')) {
+                        log('🔍 The frontend token signature is invalid', 'error');
+                    } else {
+                        log(`🔍 Other error with frontend token: ${firstError.message}`, 'error');
+                    }
+                } else if (data.data) {
+                    log(`✅ Frontend token accepted! User: ${JSON.stringify(data.data.me, null, 2)}`, 'success');
+                } else {
+                    log('❌ Unexpected response from backend', 'error');
+                }
+            })
+            .catch(error => {
+                log(`❌ Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        function testCorrectToken() {
+            log('✅ Testing with the known correct token...', 'info');
+            
+            // This is the token that we know works from the curl test
+            const correctToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OGNhMDkyMWRlODhkYjlmZmIwMTk3NGQiLCJlbWFpbCI6InJtY2JheHRAZ21haWwuY29tIiwiZGlzcGxheU5hbWUiOiJBZG1pbiIsInN5c3RlbVJvbGUiOiJUVVRPUiIsImlhdCI6MTc1ODYwMTAyNiwiZXhwIjoxNzU4NjExODI2fQ.SDILGdYZ9BQynmfVAq-HeQXzOBbkpPQWWgWMojgEvOw';
+            
+            log(`<strong>Testing correct token:</strong><br><pre>${correctToken.substring(0, 50)}...</pre>`, 'info');
+            
+            // Test with a simple query
+            fetch('http://localhost:3007/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${correctToken}`
+                },
+                body: JSON.stringify({
+                    query: 'query { me { _id displayName email systemRole } }'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    log(`❌ Correct token rejected: ${firstError.message}`, 'error');
+                } else if (data.data) {
+                    log(`✅ Correct token accepted! User: ${JSON.stringify(data.data.me, null, 2)}`, 'success');
+                } else {
+                    log('❌ Unexpected response from backend', 'error');
+                }
+            })
+            .catch(error => {
+                log(`❌ Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        // Auto-check on page load
+        window.onload = function() {
+            log('🚀 Token Debug Test loaded', 'info');
+            checkAllTokens();
+        };
+    </script>
+</body>
+</html>

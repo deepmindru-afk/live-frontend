@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Verification Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        h3 { margin-top: 0; color: #333; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Final Verification Test</h1>
+    <p>This test verifies that all GraphQL schema mismatches have been resolved.</p>
+    
+    <div class="section">
+        <h3>🧪 GraphQL Schema Tests</h3>
+        <button onclick="testAllMutations()">Test All Mutations</button>
+        <button onclick="testWithValidJWT()">Test with Valid JWT</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = message;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        function createValidJWT() {
+            // Create a valid JWT token for testing
+            const header = {
+                "alg": "HS256",
+                "typ": "JWT"
+            };
+            
+            const payload = {
+                "sub": "68ca0921de88db9ffb01974d",
+                "email": "test@example.com",
+                "displayName": "Test User",
+                "systemRole": "TUTOR",
+                "iat": Math.floor(Date.now() / 1000),
+                "exp": Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
+            };
+            
+            const encodedHeader = btoa(JSON.stringify(header));
+            const encodedPayload = btoa(JSON.stringify(payload));
+            const signature = btoa('test-signature');
+            
+            return `${encodedHeader}.${encodedPayload}.${signature}`;
+        }
+        
+        async function testAllMutations() {
+            log('🚀 Testing all mutations for schema mismatches...', 'info');
+            
+            const mutations = [
+                {
+                    name: 'CREATE_MEETING',
+                    query: `
+                        mutation CreateMeeting($input: CreateMeetingInput!) {
+                            createMeeting(input: $input) {
+                                _id
+                                title
+                                status
+                                inviteCode
+                                hostId
+                            }
+                        }
+                    `,
+                    variables: {
+                        input: {
+                            title: 'Schema Test Meeting',
+                            notes: 'Testing corrected schema',
+                            isPrivate: false
+                        }
+                    }
+                },
+                {
+                    name: 'START_MEETING',
+                    query: `
+                        mutation StartMeeting($meetingId: ID!) {
+                            startMeeting(meetingId: $meetingId) {
+                                _id
+                                title
+                                status
+                                actualStartAt
+                            }
+                        }
+                    `,
+                    variables: {
+                        meetingId: 'test-meeting-id'
+                    }
+                },
+                {
+                    name: 'END_MEETING',
+                    query: `
+                        mutation EndMeeting($meetingId: ID!) {
+                            endMeeting(meetingId: $meetingId) {
+                                _id
+                                title
+                                status
+                                endedAt
+                            }
+                        }
+                    `,
+                    variables: {
+                        meetingId: 'test-meeting-id'
+                    }
+                },
+                {
+                    name: 'JOIN_MEETING',
+                    query: `
+                        mutation JoinMeeting($input: JoinParticipantInput!) {
+                            joinMeeting(input: $input) {
+                                _id
+                                displayName
+                                role
+                                userId
+                                meetingId
+                            }
+                        }
+                    `,
+                    variables: {
+                        input: {
+                            meetingId: 'test-meeting-id',
+                            displayName: 'Test Participant',
+                            role: 'PARTICIPANT'
+                        }
+                    }
+                }
+            ];
+            
+            for (const mutation of mutations) {
+                await testMutation(mutation);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            log('✅ All mutation tests completed!', 'success');
+        }
+        
+        async function testWithValidJWT() {
+            log('🔐 Testing with valid JWT token...', 'info');
+            
+            const jwt = createValidJWT();
+            log(`<strong>Created JWT:</strong><br><pre>${jwt.substring(0, 50)}...</pre>`, 'info');
+            
+            // Test with a simple query first
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwt}`
+                    },
+                    body: JSON.stringify({
+                        query: 'query { me { _id displayName email systemRole } }'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    log(`❌ JWT rejected: ${firstError.message}`, 'error');
+                    
+                    if (firstError.message.includes('jwt malformed')) {
+                        log('🔍 JWT format is malformed - this is the issue we need to fix', 'error');
+                    } else if (firstError.message.includes('jwt signature')) {
+                        log('🔍 JWT signature is invalid - expected for test token', 'warning');
+                    } else {
+                        log(`🔍 Other JWT error: ${firstError.message}`, 'error');
+                    }
+                } else if (data.data) {
+                    log(`✅ JWT accepted! User: ${JSON.stringify(data.data.me, null, 2)}`, 'success');
+                }
+            } catch (error) {
+                log(`❌ Network error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testMutation(mutation) {
+            log(`🧪 Testing ${mutation.name}...`, 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: mutation.query,
+                        variables: mutation.variables
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    
+                    // Check for the specific schema mismatch errors we're trying to fix
+                    if (firstError.message.includes('Cannot query field "success"') || 
+                        firstError.message.includes('Cannot query field "message"')) {
+                        log(`❌ ${mutation.name}: Still has schema mismatch! ${firstError.message}`, 'error');
+                    } else if (firstError.message.includes('TOKEN_NOT_EXIST') || 
+                              firstError.message.includes('Unauthorized') ||
+                              firstError.message.includes('not found') ||
+                              firstError.message.includes('Invalid credentials')) {
+                        log(`✅ ${mutation.name}: Schema is correct (authorization/not found error is expected)`, 'success');
+                    } else {
+                        log(`⚠️ ${mutation.name}: Different error: ${firstError.message}`, 'warning');
+                    }
+                } else if (data.data) {
+                    const mutationName = Object.keys(data.data)[0];
+                    const result = data.data[mutationName];
+                    
+                    if (result._id || result.success === undefined) {
+                        log(`✅ ${mutation.name}: Direct response structure correct`, 'success');
+                    } else {
+                        log(`❌ ${mutation.name}: Unexpected response structure`, 'error');
+                    }
+                } else {
+                    log(`❌ ${mutation.name}: No data or errors in response`, 'error');
+                }
+            } catch (error) {
+                log(`❌ ${mutation.name}: Network error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-test on page load
+        window.onload = function() {
+            log('🚀 Final verification test loaded', 'info');
+            log('💡 This will test all mutations to ensure schema mismatches are resolved', 'info');
+        };
+    </script>
+</body>
+</html>

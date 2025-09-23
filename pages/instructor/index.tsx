@@ -4,12 +4,13 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
-import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE } from '../../apollo/meeting/mutations';
+import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { GET_VODS } from '../../apollo/vod/queries';
 import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../apollo/vod/mutations';
 import ProfileDropdown from '../../components/ProfileDropdown';
 import Swal from 'sweetalert2';
+import { isValidObjectId } from '../../lib/validation';
 
 interface Meeting {
   _id: string;
@@ -173,7 +174,7 @@ const Dashboard: React.FC = () => {
             createdAt: meeting.createdAt,
             updatedAt: meeting.updatedAt || meeting.createdAt,
             participantCount: meeting.participantCount || 0,
-            duration: meeting.duration
+            duration: meeting.durationMin
           }));
           
           setMeetings(meetings);
@@ -244,17 +245,25 @@ const Dashboard: React.FC = () => {
       // Try to create meeting via GraphQL first (use real backend for meeting creation)
       try {
         console.log('🏠 CREATE MEETING: Attempting GraphQL request to real backend...');
+        console.log('🏠 CREATE MEETING: Input data:', {
+          title: newMeetingTitle,
+          notes: 'Professional live streaming session',
+          scheduledFor: formattedSchedule,
+          isPrivate: false
+        });
+        
         const { makeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
         const result = await makeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
+            notes: 'Professional live streaming session',
             scheduledFor: formattedSchedule,
-            isPrivate: false,
-            notes: null
+            isPrivate: false
           }
         });
 
         console.log('🏠 CREATE MEETING: GraphQL response received:', result);
+        console.log('🏠 CREATE MEETING: Response data:', result.createMeeting);
 
         if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
@@ -264,8 +273,8 @@ const Dashboard: React.FC = () => {
             schedule: result.createMeeting.scheduledFor,
             inviteCode: result.createMeeting.inviteCode,
             createdAt: result.createMeeting.createdAt,
-            updatedAt: result.createMeeting.createdAt,
-            participantCount: 0,
+            updatedAt: result.createMeeting.updatedAt,
+            participantCount: result.createMeeting.participantCount || 0,
           };
 
           // Add to existing meetings
@@ -296,50 +305,34 @@ const Dashboard: React.FC = () => {
           return;
         }
       } catch (graphqlError) {
-        console.warn('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
+        console.error('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
         
-        // Check if it's a "field not found" error (backend doesn't have meeting mutations)
-        if (graphqlError instanceof Error && graphqlError.message.includes('Cannot query field')) {
-          console.warn('🏠 CREATE MEETING: Backend does not have meeting mutations implemented');
+        // Show proper error message instead of creating mock meeting
+        let errorMessage = 'Failed to create meeting. ';
+        
+        if (graphqlError instanceof Error) {
+          if (graphqlError.message.includes('TOKEN_NOT_EXIST')) {
+            errorMessage += 'Please log in first.';
+          } else if (graphqlError.message.includes('Cannot query field')) {
+            errorMessage += 'Backend API not available.';
+          } else if (graphqlError.message.includes('NetworkError') || graphqlError.message.includes('fetch')) {
+            errorMessage += 'Cannot connect to backend server.';
+          } else {
+            errorMessage += graphqlError.message;
+          }
+        } else {
+          errorMessage += 'Unknown error occurred.';
         }
-      }
 
-      // Fallback to mock meeting if GraphQL fails
-      const newMeeting: Meeting = {
-        _id: Date.now().toString(),
-        title: newMeetingTitle,
-        status: meetingSchedule ? 'SCHEDULED' : 'STARTED',
-        schedule: meetingSchedule || undefined,
-        inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        participantCount: 0,
-      };
+        await Swal.fire({
+          icon: 'error',
+          title: 'Meeting Creation Failed',
+          text: errorMessage,
+          confirmButtonText: '확인'
+        });
 
-      // Add to existing meetings
-      setMeetings(prev => [newMeeting, ...prev]);
-
-      await Swal.fire({
-        icon: 'info',
-        title: '성공',
-        text: '방이 성공적으로 생성되었습니다!',
-        confirmButtonText: '확인'
-      });
-
-      // Clear form
-      setNewMeetingTitle('');
-      setMeetingSchedule('');
-
-      console.log('🏠 CREATE MEETING: Mock meeting created:', newMeeting);
-      
-      // Only redirect to pre-join page for immediate meetings (not scheduled)
-      if (!formattedSchedule) {
-        console.log('🏠 CREATE MEETING: Immediate meeting, redirecting to pre-join page:', newMeeting._id);
-        window.location.href = `/prejoin/${newMeeting._id}`;
-      } else {
-        console.log('🏠 CREATE MEETING: Scheduled meeting created, staying on dashboard');
-        // Refresh the meetings list to show the new scheduled meeting
-        await fetchMeetings();
+        console.log('🏠 CREATE MEETING: Meeting creation failed, no mock meeting created');
+        return;
       }
 
     } catch (error: unknown) {
@@ -398,7 +391,7 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
 
-      console.log('▶️ START MEETING: Mock meeting started:', meetingId);
+      console.log('▶️ START MEETING: Meeting started:', meetingId);
 
     } catch (error: unknown) {
       console.error('▶️ START MEETING: Error:', error);
@@ -435,7 +428,7 @@ const Dashboard: React.FC = () => {
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
-              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.duration || 3600 }
+              ? { ...meeting, status: 'ENDED' as const, duration: result.endMeeting.durationMin || 3600 }
               : meeting
           ));
 
@@ -1039,7 +1032,18 @@ const Dashboard: React.FC = () => {
                                 {meeting.status === 'STARTED' && (
                                   <>
                                     <button 
-                                      onClick={() => window.location.href = `/prejoin/${meeting._id}`}
+                                      onClick={() => {
+        if (isValidObjectId(meeting._id)) {
+          window.location.href = `/prejoin/${meeting._id}`;
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Invalid Meeting',
+            text: 'This meeting has an invalid ID format. Please create a new meeting.',
+            confirmButtonText: 'OK'
+          });
+        }
+                                      }}
                                       style={{
                                         padding: '6px 12px',
                                         border: 'none',

@@ -1,6 +1,6 @@
 // ===== APOLLO USAGE EXAMPLES =====
 
-import { useQuery, useMutation, useSubscription } from '@apollo/client';
+import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { 
   // Auth
   GET_CURRENT_USER, 

@@ -625,73 +625,103 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
     };
   }
 
-  // Handle VOD operations
-  if (query.includes('vods') || query.includes('GetVODs')) {
+  // Handle VOD operations - Updated to match new schema
+  if (query.includes('getAllVods') || query.includes('GetAllVods')) {
     return {
-      vods: [
-        {
-          _id: 'vod-1',
-          title: 'Sample VOD 1',
-          size: 1024000000, // 1GB
-          duration: 3600, // 1 hour
-          url: 'https://example.com/vod1.mp4',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          status: 'READY'
-        },
-        {
-          _id: 'vod-2',
-          title: 'Sample VOD 2',
-          size: 512000000, // 512MB
-          duration: 1800, // 30 minutes
-          url: 'https://example.com/vod2.mp4',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          status: 'READY'
-        }
-      ]
+      getAllVods: {
+        vods: [
+          {
+            _id: 'vod-1',
+            title: 'Sample VOD 1',
+            meetingId: 'meeting-1',
+            source: 'FILE',
+            storageKey: 'vod-1.mp4',
+            sizeBytes: 1024000000, // 1GB
+            durationSec: 3600, // 1 hour
+            notes: 'Sample VOD file',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            meeting: {
+              _id: 'meeting-1',
+              title: 'Sample Meeting 1',
+              status: 'ENDED',
+              inviteCode: 'ABC123'
+            }
+          },
+          {
+            _id: 'vod-2',
+            title: 'Sample VOD 2',
+            meetingId: 'meeting-2',
+            source: 'URL',
+            storageKey: 'https://example.com/vod2.mp4',
+            sizeBytes: 512000000, // 512MB
+            durationSec: 1800, // 30 minutes
+            notes: 'Sample VOD URL',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            meeting: {
+              _id: 'meeting-2',
+              title: 'Sample Meeting 2',
+              status: 'ENDED',
+              inviteCode: 'DEF456'
+            }
+          }
+        ],
+        total: 2,
+        hasMore: false
+      }
     };
   }
 
-  if (query.includes('createVODFromURL')) {
-    const { url, title } = variables;
+  if (query.includes('createVodFromUrl')) {
+    const { input } = variables;
     return {
-      createVODFromURL: {
+      createVodFromUrl: {
         success: true,
         message: 'VOD URL이 성공적으로 등록되었습니다.',
         vod: {
           _id: 'vod-' + Date.now(),
-          title: title,
-          url: url,
+          title: input.title,
+          meetingId: null,
+          source: 'URL',
+          storageKey: input.url,
+          sizeBytes: 0,
+          durationSec: 0,
+          notes: input.notes || '',
           createdAt: new Date().toISOString(),
-          status: 'READY'
+          updatedAt: new Date().toISOString(),
+          meeting: null
         }
       }
     };
   }
 
-  if (query.includes('uploadVODFile')) {
-    const { title } = variables;
+  if (query.includes('uploadVodFile')) {
+    const { input } = variables;
     return {
-      uploadVODFile: {
+      uploadVodFile: {
         success: true,
         message: 'VOD 파일이 성공적으로 업로드되었습니다.',
         vod: {
           _id: 'vod-' + Date.now(),
-          title: title,
-          size: 1024000000, // Mock 1GB
-          duration: 3600, // Mock 1 hour
-          filePath: '/uploads/vod-' + Date.now() + '.mp4',
+          title: input.title,
+          meetingId: null,
+          source: 'FILE',
+          storageKey: 'vod-' + Date.now() + '.mp4',
+          sizeBytes: 1024000000, // Mock 1GB
+          durationSec: 3600, // Mock 1 hour
+          notes: input.notes || '',
           createdAt: new Date().toISOString(),
-          status: 'READY'
+          updatedAt: new Date().toISOString(),
+          meeting: null
         }
       }
     };
   }
 
-  if (query.includes('deleteVOD')) {
+  if (query.includes('deleteVod')) {
     return {
-      deleteVOD: {
+      deleteVod: {
         success: true,
         message: 'VOD가 성공적으로 삭제되었습니다.'
       }

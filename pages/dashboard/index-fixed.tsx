@@ -221,8 +221,8 @@ const Dashboard: React.FC = () => {
             schedule: result.createMeeting.scheduledFor,
             inviteCode: result.createMeeting.inviteCode,
             createdAt: result.createMeeting.createdAt,
-            updatedAt: result.createMeeting.createdAt,
-            participantCount: 0,
+            updatedAt: result.createMeeting.updatedAt,
+            participantCount: result.createMeeting.participantCount || 0,
           };
 
           // Add to existing meetings

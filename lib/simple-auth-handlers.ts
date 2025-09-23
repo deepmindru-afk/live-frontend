@@ -15,7 +15,7 @@ export interface SignupData {
 }
 
 // GraphQL endpoint
-const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql';
+const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT || process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql';
 
 // Login mutation
 const LOGIN_MUTATION = `
@@ -95,7 +95,12 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   let queryString = query;
   if (typeof query !== 'string') {
     // If it's a GraphQL AST object, convert it to string using print
-    queryString = print(query);
+    if (query && typeof query === 'object' && query.kind) {
+      queryString = print(query);
+    } else {
+      console.error('🌐 GRAPHQL: Invalid query object:', query);
+      throw new Error('Invalid GraphQL query: query is undefined or not a valid GraphQL AST');
+    }
   }
   
   console.log('🌐 GRAPHQL: Making request to:', GRAPHQL_ENDPOINT);

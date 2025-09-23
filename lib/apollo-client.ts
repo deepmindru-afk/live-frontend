@@ -8,7 +8,7 @@ const httpLink = createHttpLink({
 
 const authLink = setContext((_, { headers }) => {
   // Check if we're on the client side before accessing localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('jwt') : null;
   return {
     headers: {
       ...headers,

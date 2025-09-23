@@ -9,13 +9,20 @@ import Swal from 'sweetalert2';
 interface VOD {
   _id: string;
   title: string;
-  size: number;
-  duration?: number;
-  url?: string;
-  filePath?: string;
+  meetingId?: string;
+  source?: string;
+  storageKey?: string;
+  sizeBytes?: number;
+  durationSec?: number;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
-  status: 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
+  meeting?: {
+    _id: string;
+    title: string;
+    status: string;
+    inviteCode: string;
+  };
 }
 
 const VODPage: React.FC = () => {
@@ -69,35 +76,47 @@ const VODPage: React.FC = () => {
   const loadVODs = async () => {
     try {
       const result = await enhancedMakeGraphQLRequest(GET_VODS, {
-        pagination: { limit: 50, offset: 0 }
+        input: { limit: 50, offset: 0 }
       });
       
-      if (result.vods) {
-        setVods(result.vods);
+      if (result.getAllVods && result.getAllVods.vods) {
+        setVods(result.getAllVods.vods);
       }
     } catch (error) {
       console.warn('Failed to load VODs:', error);
-      // Mock VOD data
+      // Mock VOD data with new schema
       setVods([
         {
           _id: 'vod-1',
           title: 'Sample VOD 1',
-          size: 1024000000, // 1GB
-          duration: 3600, // 1 hour
-          url: 'https://example.com/vod1.mp4',
+          sizeBytes: 1024000000, // 1GB
+          durationSec: 3600, // 1 hour
+          source: 'FILE',
+          storageKey: 'vod-1.mp4',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          status: 'READY'
+          meeting: {
+            _id: 'meeting-1',
+            title: 'Sample Meeting 1',
+            status: 'ENDED',
+            inviteCode: 'ABC123'
+          }
         },
         {
           _id: 'vod-2',
           title: 'Sample VOD 2',
-          size: 512000000, // 512MB
-          duration: 1800, // 30 minutes
-          url: 'https://example.com/vod2.mp4',
+          sizeBytes: 512000000, // 512MB
+          durationSec: 1800, // 30 minutes
+          source: 'URL',
+          storageKey: 'https://example.com/vod2.mp4',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          status: 'READY'
+          meeting: {
+            _id: 'meeting-2',
+            title: 'Sample Meeting 2',
+            status: 'ENDED',
+            inviteCode: 'DEF456'
+          }
         }
       ]);
     }
@@ -145,11 +164,14 @@ const VODPage: React.FC = () => {
     setUploading(true);
     try {
       const result = await enhancedMakeGraphQLRequest(UPLOAD_VOD_FILE, {
-        file: selectedFile,
-        title: selectedFile.name
+        input: {
+          title: selectedFile.name,
+          notes: 'Uploaded via VOD page'
+        },
+        file: selectedFile
       });
 
-      if (result.uploadVODFile && result.uploadVODFile.success) {
+      if (result.uploadVodFile && result.uploadVodFile.success) {
         await Swal.fire({
           icon: 'success',
           title: '파일 업로드',
@@ -189,11 +211,14 @@ const VODPage: React.FC = () => {
     setUploading(true);
     try {
       const result = await enhancedMakeGraphQLRequest(CREATE_VOD_FROM_URL, {
-        url: urlInput,
-        title: urlTitle
+        input: {
+          url: urlInput,
+          title: urlTitle,
+          notes: 'Created from URL via VOD page'
+        }
       });
 
-      if (result.createVODFromURL && result.createVODFromURL.success) {
+      if (result.createVodFromUrl && result.createVodFromUrl.success) {
         await Swal.fire({
           icon: 'success',
           title: 'URL 등록',
@@ -250,7 +275,7 @@ const VODPage: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        await enhancedMakeGraphQLRequest(DELETE_VOD, { id: vodId });
+        await enhancedMakeGraphQLRequest(DELETE_VOD, { vodId: vodId });
         
         await Swal.fire({
           icon: 'success',
@@ -671,14 +696,14 @@ const VODPage: React.FC = () => {
                           <div>
                             <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
                             <div style={{ fontSize: '14px', color: '#666' }}>
-                              {vod.duration && formatDuration(vod.duration)}
-                              {vod.status === 'UPLOADING' && ' (업로드 중...)'}
-                              {vod.status === 'PROCESSING' && ' (처리 중...)'}
-                              {vod.status === 'ERROR' && ' (오류)'}
+                              {vod.durationSec && formatDuration(vod.durationSec)}
+                              {vod.meeting && ` • ${vod.meeting.title}`}
+                              {vod.source === 'FILE' && ' (파일)'}
+                              {vod.source === 'URL' && ' (URL)'}
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: '15px' }}>{formatFileSize(vod.size)}</td>
+                        <td style={{ padding: '15px' }}>{vod.sizeBytes ? formatFileSize(vod.sizeBytes) : 'N/A'}</td>
                         <td style={{ padding: '15px' }}>
                           <button
                             onClick={(e) => handleVODMenuClick(vod._id, e)}
@@ -970,6 +995,8 @@ const VODPage: React.FC = () => {
 };
 
 export default VODPage;
+
+
 
 
 

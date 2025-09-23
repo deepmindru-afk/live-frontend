@@ -2,19 +2,19 @@ import { gql } from '@apollo/client';
 
 // Mutation to update user profile
 export const UPDATE_PROFILE = gql`
-  mutation UpdateProfile($input: UpdateProfileInput!) {
+  mutation UpdateProfile($input: UpdateMemberInput!) {
     updateProfile(input: $input) {
-      success
-      message
-      user {
-        _id
-        displayName
-        email
-        department
-        phone
-        avatarUrl
-        systemRole
-      }
+      _id
+      email
+      displayName
+      avatarUrl
+      organization
+      department
+      phone
+      language
+      timezone
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -25,12 +25,7 @@ export const UPLOAD_PROFILE_IMAGE = gql`
     uploadProfileImage(file: $file) {
       success
       message
-      user {
-        _id
-        displayName
-        email
-        avatarUrl
-      }
+      imageUrl
     }
   }
 `;
@@ -41,17 +36,6 @@ export const DELETE_PROFILE_IMAGE = gql`
     deleteProfileImage {
       success
       message
-      user {
-        _id
-        displayName
-        email
-        avatarUrl
-      }
     }
   }
 `;
-
-
-
-
-

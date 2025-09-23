@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test JWT Format</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>JWT Format Test</h1>
+    <p>This test creates a valid JWT token and tests it with the backend.</p>
+    
+    <div>
+        <button onclick="createTestJWT()">Create Test JWT</button>
+        <button onclick="testJWTWithBackend()">Test JWT with Backend</button>
+        <button onclick="clearStorage()">Clear Storage</button>
+    </div>
+    
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = message;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+        
+        function createTestJWT() {
+            log('🔧 Creating test JWT token...', 'info');
+            
+            // Create a simple JWT token for testing
+            const header = {
+                "alg": "HS256",
+                "typ": "JWT"
+            };
+            
+            const payload = {
+                "sub": "68ca0921de88db9ffb01974d",
+                "email": "test@example.com",
+                "displayName": "Test User",
+                "systemRole": "TUTOR",
+                "iat": Math.floor(Date.now() / 1000),
+                "exp": Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
+            };
+            
+            // Encode header and payload
+            const encodedHeader = btoa(JSON.stringify(header));
+            const encodedPayload = btoa(JSON.stringify(payload));
+            
+            // Create signature (simplified for testing)
+            const signature = btoa('test-signature');
+            
+            // Combine parts
+            const jwt = `${encodedHeader}.${encodedPayload}.${signature}`;
+            
+            log(`<strong>Created JWT:</strong><br><pre>${jwt}</pre>`, 'success');
+            
+            // Store in localStorage
+            localStorage.setItem('jwt', jwt);
+            localStorage.setItem('token', jwt);
+            localStorage.setItem('user', JSON.stringify({
+                _id: payload.sub,
+                email: payload.email,
+                displayName: payload.displayName,
+                systemRole: payload.systemRole
+            }));
+            
+            log('💾 JWT stored in localStorage', 'success');
+        }
+        
+        function testJWTWithBackend() {
+            const jwt = localStorage.getItem('jwt');
+            
+            if (!jwt) {
+                log('❌ No JWT token found. Create one first.', 'error');
+                return;
+            }
+            
+            log(`<strong>Testing JWT with backend:</strong><br><pre>${jwt.substring(0, 50)}...</pre>`, 'info');
+            
+            // Test with a simple query
+            fetch('http://localhost:3007/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwt}`
+                },
+                body: JSON.stringify({
+                    query: 'query { me { _id displayName email systemRole } }'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    log(`❌ Backend rejected JWT: ${firstError.message}`, 'error');
+                    
+                    if (firstError.message.includes('jwt malformed')) {
+                        log('🔍 The JWT token format is malformed', 'error');
+                    } else if (firstError.message.includes('jwt expired')) {
+                        log('🔍 The JWT token has expired', 'error');
+                    } else if (firstError.message.includes('jwt signature')) {
+                        log('🔍 The JWT signature is invalid', 'error');
+                    } else {
+                        log(`🔍 Other JWT error: ${firstError.message}`, 'error');
+                    }
+                } else if (data.data) {
+                    log(`✅ JWT token accepted! User: ${JSON.stringify(data.data.me, null, 2)}`, 'success');
+                } else {
+                    log('❌ Unexpected response from backend', 'error');
+                }
+            })
+            .catch(error => {
+                log(`❌ Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        function clearStorage() {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            log('🧹 Storage cleared', 'info');
+        }
+        
+        // Auto-create test JWT on page load
+        window.onload = function() {
+            log('🚀 JWT Format Test loaded', 'info');
+            createTestJWT();
+        };
+    </script>
+</body>
+</html>

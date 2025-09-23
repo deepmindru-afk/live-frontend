@@ -4,7 +4,9 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, handleLogout } from '../../lib/simple-auth-handlers';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
-import { GET_MY_MEETINGS, GET_MEETING_BY_ID, JOIN_MEETING_BY_CODE, GET_MEETING_STATS } from '../../apollo/meeting/queries';
+import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS } from '../../apollo/meeting/queries';
+import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
+
 import { UPDATE_PROFILE, UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE } from '../../apollo/member/mutations';
 import Swal from 'sweetalert2';
 
@@ -80,6 +82,12 @@ const MemberDashboard: React.FC = () => {
     try {
       console.log('📊 MEMBER DASHBOARD: Fetching meetings...');
       
+      if (!GET_MY_MEETINGS) {
+        console.error('📊 MEMBER DASHBOARD: GET_MY_MEETINGS query is undefined');
+        setMeetings([]);
+        return;
+      }
+      
       const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
         input: {}
       });
@@ -140,7 +148,9 @@ const MemberDashboard: React.FC = () => {
     }
 
     try {
-      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { inviteCode });
+      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
+        input: { inviteCode } 
+      });
       
       if (result.joinMeetingByCode && result.joinMeetingByCode.success) {
         // Redirect to pre-join device check page

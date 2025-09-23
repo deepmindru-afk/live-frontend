@@ -1,86 +1,122 @@
 import { gql } from '@apollo/client';
 
-// Mutation to create a VOD
+// Mutation to create a VOD - Updated to match backend schema
 export const CREATE_VOD = gql`
-  mutation CreateVOD($input: CreateVODInput!) {
-    createVOD(input: $input) {
+  mutation CreateVod($input: CreateVodInput!) {
+    createVod(input: $input) {
       success
       message
       vod {
         _id
         title
-        size
-        duration
-        url
-        filePath
+        meetingId
+        source
+        storageKey
+        sizeBytes
+        durationSec
+        notes
         createdAt
-        status
-      }
-    }
-  }
-`;
-
-// Mutation to update a VOD
-export const UPDATE_VOD = gql`
-  mutation UpdateVOD($id: ID!, $input: UpdateVODInput!) {
-    updateVOD(id: $id, input: $input) {
-      success
-      message
-      vod {
-        _id
-        title
-        size
-        duration
-        url
-        filePath
         updatedAt
-        status
+        meeting {
+          _id
+          title
+          status
+          inviteCode
+        }
       }
     }
   }
 `;
 
-// Mutation to delete a VOD
+// Mutation to update a VOD - Updated to match backend schema
+export const UPDATE_VOD = gql`
+  mutation UpdateVod($vodId: ID!, $input: UpdateVodInput!) {
+    updateVod(vodId: $vodId, input: $input) {
+      success
+      message
+      vod {
+        _id
+        title
+        meetingId
+        source
+        storageKey
+        sizeBytes
+        durationSec
+        notes
+        createdAt
+        updatedAt
+        meeting {
+          _id
+          title
+          status
+          inviteCode
+        }
+      }
+    }
+  }
+`;
+
+// Mutation to delete a VOD - Updated to match backend schema
 export const DELETE_VOD = gql`
-  mutation DeleteVOD($id: ID!) {
-    deleteVOD(id: $id) {
+  mutation DeleteVod($vodId: ID!) {
+    deleteVod(vodId: $vodId) {
       success
       message
     }
   }
 `;
 
-// Mutation to upload VOD file
+// Mutation to upload VOD file - Updated to match backend schema
 export const UPLOAD_VOD_FILE = gql`
-  mutation UploadVODFile($file: Upload!, $title: String!) {
-    uploadVODFile(file: $file, title: $title) {
+  mutation UploadVodFile($input: CreateVodFileInput!, $file: Upload!) {
+    uploadVodFile(input: $input, file: $file) {
       success
       message
       vod {
         _id
         title
-        size
-        duration
-        filePath
+        meetingId
+        source
+        storageKey
+        sizeBytes
+        durationSec
+        notes
         createdAt
-        status
+        updatedAt
+        meeting {
+          _id
+          title
+          status
+          inviteCode
+        }
       }
     }
   }
 `;
 
-// Mutation to create VOD from URL
+// Mutation to create VOD from URL - Updated to match backend schema
 export const CREATE_VOD_FROM_URL = gql`
-  mutation CreateVODFromURL($url: String!, $title: String!) {
-    createVODFromURL(url: $url, title: $title) {
+  mutation CreateVodFromUrl($input: CreateVodUrlInput!) {
+    createVodFromUrl(input: $input) {
       success
       message
       vod {
         _id
         title
-        url
+        meetingId
+        source
+        storageKey
+        sizeBytes
+        durationSec
+        notes
         createdAt
-        status
+        updatedAt
+        meeting {
+          _id
+          title
+          status
+          inviteCode
+        }
       }
     }
   }

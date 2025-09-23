@@ -1,4 +1,4 @@
-import { useQuery } from '@apollo/client';
+import { useQuery } from '@apollo/client/react';
 import { 
   GET_MEETING_INFO,
   GET_PARTICIPANTS,

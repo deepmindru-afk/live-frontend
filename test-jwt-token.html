@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test JWT Token</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        .warning { color: orange; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        h3 { margin-top: 0; color: #333; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>JWT Token Debugger</h1>
+    <p>This tool helps debug JWT token issues in localStorage.</p>
+    
+    <div class="section">
+        <h3>🔍 Token Inspection</h3>
+        <button onclick="checkTokens()">Check Stored Tokens</button>
+        <button onclick="clearTokens()">Clear All Tokens</button>
+        <button onclick="testLogin()">Test Login</button>
+    </div>
+    
+    <div class="section">
+        <h3>🧪 JWT Validation</h3>
+        <button onclick="validateJWT()">Validate Current JWT</button>
+        <button onclick="decodeJWT()">Decode JWT Payload</button>
+    </div>
+    
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = message;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+        
+        function checkTokens() {
+            log('🔍 Checking stored tokens...', 'info');
+            
+            const jwtToken = localStorage.getItem('jwt');
+            const tokenKey = localStorage.getItem('token');
+            const userData = localStorage.getItem('user');
+            
+            log(`<strong>JWT Token (jwt key):</strong><br><pre>${jwtToken || 'null'}</pre>`, jwtToken ? 'success' : 'error');
+            log(`<strong>Token (token key):</strong><br><pre>${tokenKey || 'null'}</pre>`, tokenKey ? 'success' : 'error');
+            log(`<strong>User Data:</strong><br><pre>${userData || 'null'}</pre>`, userData ? 'success' : 'error');
+            
+            // Check if tokens are valid JWT format
+            if (jwtToken) {
+                const isValidJWT = isValidJWTFormat(jwtToken);
+                log(`<strong>JWT Token Valid:</strong> ${isValidJWT}`, isValidJWT ? 'success' : 'error');
+            }
+            
+            if (tokenKey) {
+                const isValidJWT = isValidJWTFormat(tokenKey);
+                log(`<strong>Token Key Valid:</strong> ${isValidJWT}`, isValidJWT ? 'success' : 'error');
+            }
+        }
+        
+        function isValidJWTFormat(token) {
+            if (!token || typeof token !== 'string') return false;
+            
+            // JWT should have 3 parts separated by dots
+            const parts = token.split('.');
+            if (parts.length !== 3) {
+                log(`❌ Invalid JWT format: Expected 3 parts, got ${parts.length}`, 'error');
+                return false;
+            }
+            
+            // Each part should be base64 encoded
+            try {
+                atob(parts[0]); // Header
+                atob(parts[1]); // Payload
+                atob(parts[2]); // Signature
+                return true;
+            } catch (e) {
+                log(`❌ Invalid JWT format: Not base64 encoded - ${e.message}`, 'error');
+                return false;
+            }
+        }
+        
+        function decodeJWT() {
+            const jwtToken = localStorage.getItem('jwt') || localStorage.getItem('token');
+            
+            if (!jwtToken) {
+                log('❌ No JWT token found in localStorage', 'error');
+                return;
+            }
+            
+            if (!isValidJWTFormat(jwtToken)) {
+                log('❌ Token is not a valid JWT format', 'error');
+                return;
+            }
+            
+            try {
+                const parts = jwtToken.split('.');
+                const header = JSON.parse(atob(parts[0]));
+                const payload = JSON.parse(atob(parts[1]));
+                
+                log(`<strong>JWT Header:</strong><br><pre>${JSON.stringify(header, null, 2)}</pre>`, 'info');
+                log(`<strong>JWT Payload:</strong><br><pre>${JSON.stringify(payload, null, 2)}</pre>`, 'info');
+                
+                // Check if token is expired
+                if (payload.exp) {
+                    const now = Math.floor(Date.now() / 1000);
+                    const isExpired = payload.exp < now;
+                    log(`<strong>Token Expired:</strong> ${isExpired} (exp: ${new Date(payload.exp * 1000).toISOString()}, now: ${new Date(now * 1000).toISOString()})`, isExpired ? 'error' : 'success');
+                }
+            } catch (e) {
+                log(`❌ Error decoding JWT: ${e.message}`, 'error');
+            }
+        }
+        
+        function validateJWT() {
+            const jwtToken = localStorage.getItem('jwt') || localStorage.getItem('token');
+            
+            if (!jwtToken) {
+                log('❌ No JWT token found in localStorage', 'error');
+                return;
+            }
+            
+            log(`<strong>Testing JWT with backend...</strong>`, 'info');
+            
+            // Test the token with a simple GraphQL query
+            fetch('http://localhost:3007/graphql', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwtToken}`
+                },
+                body: JSON.stringify({
+                    query: 'query { me { _id displayName email } }'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.errors) {
+                    const firstError = data.errors[0];
+                    log(`❌ Backend rejected token: ${firstError.message}`, 'error');
+                    if (firstError.message.includes('jwt malformed')) {
+                        log('🔍 The JWT token is malformed - check the token format', 'warning');
+                    } else if (firstError.message.includes('jwt expired')) {
+                        log('🔍 The JWT token has expired - need to login again', 'warning');
+                    }
+                } else if (data.data) {
+                    log(`✅ JWT token is valid! User: ${JSON.stringify(data.data.me, null, 2)}`, 'success');
+                } else {
+                    log('❌ Unexpected response from backend', 'error');
+                }
+            })
+            .catch(error => {
+                log(`❌ Network error: ${error.message}`, 'error');
+            });
+        }
+        
+        function clearTokens() {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            log('🧹 All tokens cleared from localStorage', 'info');
+        }
+        
+        async function testLogin() {
+            log('🧪 Testing login process...', 'info');
+            
+            const testCredentials = {
+                email: 'rmcbaxt@gmail.com',
+                password: 'password123'
+            };
+            
+            try {
+                const response = await fetch('http://localhost:3007/graphql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation Login($email: String!, $password: String!) {
+                                login(email: $email, password: $password) {
+                                    token
+                                    user {
+                                        _id
+                                        displayName
+                                        email
+                                        systemRole
+                                    }
+                                }
+                            }
+                        `,
+                        variables: testCredentials
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.errors) {
+                    log(`❌ Login failed: ${data.errors[0].message}`, 'error');
+                } else if (data.data && data.data.login) {
+                    const token = data.data.login.token;
+                    log(`✅ Login successful! Token received: ${token.substring(0, 50)}...`, 'success');
+                    
+                    // Store the token
+                    localStorage.setItem('jwt', token);
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('user', JSON.stringify(data.data.login.user));
+                    
+                    log('💾 Token stored in localStorage', 'success');
+                    
+                    // Validate the stored token
+                    setTimeout(() => {
+                        validateJWT();
+                    }, 1000);
+                } else {
+                    log('❌ Unexpected login response', 'error');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-check on page load
+        window.onload = function() {
+            log('🚀 JWT Token Debugger loaded', 'info');
+            checkTokens();
+        };
+    </script>
+</body>
+</html>

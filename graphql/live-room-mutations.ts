@@ -143,8 +143,29 @@ export const UNLOCK_ROOM = gql`
 export const START_MEETING = gql`
   mutation StartMeeting($meetingId: ID!) {
     startMeeting(meetingId: $meetingId) {
-      success
-      message
+      _id
+      title
+      status
+      inviteCode
+      isPrivate
+      scheduledFor
+      actualStartAt
+      endedAt
+      durationMin
+      notes
+      participantCount
+      createdAt
+      updatedAt
+      hostId
+      host {
+        _id
+        email
+        displayName
+        systemRole
+        avatarUrl
+        department
+        organization
+      }
     }
   }
 `;
@@ -152,9 +173,32 @@ export const START_MEETING = gql`
 export const END_MEETING = gql`
   mutation EndMeeting($meetingId: ID!) {
     endMeeting(meetingId: $meetingId) {
-      success
-      message
+      _id
+      title
+      status
+      inviteCode
+      isPrivate
+      scheduledFor
+      actualStartAt
+      endedAt
+      durationMin
+      notes
+      participantCount
+      createdAt
+      updatedAt
+      hostId
+      host {
+        _id
+        email
+        displayName
+        systemRole
+        avatarUrl
+        department
+        organization
+      }
     }
   }
 `;
+
+
 

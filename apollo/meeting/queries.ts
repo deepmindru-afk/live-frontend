@@ -1,40 +1,73 @@
 import { gql } from '@apollo/client';
 
-// Query to get user's meetings with filtering
+// Query to get meetings for a user
 export const GET_MY_MEETINGS = gql`
   query GetMyMeetings($input: MeetingQueryInput!) {
     getMeetings(input: $input) {
-      total
       meetings {
         _id
         title
         status
-        scheduledFor
         inviteCode
+        isPrivate
+        scheduledFor
+        actualStartAt
+        endedAt
+        durationMin
+        notes
+        participantCount
         createdAt
         updatedAt
-        participantCount
-        duration
-        notes
-        isPrivate
-        maxParticipants
+        hostId
+        host {
+          _id
+          email
+          displayName
+          avatarUrl
+          department
+          organization
+        }
       }
+      total
+      limit
+      offset
+      hasMore
     }
   }
 `;
 
-// Simple query to test if meetings exist
+// Query to get all meetings (for admin)
 export const GET_ALL_MEETINGS = gql`
   query GetAllMeetings($input: MeetingQueryInput!) {
     getMeetings(input: $input) {
-      total
       meetings {
         _id
         title
         status
         inviteCode
+        isPrivate
+        scheduledFor
+        actualStartAt
+        endedAt
+        durationMin
+        notes
+        participantCount
         createdAt
+        updatedAt
+        hostId
+        host {
+          _id
+          email
+          displayName
+          avatarUrl
+          department
+          organization
+        }
       }
+      total
+      limit
+      offset
+      hasMore
     }
   }
 `;
@@ -45,36 +78,13 @@ export const GET_MEETING_STATS = gql`
     getMeetingStats {
       totalMeetings
       activeMeetings
-      scheduledMeetings
       endedMeetings
       totalParticipants
-      totalDuration
+      averageDuration
     }
   }
 `;
 
-// Query to get a specific meeting
-export const GET_MEETING = gql`
-  query GetMeeting($meetingId: ID!) {
-    getMeeting(meetingId: $meetingId) {
-      _id
-      title
-      status
-      schedule
-      inviteCode
-      createdAt
-      updatedAt
-      participantCount
-      duration
-      participants {
-        _id
-        displayName
-        email
-        joinedAt
-      }
-    }
-  }
-`;
 
 // Query to get meeting by ID (for meeting page)
 export const GET_MEETING_BY_ID = gql`
@@ -83,37 +93,25 @@ export const GET_MEETING_BY_ID = gql`
       _id
       title
       status
-      schedule
       inviteCode
+      isPrivate
+      scheduledFor
+      actualStartAt
+      endedAt
+      durationMin
+      notes
+      participantCount
       createdAt
       updatedAt
-      participantCount
-      duration
-      participants {
+      hostId
+      host {
         _id
-        displayName
         email
-        isMuted
-        isCameraOff
-        joinedAt
-        isHost
-      }
-    }
-  }
-`;
-
-// Query to get chat history
-export const GET_CHAT_HISTORY = gql`
-  query GetChatHistory($meetingId: ID!, $pagination: PaginationInput!) {
-    chatHistory(meetingId: $meetingId, pagination: $pagination) {
-      _id
-      message
-      sender {
-        _id
         displayName
+        avatarUrl
+        department
+        organization
       }
-      createdAt
-      replyToMessageId
     }
   }
 `;
@@ -121,14 +119,56 @@ export const GET_CHAT_HISTORY = gql`
 // Query to get participants by meeting
 export const GET_PARTICIPANTS_BY_MEETING = gql`
   query GetParticipantsByMeeting($meetingId: ID!) {
-    participantsByMeeting(meetingId: $meetingId) {
+    getParticipantsByMeeting(meetingId: $meetingId) {
+      _id
+      displayName
+      role
+      micState
+      cameraState
+      user {
+        _id
+        email
+        displayName
+      }
+    }
+  }
+`;
+
+// Query to get waiting participants
+export const GET_WAITING_PARTICIPANTS = gql`
+  query GetWaitingParticipants($meetingId: ID!) {
+    getWaitingParticipants(meetingId: $meetingId) {
       _id
       displayName
       email
-      joinedAt
-      leftAt
-      isHost
-      totalTime
+      role
+    }
+  }
+`;
+
+// Query to get chat history
+export const GET_CHAT_HISTORY = gql`
+  query GetChatHistory($input: ChatHistoryInput!) {
+    getChatHistory(input: $input) {
+      messages {
+        _id
+        text
+        displayName
+        createdAt
+      }
+    }
+  }
+`;
+
+// Query to get raised hands
+export const GET_RAISED_HANDS = gql`
+  query GetRaisedHands($input: RaisedHandsInput!) {
+    getRaisedHands(input: $input) {
+      raisedHands {
+        participantId
+        reason
+        raisedAt
+      }
     }
   }
 `;
@@ -136,33 +176,96 @@ export const GET_PARTICIPANTS_BY_MEETING = gql`
 // Query to get participant stats
 export const GET_PARTICIPANT_STATS = gql`
   query GetParticipantStats($meetingId: ID!) {
-    participantStats(meetingId: $meetingId) {
+    getParticipantStats(meetingId: $meetingId) {
       totalParticipants
-      averageAttendanceTime
-      hostAttendanceTime
-      longestAttendance
-      shortestAttendance
+      activeParticipants
+      waitingParticipants
+      mutedParticipants
+      videoOffParticipants
     }
   }
 `;
 
-// Mutation to join meeting by code
-export const JOIN_MEETING_BY_CODE = gql`
-  mutation JoinMeetingByCode($inviteCode: String!) {
-    joinMeetingByCode(inviteCode: $inviteCode) {
-      success
-      message
-      meeting {
-        _id
-        title
-        status
-        inviteCode
-      }
-      user {
-        _id
-        displayName
-        email
-      }
+// Query to get chat stats
+export const GET_CHAT_STATS = gql`
+  query GetChatStats($meetingId: ID!) {
+    getChatStats(meetingId: $meetingId) {
+      totalMessages
+      messagesPerMinute
+      activeChatters
+    }
+  }
+`;
+
+// Subscriptions
+export const MEETING_UPDATED = gql`
+  subscription MeetingUpdated($meetingId: ID!) {
+    meetingUpdated(meetingId: $meetingId) {
+      _id
+      status
+      participantCount
+    }
+  }
+`;
+
+export const PARTICIPANT_JOINED = gql`
+  subscription ParticipantJoined($meetingId: ID!) {
+    participantJoined(meetingId: $meetingId) {
+      _id
+      displayName
+      role
+      micState
+      cameraState
+    }
+  }
+`;
+
+export const PARTICIPANT_LEFT = gql`
+  subscription ParticipantLeft($meetingId: ID!) {
+    participantLeft(meetingId: $meetingId) {
+      _id
+      displayName
+    }
+  }
+`;
+
+export const PARTICIPANT_UPDATED = gql`
+  subscription ParticipantUpdated($meetingId: ID!) {
+    participantUpdated(meetingId: $meetingId) {
+      _id
+      displayName
+      role
+      micState
+      cameraState
+    }
+  }
+`;
+
+export const CHAT_MESSAGE_ADDED = gql`
+  subscription ChatMessageAdded($meetingId: ID!) {
+    chatMessageAdded(meetingId: $meetingId) {
+      _id
+      text
+      displayName
+      createdAt
+    }
+  }
+`;
+
+export const HAND_RAISED = gql`
+  subscription HandRaised($meetingId: ID!) {
+    handRaised(meetingId: $meetingId) {
+      participantId
+      reason
+      raisedAt
+    }
+  }
+`;
+
+export const HAND_LOWERED = gql`
+  subscription HandLowered($meetingId: ID!) {
+    handLowered(meetingId: $meetingId) {
+      participantId
     }
   }
 `;
