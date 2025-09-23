@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import ProfessionalLiveStreamRoom from '../../components/ProfessionalLiveStreamRoom';
 
 const LiveStreamRoomPage: React.FC = () => {
+  const router = useRouter();
+  const { meetingId } = router.query;
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -34,7 +37,25 @@ const LiveStreamRoomPage: React.FC = () => {
     );
   }
 
-  return <ProfessionalLiveStreamRoom />;
+  if (!meetingId) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#1a1a1a',
+        color: 'white'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2>Meeting ID Required</h2>
+          <p>Please provide a valid meeting ID.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ProfessionalLiveStreamRoom meetingId={meetingId as string} />;
 };
 
 export default LiveStreamRoomPage;

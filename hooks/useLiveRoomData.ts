@@ -93,7 +93,15 @@ export const useLiveRoomData = (meetingId: string): LiveRoomData => {
     meeting: meetingData?.getMeetingById,
     participants: participantsData?.getParticipantsByMeeting || [],
     waitingParticipants: waitingData?.getWaitingParticipants || [],
-    chatMessages: chatData?.getChatHistory?.messages || [],
+    chatMessages: (() => {
+      try {
+        const messages = chatData?.getChatHistory?.messages;
+        return Array.isArray(messages) ? messages : [];
+      } catch (error) {
+        console.error('Error processing chat messages:', error);
+        return [];
+      }
+    })(),
     recording: recordingData?.getRecordingInfo,
     stats: statsData?.getParticipantStats,
     loading,

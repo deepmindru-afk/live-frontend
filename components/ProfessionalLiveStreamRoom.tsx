@@ -228,13 +228,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   });
 
   // Extract data from queries
-  const meeting = meetingData?.getMeetingById as Meeting;
+  const meeting = (meetingData as any)?.getMeetingById as Meeting;
   const participants = (participantsData as any)?.getParticipantsByMeeting as Participant[] || [];
   const waitingParticipants = (waitingData as any)?.getWaitingParticipants as WaitingParticipant[] || [];
   
   // Safe chat messages extraction with additional safety checks
   const rawChatData = (chatData as any)?.getChatHistory;
-  const chatMessages = Array.isArray(rawChatData?.messages) ? rawChatData.messages as ChatMessage[] : [];
+  const chatMessages = (() => {
+    try {
+      if (rawChatData && Array.isArray(rawChatData.messages)) {
+        return rawChatData.messages as ChatMessage[];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error processing chat messages:', error);
+      return [];
+    }
+  })();
   
   // Debug logging for chat data
   useEffect(() => {
@@ -436,8 +446,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const isLoading = isAuthenticating || isJoiningMeeting || !authComplete;
   
   // Only check for errors on queries that are actually running
+  // Ignore chat errors that are not critical (like "incoming is not iterable")
+  const isChatErrorCritical = chatError && !chatError.message?.includes('incoming is not iterable');
   const hasError = meetingError || authError || 
-    (hasJoinedMeeting && (participantsError || waitingError || chatError || raisedHandsError || statsError || chatStatsError));
+    (hasJoinedMeeting && (participantsError || waitingError || isChatErrorCritical || raisedHandsError || statsError || chatStatsError));
 
   // Debug logging
   useEffect(() => {
@@ -1029,8 +1041,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 flexDirection: 'column',
                 gap: '10px'
               }}>
-                {Array.isArray(chatMessages) && chatMessages.length > 0 ? (
-                  chatMessages.map((message) => (
+                {(() => {
+                  try {
+                    if (!Array.isArray(chatMessages)) {
+                      console.warn('Chat messages is not an array:', chatMessages);
+                      return <div style={{ color: '#ff6b6b', fontSize: '14px' }}>No chat messages available</div>;
+                    }
+                    if (chatMessages.length === 0) {
+                      return <div style={{ color: '#888', fontSize: '14px' }}>No messages yet</div>;
+                    }
+                    return chatMessages.map((message) => (
                     <div key={message._id} style={{
                       padding: '8px 12px',
                       backgroundColor: '#333',
@@ -1044,17 +1064,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                         {message.text || 'No message content'}
                       </p>
                     </div>
-                  ))
-                ) : (
-                  <div style={{ 
-                    padding: '20px', 
-                    textAlign: 'center', 
-                    color: '#666',
-                    fontSize: '14px'
-                  }}>
-                    {chatLoading ? 'Loading messages...' : 'No messages yet'}
-                  </div>
-                )}
+                    ));
+                  } catch (error) {
+                    console.error('Error rendering chat messages:', error);
+                    return <div style={{ color: '#ff6b6b', fontSize: '14px' }}>Error loading messages</div>;
+                  }
+                })()}
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <input
