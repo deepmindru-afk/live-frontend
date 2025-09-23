@@ -48,9 +48,39 @@ const PrejoinPage = () => {
         return;
       }
       
-      const result = await makeGraphQLRequest(GET_MEETING_BY_ID, {
-        meetingId: meetingId as string
-      });
+      // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
+      let result;
+      try {
+        result = await makeGraphQLRequest(GET_MEETING_BY_ID, {
+          meetingId: meetingId as string
+        });
+      } catch (authError: any) {
+        // Handle authentication errors immediately
+        if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
+          await Swal.fire({
+            icon: 'warning',
+            title: '세션이 만료되었습니다',
+            text: '다시 로그인해 주세요.',
+            confirmButtonText: '로그인',
+            showCancelButton: true,
+            cancelButtonText: '취소'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Clear any stored tokens
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              // Redirect to login
+              router.push('/login');
+            } else {
+              // Redirect to dashboard
+              router.push('/instructor');
+            }
+          });
+          return;
+        }
+        // Re-throw other errors
+        throw authError;
+      }
       
       console.log('🔍 PREJOIN: Raw backend response:', result);
       
@@ -76,14 +106,39 @@ const PrejoinPage = () => {
       }
     } catch (error: any) {
       console.error('🔍 PREJOIN: Error fetching meeting info:', error);
-      const errorMessage = error.message || '미팅 정보를 가져올 수 없습니다.';
-      await Swal.fire({
-        icon: 'error',
-        title: '미팅 정보 오류',
-        text: errorMessage,
-        confirmButtonText: '확인'
-      });
-      router.push('/instructor'); // Redirect to instructor dashboard
+      
+      // Handle authentication errors specifically
+      if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
+        await Swal.fire({
+          icon: 'warning',
+          title: '세션이 만료되었습니다',
+          text: '다시 로그인해 주세요.',
+          confirmButtonText: '로그인',
+          showCancelButton: true,
+          cancelButtonText: '취소'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // Clear any stored tokens
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            // Redirect to login
+            router.push('/login');
+          } else {
+            // Redirect to dashboard
+            router.push('/dashboard');
+          }
+        });
+      } else {
+        // Handle other errors
+        const errorMessage = error.message || '미팅 정보를 가져올 수 없습니다.';
+        await Swal.fire({
+          icon: 'error',
+          title: '미팅 정보 오류',
+          text: errorMessage,
+          confirmButtonText: '확인'
+        });
+        router.push('/instructor'); // Redirect to instructor dashboard
+      }
     } finally {
       setIsLoading(false);
     }

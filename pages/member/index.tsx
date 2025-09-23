@@ -88,9 +88,39 @@ const MemberDashboard: React.FC = () => {
         return;
       }
       
-      const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
-        input: {}
-      });
+      // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
+      let result;
+      try {
+        result = await makeGraphQLRequest(GET_MY_MEETINGS, {
+          input: {}
+        });
+      } catch (authError: any) {
+        // Handle authentication errors immediately
+        if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
+          await Swal.fire({
+            icon: 'warning',
+            title: '세션이 만료되었습니다',
+            text: '다시 로그인해 주세요.',
+            confirmButtonText: '로그인',
+            showCancelButton: true,
+            cancelButtonText: '취소'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Clear any stored tokens
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              // Redirect to login
+              window.location.href = '/login';
+            } else {
+              // Redirect to dashboard
+              window.location.href = '/dashboard';
+            }
+          });
+          return;
+        }
+        // Re-throw other errors
+        throw authError;
+      }
       
       console.log('📊 MEMBER DASHBOARD: Backend response:', result);
       
@@ -117,8 +147,32 @@ const MemberDashboard: React.FC = () => {
         setMeetings([]);
         setFilteredMeetings([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('📊 MEMBER DASHBOARD: Error fetching meetings:', error);
+      
+      // Handle authentication errors specifically
+      if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
+        await Swal.fire({
+          icon: 'warning',
+          title: '세션이 만료되었습니다',
+          text: '다시 로그인해 주세요.',
+          confirmButtonText: '로그인',
+          showCancelButton: true,
+          cancelButtonText: '취소'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // Clear any stored tokens
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            // Redirect to login
+            window.location.href = '/login';
+          } else {
+            // Redirect to dashboard
+            window.location.href = '/dashboard';
+          }
+        });
+      }
+      
       setMeetings([]);
       setFilteredMeetings([]);
     }
@@ -148,9 +202,36 @@ const MemberDashboard: React.FC = () => {
     }
 
     try {
-      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
-        input: { inviteCode } 
-      });
+      // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
+      let result;
+      try {
+        result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
+          input: { inviteCode } 
+        });
+      } catch (authError: any) {
+        // Handle authentication errors immediately
+        if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
+          await Swal.fire({
+            icon: 'warning',
+            title: '세션이 만료되었습니다',
+            text: '다시 로그인해 주세요.',
+            confirmButtonText: '로그인',
+            showCancelButton: true,
+            cancelButtonText: '취소'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // Clear any stored tokens
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              // Redirect to login
+              window.location.href = '/login';
+            }
+          });
+          return;
+        }
+        // Re-throw other errors
+        throw authError;
+      }
       
       if (result.joinMeetingByCode && result.joinMeetingByCode.success) {
         // Redirect to pre-join device check page
@@ -159,14 +240,35 @@ const MemberDashboard: React.FC = () => {
       } else {
         throw new Error(result.joinMeetingByCode?.message || '미팅 참여에 실패했습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Join meeting error:', error);
-      await Swal.fire({
-        icon: 'error',
-        title: '미팅 참여 실패',
-        text: error instanceof Error ? error.message : '미팅 참여 중 오류가 발생했습니다.',
-        confirmButtonText: '확인'
-      });
+      
+      // Handle authentication errors specifically
+      if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
+        await Swal.fire({
+          icon: 'warning',
+          title: '세션이 만료되었습니다',
+          text: '다시 로그인해 주세요.',
+          confirmButtonText: '로그인',
+          showCancelButton: true,
+          cancelButtonText: '취소'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // Clear any stored tokens
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            // Redirect to login
+            window.location.href = '/login';
+          }
+        });
+      } else {
+        await Swal.fire({
+          icon: 'error',
+          title: '미팅 참여 실패',
+          text: error instanceof Error ? error.message : '미팅 참여 중 오류가 발생했습니다.',
+          confirmButtonText: '확인'
+        });
+      }
     }
   };
 

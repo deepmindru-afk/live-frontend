@@ -15,7 +15,6 @@ export const GET_MEETING_BY_ID = gql`
       endedAt
       durationMin
       participantCount
-      hostId
       createdAt
       updatedAt
     }

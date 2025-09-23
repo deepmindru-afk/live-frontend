@@ -18,7 +18,6 @@ export const GET_MY_MEETINGS = gql`
         participantCount
         createdAt
         updatedAt
-        hostId
         host {
           _id
           email
@@ -54,7 +53,6 @@ export const GET_ALL_MEETINGS = gql`
         participantCount
         createdAt
         updatedAt
-        hostId
         host {
           _id
           email

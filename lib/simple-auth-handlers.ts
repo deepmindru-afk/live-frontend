@@ -171,6 +171,18 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
       throw new Error('Invalid credentials');
     }
     
+    // Handle JWT expiration
+    if (firstError.message === 'jwt expired' || firstError.message.includes('jwt expired')) {
+      console.log('🌐 GRAPHQL: JWT token expired');
+      throw new Error('JWT_EXPIRED');
+    }
+    
+    // Handle token not exist
+    if (firstError.message === 'TOKEN_NOT_EXIST' || firstError.extensions?.code === 'TOKEN_NOT_EXIST') {
+      console.log('🌐 GRAPHQL: Token does not exist');
+      throw new Error('TOKEN_NOT_EXIST');
+    }
+    
     // For other GraphQL errors, throw with the original message
     console.log('🌐 GRAPHQL: Throwing generic GraphQL error');
     throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
