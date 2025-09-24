@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
+import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser, forceLogin } from '../lib/simple-auth-handlers';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
@@ -49,6 +50,13 @@ import {
   type DeleteMessageInput
 } from '../apollo/livestream/mutations';
 
+// Add additional mutations for leave functionality
+const FORCE_LEAVE_MEETING = gql`
+  mutation ForceLeaveMeeting($meetingId: ID!) {
+    forceLeaveMeeting(meetingId: $meetingId)
+  }
+`;
+
 interface ProfessionalLiveStreamRoomProps {
   meetingId?: string;
   role?: 'HOST' | 'PARTICIPANT';
@@ -89,6 +97,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [authComplete, setAuthComplete] = useState<boolean>(false);
   const [actualUserId, setActualUserId] = useState<string>('');
   const [actualUserEmail, setActualUserEmail] = useState<string>('');
+  const [currentParticipant, setCurrentParticipant] = useState<any>(null);
+
+  // Media state
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+
+  // Refs for video elements
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const screenShareRef = useRef<HTMLVideoElement>(null);
+  const mainVideoRef = useRef<HTMLVideoElement>(null);
 
   // Set meetingId from prop or URL
   useEffect(() => {
@@ -108,26 +129,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   // Authentication
   useEffect(() => {
     const checkAuth = async () => {
-        try {
-          const user = await getCurrentUser();
+      try {
+        const user = await getCurrentUser();
         if (user) {
-            setIsAuth(true);
-                setActualUserId(user._id);
+          setIsAuth(true);
+          setActualUserId(user._id);
           setActualUserEmail(user.email);
           setCurrentUserRole(user.systemRole || 'MEMBER');
           console.log('✅ FRONTEND: User authenticated:', user);
-          } else {
+        } else {
           console.log('❌ FRONTEND: User not authenticated');
           setIsAuth(false);
         }
       } catch (error) {
         console.error('❌ FRONTEND: Auth check failed:', error);
         setIsAuth(false);
-        } finally {
+      } finally {
         setAuthComplete(true);
       }
     };
-    
+
     checkAuth();
   }, []);
 
@@ -146,6 +167,185 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   // Mutations
   const [joinMeeting] = useMutation(JOIN_MEETING);
   const [startMeeting] = useMutation(START_MEETING);
+  const [leaveMeeting] = useMutation(LEAVE_MEETING);
+  const [forceLeaveMeeting] = useMutation(FORCE_LEAVE_MEETING);
+
+  // Media access functions
+  const startCamera = async () => {
+    try {
+      setMediaError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      
+      setLocalStream(stream);
+      setIsVideoOn(true);
+      setIsMicOn(true);
+      
+      // Attach stream to video element
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      
+      console.log('✅ Camera and microphone started');
+    } catch (error) {
+      console.error('❌ Failed to start camera:', error);
+      setMediaError('Failed to access camera and microphone. Please check permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      setLocalStream(null);
+      setIsVideoOn(false);
+      setIsMicOn(false);
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      
+      console.log('✅ Camera and microphone stopped');
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (isVideoOn) {
+      stopCamera();
+    } else {
+      await startCamera();
+    }
+  };
+
+  const toggleMicrophone = () => {
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !isMicOn;
+      });
+      setIsMicOn(!isMicOn);
+      console.log(`✅ Microphone ${isMicOn ? 'muted' : 'unmuted'}`);
+    }
+  };
+
+  const startScreenShare = async () => {
+    try {
+      setMediaError(null);
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+      
+      setScreenStream(stream);
+      setIsScreenSharing(true);
+      
+      // Attach stream to screen share element
+      if (screenShareRef.current) {
+        screenShareRef.current.srcObject = stream;
+      }
+      
+      // Handle screen share end
+      stream.getVideoTracks()[0].onended = () => {
+        stopScreenShare();
+      };
+      
+      console.log('✅ Screen sharing started');
+        } catch (error) {
+      console.error('❌ Failed to start screen share:', error);
+      setMediaError('Failed to start screen sharing. Please check permissions.');
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+      setIsScreenSharing(false);
+      
+      if (screenShareRef.current) {
+        screenShareRef.current.srcObject = null;
+      }
+      
+      console.log('✅ Screen sharing stopped');
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      stopScreenShare();
+          } else {
+      await startScreenShare();
+    }
+  };
+
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+      } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  // Handle leaving the meeting
+  const handleLeaveMeeting = async () => {
+    try {
+      console.log('🚪 FRONTEND: Leaving meeting...');
+      
+      // First try to leave using participant ID
+      if (currentParticipant?._id) {
+        console.log('🚪 FRONTEND: Using participant ID:', currentParticipant._id);
+        await leaveMeeting({
+          variables: {
+            input: {
+              participantId: currentParticipant._id
+            }
+          }
+        });
+      } else if (currentParticipantId) {
+        console.log('🚪 FRONTEND: Using stored participant ID:', currentParticipantId);
+        await leaveMeeting({
+          variables: {
+            input: {
+              participantId: currentParticipantId
+            }
+          }
+        });
+      } else {
+        // Fallback: force leave using meeting ID
+        console.log('🚪 FRONTEND: Using force leave for meeting:', actualMeetingId);
+        await forceLeaveMeeting({
+          variables: {
+            meetingId: actualMeetingId
+          }
+        });
+      }
+      
+      console.log('✅ FRONTEND: Successfully left meeting');
+      
+      // Stop camera and microphone
+      stopCamera();
+      stopScreenShare();
+      
+      // Show success message
+      alert('Successfully left the meeting');
+      
+      // Navigate away
+      window.location.href = '/dashboard';
+      
+    } catch (error: any) {
+      console.error('❌ FRONTEND: Failed to leave meeting:', error);
+      
+      // Show error message to user
+      alert('Failed to leave meeting. Please try again.');
+      
+      // Still redirect even if there's an error
+      window.location.href = '/dashboard';
+    }
+  };
 
   // Auto-join meeting when ready
   useEffect(() => {
@@ -169,7 +369,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         
         const joinMeetingInput: JoinParticipantInput = {
           meetingId: actualMeetingId,
-          displayName: actualUserEmail || (isTutor ? 'Host' : 'Participant'),
+          displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
           role: isTutor ? 'HOST' : 'PARTICIPANT'
         };
 
@@ -189,8 +389,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           });
           
           setCurrentParticipantId(result.data.joinMeeting._id);
+          setCurrentParticipant(result.data.joinMeeting);
           setHasJoinedMeeting(true);
           setAuthError(null);
+          
+          // Auto-start camera after joining
+          await startCamera();
           
           // Auto-start meeting for tutors
           if (isTutor) {
@@ -220,6 +424,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     joinMeetingWhenReady();
   }, [authComplete, isAuth, hasJoinedMeeting, isJoiningMeeting, actualMeetingId, currentUserRole, actualUserId, joinMeeting, startMeeting]);
 
+  // Extract data
+  const meeting = (meetingData as any)?.getMeetingById;
+  const participants = (participantsData as any)?.getParticipantsByMeeting || [];
+
+  // Track current participant ID for leave functionality
+  useEffect(() => {
+    if (participants && participants.length > 0 && actualUserId) {
+      const foundParticipant = participants.find((p: any) => 
+        p.userId && p.userId._id && p.userId._id.toString() === actualUserId.toString()
+      );
+      
+      if (foundParticipant) {
+        console.log('🎯 CURRENT PARTICIPANT: Found', {
+          participantId: foundParticipant._id,
+          displayName: foundParticipant.displayName,
+          role: foundParticipant.role
+        });
+        setCurrentParticipantId(foundParticipant._id);
+        setCurrentParticipant(foundParticipant);
+      } else {
+        console.log('🎯 CURRENT PARTICIPANT: Not found in participants list');
+      }
+    }
+  }, [participants, actualUserId]);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 FRONTEND DEBUG: Current participant:', currentParticipant);
+    console.log('🔍 FRONTEND DEBUG: Meeting ID:', actualMeetingId);
+    console.log('🔍 FRONTEND DEBUG: Participants count:', participants.length);
+  }, [currentParticipant, actualMeetingId, participants.length]);
+
   // Subscriptions for real-time updates
   useSubscription(PARTICIPANT_JOINED, {
     variables: { meetingId: actualMeetingId },
@@ -230,10 +466,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId
   });
-
-  // Extract data
-  const meeting = (meetingData as any)?.getMeetingById;
-  const participants = (participantsData as any)?.getParticipantsByMeeting || [];
 
   // Loading state
   if (meetingLoading || !authComplete) {
@@ -333,8 +565,35 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           height: '100vh',
           backgroundColor: '#1a1a1a',
           color: 'white',
-      fontFamily: 'Arial, sans-serif'
+      fontFamily: 'Arial, sans-serif',
+      position: 'relative'
     }}>
+      {/* Debug Information */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+          padding: '10px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          zIndex: 1000,
+          maxWidth: '300px'
+        }}>
+          <div><strong>Debug Info:</strong></div>
+          <div>Meeting ID: {actualMeetingId}</div>
+          <div>User ID: {actualUserId}</div>
+          <div>User Role: {currentUserRole}</div>
+          <div>Participants: {participants.length}</div>
+          <div>Has Joined: {hasJoinedMeeting ? 'Yes' : 'No'}</div>
+          <div>Local Stream: {localStream ? 'Yes' : 'No'}</div>
+          <div>Camera: {isVideoOn ? 'On' : 'Off'}</div>
+          <div>Mic: {isMicOn ? 'On' : 'Off'}</div>
+        </div>
+      )}
+
       {/* Main Video Area */}
       <div style={{
         flex: 1,
@@ -347,30 +606,31 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '20px',
+          padding: '15px 20px',
           backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          borderBottom: '1px solid #333'
+          borderBottom: '1px solid #333',
+          zIndex: 100
         }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px' }}>
+            <h1 style={{ margin: 0, fontSize: '20px' }}>
               {meeting?.title || 'Live Meeting'}
             </h1>
-            <p style={{ margin: '5px 0 0 0', color: '#ccc' }}>
+            <p style={{ margin: '5px 0 0 0', color: '#ccc', fontSize: '14px' }}>
               Meeting ID: {actualMeetingId}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{
-              padding: '5px 10px',
+              padding: '4px 8px',
               backgroundColor: meetingStatus === 'ACTIVE' ? '#28a745' : '#ffc107',
               borderRadius: '4px',
               fontSize: '12px'
             }}>
               {meetingStatus}
             </span>
-                {isRecording && (
+            {isRecording && (
               <span style={{
-                padding: '5px 10px',
+                padding: '4px 8px',
                 backgroundColor: '#dc3545',
                 borderRadius: '4px',
                 fontSize: '12px'
@@ -378,67 +638,142 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 REC
               </span>
             )}
+                <button
+              onClick={toggleFullscreen}
+                  style={{
+                padding: '8px',
+                backgroundColor: 'transparent',
+                border: '1px solid #555',
+                borderRadius: '4px',
+                    color: 'white',
+                cursor: 'pointer'
+                  }}
+                >
+              {isFullscreen ? '⤓' : '⤢'}
+                </button>
           </div>
         </div>
 
-        {/* Video Area */}
-        <div style={{
+        {/* Main Video Area - Zoom-like Layout */}
+        <div 
+          style={{
           flex: 1,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           backgroundColor: '#000',
-          position: 'relative'
-        }}>
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+          onMouseEnter={() => setShowControls(true)}
+          onMouseLeave={() => setShowControls(false)}
+        >
           {participants.length > 0 ? (
           <div style={{
               display: 'grid',
               gridTemplateColumns: participants.length === 1 ? '1fr' : 
                                  participants.length === 2 ? '1fr 1fr' : 
-                                 participants.length <= 4 ? '1fr 1fr' : '1fr 1fr 1fr',
-              gap: '10px',
+                                 participants.length <= 4 ? '1fr 1fr' : 
+                                 participants.length <= 9 ? '1fr 1fr 1fr' : '1fr 1fr 1fr 1fr',
+              gap: '8px',
             width: '100%',
             height: '100%',
-              padding: '20px'
+              padding: '10px'
             }}>
               {participants.map((participant: any) => {
-                // Get the real display name from the populated user data
                 const realDisplayName = participant.userId?.displayName || participant.displayName || 'Anonymous';
                 const realRole = participant.role === 'HOST' ? 'Host' : 'Participant';
+                const isCurrentUser = participant.userId?._id === actualUserId;
                 
                 return (
                   <div key={participant._id} style={{
-                    backgroundColor: '#333',
-                    borderRadius: '8px',
-                    display: 'flex',
+                  backgroundColor: '#333',
+                  borderRadius: '8px',
+                  display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                     minHeight: '200px',
-                    border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #555'
-                  }}>
+                    border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #555',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setMainVideoParticipant(participant._id)}
+                  >
+                    {/* Video Element - Only show for current user */}
+                    {isCurrentUser && localStream && (
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0
+                        }}
+                      />
+                    )}
+                    
+                    {/* Screen Share Overlay - Only show for current user */}
+                    {isCurrentUser && isScreenSharing && screenStream && (
+                      <video
+                        ref={screenShareRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          zIndex: 1
+                        }}
+                      />
+                    )}
+                    
+                    {/* Fallback Avatar */}
+                    {(!isCurrentUser || !localStream) && (
+                      <div style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '50%',
+                        backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                        fontWeight: 'bold',
+                        marginBottom: '10px'
+                      }}>
+                        {realDisplayName.charAt(0).toUpperCase()}
+                </div>
+                    )}
+                    
+                    {/* Name and Status Overlay */}
                     <div style={{
-                      width: '80px',
-                      height: '80px',
-                      borderRadius: '50%',
-                      backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '32px',
-                      fontWeight: 'bold',
-                      marginBottom: '10px'
+                      position: 'absolute',
+                      bottom: '8px',
+                      left: '8px',
+                      right: '8px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      textAlign: 'center'
                     }}>
-                      {realDisplayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-                        {realDisplayName}
+                      <div style={{ fontWeight: 'bold', marginBottom: '2px', color: 'white', fontSize: '12px' }}>
+                        {realDisplayName} {isCurrentUser && '(You)'}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#ccc' }}>
+                      <div style={{ fontSize: '10px', color: '#ccc' }}>
                         {realRole}
                       </div>
-                      <div style={{ fontSize: '10px', color: '#888', marginTop: '5px' }}>
+                      <div style={{ fontSize: '8px', color: '#888', marginTop: '2px' }}>
                         {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
                       </div>
                     </div>
@@ -467,70 +802,139 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             )}
         </div>
 
-        {/* Controls */}
+        {/* Bottom Controls - Zoom-like */}
         <div style={{
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          padding: '20px',
+          padding: '15px 20px',
           backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          borderTop: '1px solid #333'
+          borderTop: '1px solid #333',
+          opacity: showControls ? 1 : 0.3,
+          transition: 'opacity 0.3s ease'
         }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Mic Control */}
           <button
-            onClick={() => setIsMicOn(!isMicOn)}
+              onClick={toggleMicrophone}
             style={{
-                padding: '10px 15px',
+                width: '40px',
+                height: '40px',
+              borderRadius: '50%',
+              border: 'none',
                 backgroundColor: isMicOn ? '#28a745' : '#dc3545',
               color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {isMicOn ? '🎤 Mic On' : '🔇 Mic Off'}
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+                fontSize: '16px'
+            }}
+          >
+            {isMicOn ? '🎤' : '🔇'}
           </button>
+          
+            {/* Camera Control */}
           <button
-            onClick={() => setIsVideoOn(!isVideoOn)}
+              onClick={toggleCamera}
             style={{
-                padding: '10px 15px',
+                width: '40px',
+                height: '40px',
+              borderRadius: '50%',
+              border: 'none',
                 backgroundColor: isVideoOn ? '#28a745' : '#dc3545',
               color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {isVideoOn ? '📷 Camera On' : '📹 Camera Off'}
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+                fontSize: '16px'
+            }}
+          >
+              {isVideoOn ? '📷' : '📹'}
           </button>
+          
+            {/* Screen Share Control */}
           <button
-            onClick={() => setIsScreenSharing(!isScreenSharing)}
+              onClick={toggleScreenShare}
             style={{
-                padding: '10px 15px',
+                width: '40px',
+                height: '40px',
+              borderRadius: '50%',
+              border: 'none',
                 backgroundColor: isScreenSharing ? '#007bff' : '#6c757d',
               color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {isScreenSharing ? '🖥️ Stop Share' : '🖥️ Share Screen'}
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+                fontSize: '16px'
+            }}
+          >
+              🖥️
           </button>
+          
+            {/* Recording Control (Host only) */}
             {currentUserRole === 'HOST' && (
           <button
                 onClick={() => setIsRecording(!isRecording)}
             style={{
-                  padding: '10px 15px',
+                  width: '40px',
+                  height: '40px',
+              borderRadius: '50%',
+              border: 'none',
                   backgroundColor: isRecording ? '#dc3545' : '#28a745',
               color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+                  fontSize: '16px'
                 }}
               >
-                {isRecording ? '⏹️ Stop Recording' : '⏺️ Start Recording'}
-          </button>
+                {isRecording ? '⏹️' : '⏺️'}
+              </button>
             )}
+            
+            {/* More Options */}
+            <button
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px'
+              }}
+            >
+              ⋯
+            </button>
+            
+            {/* Leave Meeting Button */}
+            <button
+              onClick={handleLeaveMeeting}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+                marginLeft: '20px'
+              }}
+            >
+              📞
+          </button>
           </div>
         </div>
       </div>
@@ -556,7 +960,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               backgroundColor: rightPanelTab === 'students' ? '#007bff' : 'transparent',
               color: 'white',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '14px'
             }}
           >
             Participants ({participants.length})
@@ -569,7 +974,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               backgroundColor: rightPanelTab === 'chat' ? '#007bff' : 'transparent',
               color: 'white',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '14px'
             }}
           >
             Chat
@@ -579,57 +985,65 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         {/* Panel Content */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {rightPanelTab === 'students' ? (
-            <div style={{ padding: '20px' }}>
-              <h3 style={{ margin: '0 0 15px 0' }}>Participants</h3>
-              {participants.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {participants.map((participant: any) => {
-                    // Get the real display name from the populated user data
-                    const realDisplayName = participant.userId?.displayName || participant.displayName || 'Anonymous';
-                    const realRole = participant.role === 'HOST' ? 'Host' : 'Participant';
-                    
-                    return (
-                      <div key={participant._id} style={{
-                        padding: '10px',
-                        backgroundColor: '#333',
-                        borderRadius: '4px',
+            <div style={{ padding: '15px' }}>
+              <h3 style={{ margin: '0 0 15px 0', fontSize: '16px' }}>Participants</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {participants.map((participant: any) => {
+                  const realDisplayName = participant.userId?.displayName || participant.displayName || 'Anonymous';
+                  const realRole = participant.role === 'HOST' ? 'Host' : 'Participant';
+                  const isCurrentUser = participant.userId?._id === actualUserId;
+                  
+                  return (
+                  <div
+                    key={participant._id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                        padding: '8px',
+                        backgroundColor: isCurrentUser ? '#444' : '#333',
+                        borderRadius: '6px',
+                        border: isCurrentUser ? '1px solid #007bff' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                          width: '28px',
+                          height: '28px',
+                        borderRadius: '50%',
+                          backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '10px'
+                        justifyContent: 'center',
+                        color: 'white',
+                          fontSize: '12px',
+                        fontWeight: 'bold'
                       }}>
-                        <div style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '50%',
-                          backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '16px',
-                          fontWeight: 'bold'
-                        }}>
                           {realDisplayName.charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 'bold' }}>
-                            {realDisplayName}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#ccc' }}>
-                            {realRole}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: '12px' }}>
-                          {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
-                        </div>
                       </div>
-                    );
-                  })}
+                      <div>
+                          <p style={{ margin: 0, fontSize: '12px', fontWeight: '500' }}>
+                            {realDisplayName} {isCurrentUser && '(You)'}
+                        </p>
+                          <p style={{ margin: 0, fontSize: '10px', color: '#ccc' }}>
+                            {realRole}
+                        </p>
+                      </div>
+                    </div>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '10px', color: '#888' }}>
+                          {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
+                        </span>
+                        {isCurrentUser && (
+                          <span style={{ fontSize: '8px', color: '#007bff' }}>
+                            YOU
+                          </span>
+                        )}
+                    </div>
+                  </div>
+                  );
+                })}
               </div>
-              ) : (
-                <div style={{ textAlign: 'center', color: '#ccc' }}>
-                  <p>No participants yet</p>
-                </div>
-              )}
             </div>
           ) : (
             <div style={{ padding: '20px' }}>
@@ -641,6 +1055,35 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           )}
         </div>
       </div>
+
+      {/* Media Error Display */}
+      {mediaError && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#dc3545',
+          color: 'white',
+          padding: '10px 20px',
+          borderRadius: '4px',
+          zIndex: 1000
+        }}>
+          {mediaError}
+          <button
+            onClick={() => setMediaError(null)}
+                  style={{
+              marginLeft: '10px',
+              backgroundColor: 'transparent',
+              border: 'none',
+                    color: 'white',
+              cursor: 'pointer'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Manual Join Button (for debugging) */}
       {!hasJoinedMeeting && (
@@ -666,7 +1109,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
                 const joinMeetingInput: JoinParticipantInput = {
                   meetingId: actualMeetingId,
-                  displayName: actualUserEmail || (isTutor ? 'Host' : 'Participant'),
+                  displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
                   role: isTutor ? 'HOST' : 'PARTICIPANT'
                 };
                 
@@ -677,6 +1120,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 if (result.data?.joinMeeting?._id) {
                   setCurrentParticipantId(result.data.joinMeeting._id);
                   setHasJoinedMeeting(true);
+                  await startCamera();
                   console.log('✅ Manually joined meeting:', result.data.joinMeeting);
                 }
               } catch (error) {

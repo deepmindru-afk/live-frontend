@@ -166,8 +166,8 @@ export const JOIN_MEETING = gql`
 `;
 
 export const LEAVE_MEETING = gql`
-  mutation LeaveMeeting($participantId: ID!) {
-    leaveMeeting(participantId: $participantId) {
+  mutation LeaveMeeting($input: LeaveMeetingInput!) {
+    leaveMeeting(input: $input) {
       success
       message
     }
