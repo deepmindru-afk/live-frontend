@@ -23,8 +23,8 @@ interface ChatMessage {
 
 const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   meetingId,
-  role = 'HOST',
-  userId = 'p1'
+  role,
+  userId
 }) => {
   // Debug logging for props
   console.log('🔍 PROFESSIONAL LIVE STREAM ROOM: Props received:', { meetingId, role, userId });
@@ -65,9 +65,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         
         // Get actual user from localStorage
         const userStr = localStorage.getItem('user');
+        const tokenStr = localStorage.getItem('token') || localStorage.getItem('jwt');
         const user = userStr ? JSON.parse(userStr) : null;
 
-        if (user) {
+        console.log('🔐 AUTH CHECK: Local storage data:', {
+          hasUser: !!user,
+          hasToken: !!tokenStr,
+          userRole: user?.systemRole,
+          userEmail: user?.email
+        });
+
+        if (user && tokenStr) {
           setIsAuth(true);
           setAuthComplete(true);
           setCurrentUserRole(user.systemRole || 'MEMBER'); // Use actual role
@@ -202,15 +210,47 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     }
   }, [liveRoomData]);
 
+  // Add debug logging for meeting data
+  useEffect(() => {
+    console.log('🔍 MEETING DEBUG:', {
+      meetingData: liveRoomData?.meeting,
+      meeting,
+      meetingLoading: liveRoomData?.loading,
+      meetingError: liveRoomData?.error?.message,
+      actualMeetingId
+    });
+  }, [liveRoomData?.meeting, meeting, liveRoomData?.loading, liveRoomData?.error, actualMeetingId]);
+
   // Meeting entry logic - Host starts meeting, Members join
   useEffect(() => {
     const handleMeetingEntry = async () => {
+      console.log('🚀 MEETING ENTRY: Starting handleMeetingEntry', {
+        authComplete,
+        isAuth,
+        actualMeetingId,
+        loading,
+        currentUserRole
+      });
+
       if (!authComplete || !isAuth || !actualMeetingId || loading) {
+        console.log('🚀 MEETING ENTRY: Conditions not met, skipping', {
+          authComplete,
+          isAuth,
+          actualMeetingId: !!actualMeetingId,
+          loading
+        });
         return;
       }
 
       try {
         const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
+        
+        console.log('🚀 JOIN MEETING DEBUG:', {
+          currentUserRole,
+          isTutor,
+          actualUserId,
+          actualMeetingId
+        });
         
         if (isTutor) {
           // HOST FLOW: Start meeting first, then join
@@ -229,12 +269,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           // Step 2: Join the meeting
           const { JOIN_MEETING } = await import('../apollo/livestream/mutations');
           
+          const joinMeetingInput = {
+            meetingId: actualMeetingId,
+            displayName: actualUserId || 'Host',
+            role: 'HOST'
+          };
+          
+          console.log('🚀 HOST FLOW: Joining with input:', joinMeetingInput);
+          
           const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
-            input: {
-              meetingId: actualMeetingId,
-              displayName: actualUserId || 'Host',
-              role: 'HOST'
-            }
+            input: joinMeetingInput
           });
           
           console.log('🚀 HOST FLOW: Joined meeting:', joinResult);
@@ -246,12 +290,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           const { JOIN_MEETING } = await import('../apollo/livestream/mutations');
           const { makeGraphQLRequest } = await import('../lib/simple-auth-handlers');
           
+          const joinMeetingInput = {
+          meetingId: actualMeetingId,
+            displayName: actualUserId || 'Participant',
+            role: 'PARTICIPANT'
+          };
+          
+          console.log('🚀 MEMBER FLOW: Joining with input:', joinMeetingInput);
+          
           const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
-            input: {
-              meetingId: actualMeetingId,
-              displayName: actualUserId || 'Participant',
-              role: 'PARTICIPANT'
-            }
+            input: joinMeetingInput
           });
           
           console.log('🚀 MEMBER FLOW: Joined meeting:', joinResult);
@@ -261,7 +309,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         
       } catch (error: any) {
         console.error('❌ MEETING ENTRY: Failed:', error);
-        setError(`Failed to enter meeting: ${error.message || 'Unknown error'}`);
+        console.error('❌ MEETING ENTRY: Error details:', {
+          message: error.message,
+          stack: error.stack,
+          graphQLErrors: error.graphQLErrors,
+          networkError: error.networkError,
+          name: error.name
+        });
+        
+        // Handle specific GraphQL errors
+        if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+          const firstError = error.graphQLErrors[0];
+          console.error('❌ GRAPHQL ERROR:', firstError);
+          setError(`GraphQL Error: ${firstError.message}`);
+        } else if (error.networkError) {
+          console.error('❌ NETWORK ERROR:', error.networkError);
+          setError(`Network Error: ${error.networkError.message || 'Failed to connect to server'}`);
+        } else {
+          setError(`Failed to enter meeting: ${error.message || 'Unknown error'}`);
+        }
       }
     };
     
@@ -328,7 +394,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       console.log('🔍 SCREEN SHARE: Not in browser environment or mediaDevices not available');
       return;
     }
-
+    
     try {
       if (!isScreenSharing) {
         const stream = await navigator.mediaDevices.getDisplayMedia({ 
@@ -689,9 +755,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               color: 'white',
               fontSize: '14px'
               }}>
-                {role.charAt(0)}
+                {(role || 'P').charAt(0)}
         </div>
-              <span>You ({role})</span>
+              <span>You ({role || 'Participant'})</span>
             </div>
             {participants.map((participant, index) => (
               <div key={participant._id || index} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
