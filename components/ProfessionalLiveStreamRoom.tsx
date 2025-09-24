@@ -99,7 +99,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   }>({});
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'students'>('students');
   const [mainVideoParticipant, setMainVideoParticipant] = useState<string | null>(null);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
@@ -118,14 +117,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   // Media state
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenShareParticipant, setScreenShareParticipant] = useState<string | null>(null);
+  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
+  const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
 
   // Refs for video elements
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const screenShareRef = useRef<HTMLVideoElement>(null);
   const mainVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
 
   // Set meetingId from prop or URL
   useEffect(() => {
@@ -196,11 +202,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const startCamera = async () => {
     try {
       setMediaError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
+      const constraints = {
+        video: selectedCamera ? { deviceId: { exact: selectedCamera } } : true,
+        audio: selectedMicrophone ? { deviceId: { exact: selectedMicrophone } } : true
+      };
       
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setLocalStream(stream);
       setIsVideoOn(true);
       setIsMicOn(true);
@@ -208,6 +215,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       // Attach stream to video element
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(console.error);
       }
       
       console.log('✅ Camera and microphone started');
@@ -296,8 +304,47 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
       stopScreenShare();
-          } else {
+    } else {
       await startScreenShare();
+    }
+  };
+
+  // Device management functions
+  const enumerateDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAvailableDevices(devices);
+      
+      // Set default devices
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      const audioDevices = devices.filter(device => device.kind === 'audioinput');
+      
+      if (videoDevices.length > 0 && !selectedCamera) {
+        setSelectedCamera(videoDevices[0].deviceId);
+      }
+      if (audioDevices.length > 0 && !selectedMicrophone) {
+        setSelectedMicrophone(audioDevices[0].deviceId);
+      }
+      
+      console.log('📱 Available devices:', devices);
+    } catch (error) {
+      console.error('❌ Failed to enumerate devices:', error);
+    }
+  };
+
+  const switchCamera = async (deviceId: string) => {
+    setSelectedCamera(deviceId);
+    if (localStream) {
+      stopCamera();
+      await startCamera();
+    }
+  };
+
+  const switchMicrophone = async (deviceId: string) => {
+    setSelectedMicrophone(deviceId);
+    if (localStream) {
+      stopCamera();
+      await startCamera();
     }
   };
 
@@ -369,6 +416,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     }
   };
 
+
+  // Enumerate devices on component mount
+  useEffect(() => {
+    enumerateDevices();
+  }, []);
+
+  // Cleanup media streams on unmount
+  useEffect(() => {
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [localStream, screenStream]);
 
   // Auto-join meeting when ready
   useEffect(() => {
@@ -734,14 +798,50 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           </div>
         </div>
 
+        {/* Screen Share Indicator */}
+        {isScreenSharing && (
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0, 123, 255, 0.9)',
+            color: 'white',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '14px',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span>🖥️</span>
+            <span>You are sharing your screen</span>
+            <button
+              onClick={stopScreenShare}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '0',
+                marginLeft: '8px'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Main Video Area - Zoom-like Layout */}
-        <div 
+        <div
           style={{
-          flex: 1,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#000',
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#000',
             position: 'relative',
             overflow: 'hidden'
           }}
@@ -976,24 +1076,109 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               </button>
             )}
             
-            {/* More Options */}
-            <button
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                border: 'none',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '16px'
-              }}
-            >
-              ⋯
-            </button>
+            {/* Device Selection Dropdown */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '16px'
+                }}
+                onMouseEnter={(e) => {
+                  const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (dropdown) dropdown.style.display = 'block';
+                }}
+                onMouseLeave={(e) => {
+                  const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (dropdown) dropdown.style.display = 'none';
+                }}
+              >
+                ⚙️
+              </button>
+              
+              {/* Device Selection Dropdown */}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '50px',
+                  right: '0',
+                  backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  minWidth: '200px',
+                  display: 'none',
+                  zIndex: 1000
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.display = 'block';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              >
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#ccc' }}>
+                    Camera:
+                  </label>
+                  <select
+                    value={selectedCamera}
+                    onChange={(e) => switchCamera(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '5px',
+                      backgroundColor: '#333',
+                      color: 'white',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {availableDevices
+                      .filter(device => device.kind === 'videoinput')
+                      .map(device => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#ccc' }}>
+                    Microphone:
+                  </label>
+                  <select
+                    value={selectedMicrophone}
+                    onChange={(e) => switchMicrophone(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '5px',
+                      backgroundColor: '#333',
+                      color: 'white',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {availableDevices
+                      .filter(device => device.kind === 'audioinput')
+                      .map(device => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            </div>
             
             {/* Leave Meeting Button */}
             <button
@@ -1223,6 +1408,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 </button>
             </div>
           )}
+
+      {/* Media Error Display */}
+      {mediaError && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#dc3545',
+          color: 'white',
+          padding: '15px 20px',
+          borderRadius: '8px',
+          zIndex: 1000,
+          maxWidth: '400px',
+          textAlign: 'center',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>⚠️</span>
+            <span>{mediaError}</span>
+            <button
+              onClick={() => setMediaError(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '18px',
+                padding: '0',
+                marginLeft: '10px'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
