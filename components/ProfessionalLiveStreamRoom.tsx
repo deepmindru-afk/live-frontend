@@ -57,6 +57,22 @@ const FORCE_LEAVE_MEETING = gql`
   }
 `;
 
+const GET_PARTICIPANT_BY_USER_MEETING = gql`
+  query GetParticipantByUserAndMeeting($meetingId: ID!) {
+    getParticipantByUserAndMeeting(meetingId: $meetingId) {
+      _id
+      displayName
+      role
+      status
+      userId {
+        _id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
 interface ProfessionalLiveStreamRoomProps {
   meetingId?: string;
   role?: 'HOST' | 'PARTICIPANT';
@@ -169,6 +185,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [startMeeting] = useMutation(START_MEETING);
   const [leaveMeeting] = useMutation(LEAVE_MEETING);
   const [forceLeaveMeeting] = useMutation(FORCE_LEAVE_MEETING);
+
+  // Get current user's participant data
+  const { data: currentParticipantData } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
+    variables: { meetingId: actualMeetingId },
+    skip: !actualMeetingId || !hasJoinedMeeting
+  });
 
   // Media access functions
   const startCamera = async () => {
@@ -284,7 +306,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
       setIsFullscreen(true);
-      } else {
+    } else {
       document.exitFullscreen();
       setIsFullscreen(false);
     }
@@ -294,58 +316,59 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const handleLeaveMeeting = async () => {
     try {
       console.log('🚪 FRONTEND: Leaving meeting...');
+      console.log('🚪 FRONTEND: Current participant data:', currentParticipantData);
+      console.log('🚪 FRONTEND: Meeting ID:', actualMeetingId);
       
-      // First try to leave using participant ID
-      if (currentParticipant?._id) {
-        console.log('🚪 FRONTEND: Using participant ID:', currentParticipant._id);
-        await leaveMeeting({
+      // Get the current user's participant from the dedicated query
+      const currentUserParticipant = (currentParticipantData as any)?.getParticipantByUserAndMeeting;
+      
+      if (currentUserParticipant?._id) {
+        console.log('🚪 FRONTEND: Using participant ID from getParticipantByUserAndMeeting:', currentUserParticipant._id);
+        console.log('🚪 FRONTEND: Participant details:', {
+          _id: currentUserParticipant._id,
+          displayName: currentUserParticipant.displayName,
+          role: currentUserParticipant.role,
+          status: currentUserParticipant.status,
+          userId: currentUserParticipant.userId?._id
+        });
+        
+        const result = await leaveMeeting({
           variables: {
             input: {
-              participantId: currentParticipant._id
+              participantId: currentUserParticipant._id
             }
           }
         });
-      } else if (currentParticipantId) {
-        console.log('🚪 FRONTEND: Using stored participant ID:', currentParticipantId);
-        await leaveMeeting({
-          variables: {
-            input: {
-              participantId: currentParticipantId
-            }
-          }
-        });
+        
+        console.log('✅ FRONTEND: Leave meeting success:', (result.data as any)?.leaveMeeting?.message);
+        alert('Successfully left the meeting');
+        window.location.href = '/dashboard';
+        
       } else {
-        // Fallback: force leave using meeting ID
-        console.log('🚪 FRONTEND: Using force leave for meeting:', actualMeetingId);
-        await forceLeaveMeeting({
+        console.log('🚪 FRONTEND: No participant found, using force leave for meeting:', actualMeetingId);
+        
+        const result = await forceLeaveMeeting({
           variables: {
             meetingId: actualMeetingId
           }
         });
+        
+        console.log('✅ FRONTEND: Force leave success:', result.data);
+        alert('Successfully left the meeting');
+        window.location.href = '/dashboard';
       }
-      
-      console.log('✅ FRONTEND: Successfully left meeting');
-      
-      // Stop camera and microphone
-      stopCamera();
-      stopScreenShare();
-      
-      // Show success message
-      alert('Successfully left the meeting');
-      
-      // Navigate away
-      window.location.href = '/dashboard';
       
     } catch (error: any) {
       console.error('❌ FRONTEND: Failed to leave meeting:', error);
-      
-      // Show error message to user
-      alert('Failed to leave meeting. Please try again.');
-      
-      // Still redirect even if there's an error
-      window.location.href = '/dashboard';
+      console.error('❌ FRONTEND: Error details:', {
+        message: error.message,
+        graphQLErrors: error.graphQLErrors,
+        networkError: error.networkError
+      });
+      alert('Failed to leave meeting: ' + (error.message || 'Unknown error'));
     }
   };
+
 
   // Auto-join meeting when ready
   useEffect(() => {
@@ -428,24 +451,63 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const meeting = (meetingData as any)?.getMeetingById;
   const participants = (participantsData as any)?.getParticipantsByMeeting || [];
 
+
   // Track current participant ID for leave functionality
   useEffect(() => {
+    console.log('🔍 PARTICIPANT TRACKING: Checking participants...', {
+      participantsCount: participants?.length || 0,
+      actualUserId,
+      currentParticipantId
+    });
+
     if (participants && participants.length > 0 && actualUserId) {
-      const foundParticipant = participants.find((p: any) => 
-        p.userId && p.userId._id && p.userId._id.toString() === actualUserId.toString()
-      );
-      
-      if (foundParticipant) {
-        console.log('🎯 CURRENT PARTICIPANT: Found', {
-          participantId: foundParticipant._id,
-          displayName: foundParticipant.displayName,
-          role: foundParticipant.role
+      console.log('🔍 PARTICIPANT TRACKING: Searching through participants...', {
+        participants: participants.map((p: any) => ({
+          _id: p._id,
+          userId: p.userId?._id,
+          displayName: p.displayName,
+          role: p.role
+        }))
+      });
+
+      const currentParticipant = participants.find((p: any) => {
+        const participantUserId = p.userId?._id || p.userId;
+        const matches = participantUserId && participantUserId.toString() === actualUserId.toString();
+        console.log('🔍 CHECKING PARTICIPANT:', {
+          participantId: p._id,
+          participantUserId: participantUserId,
+          actualUserId: actualUserId,
+          matches: matches,
+          displayName: p.displayName
         });
-        setCurrentParticipantId(foundParticipant._id);
-        setCurrentParticipant(foundParticipant);
+        return matches;
+      });
+      
+      if (currentParticipant) {
+        console.log('🎯 CURRENT PARTICIPANT: Found and setting', {
+          participantId: currentParticipant._id,
+          displayName: currentParticipant.displayName,
+          role: currentParticipant.role,
+          userId: currentParticipant.userId?._id,
+          actualUserId
+        });
+        setCurrentParticipantId(currentParticipant._id);
       } else {
-        console.log('🎯 CURRENT PARTICIPANT: Not found in participants list');
+        console.log('❌ CURRENT PARTICIPANT: Not found in participants list', {
+          actualUserId,
+          participants: participants.map((p: any) => ({
+            _id: p._id,
+            userId: p.userId?._id,
+            displayName: p.displayName
+          }))
+        });
       }
+    } else {
+      console.log('❌ PARTICIPANT TRACKING: Missing data', {
+        hasParticipants: !!(participants && participants.length > 0),
+        hasActualUserId: !!actualUserId,
+        participantsCount: participants?.length || 0
+      });
     }
   }, [participants, actualUserId]);
 
@@ -582,15 +644,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           zIndex: 1000,
           maxWidth: '300px'
         }}>
-          <div><strong>Debug Info:</strong></div>
-          <div>Meeting ID: {actualMeetingId}</div>
-          <div>User ID: {actualUserId}</div>
-          <div>User Role: {currentUserRole}</div>
-          <div>Participants: {participants.length}</div>
-          <div>Has Joined: {hasJoinedMeeting ? 'Yes' : 'No'}</div>
-          <div>Local Stream: {localStream ? 'Yes' : 'No'}</div>
-          <div>Camera: {isVideoOn ? 'On' : 'Off'}</div>
-          <div>Mic: {isMicOn ? 'On' : 'Off'}</div>
+        <div><strong>Debug Info:</strong></div>
+        <div>Meeting ID: {actualMeetingId}</div>
+        <div>User ID: {actualUserId}</div>
+        <div>User Role: {currentUserRole}</div>
+        <div>Participants: {participants.length}</div>
+        <div>Has Joined: {hasJoinedMeeting ? 'Yes' : 'No'}</div>
+        <div>Current Participant ID: {currentParticipantId || 'Not set'}</div>
+        <div>Current User Participant: {(currentParticipantData as any)?.getParticipantByUserAndMeeting ? JSON.stringify((currentParticipantData as any).getParticipantByUserAndMeeting, null, 2) : 'None'}</div>
+        <div>Local Stream: {localStream ? 'Yes' : 'No'}</div>
+        <div>Camera: {isVideoOn ? 'On' : 'Off'}</div>
+        <div>Mic: {isMicOn ? 'On' : 'Off'}</div>
+          <div style={{ marginTop: '10px' }}>
+            <button
+              onClick={handleLeaveMeeting}
+              style={{
+                padding: '5px 10px',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '10px'
+              }}
+            >
+              Test Leave Meeting
+            </button>
+          </div>
         </div>
       )}
 
