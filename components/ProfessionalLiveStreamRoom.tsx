@@ -169,7 +169,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         
         const joinMeetingInput: JoinParticipantInput = {
           meetingId: actualMeetingId,
-          displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
+          displayName: actualUserEmail || (isTutor ? 'Host' : 'Participant'),
           role: isTutor ? 'HOST' : 'PARTICIPANT'
         };
 
@@ -401,44 +401,50 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             height: '100%',
               padding: '20px'
             }}>
-              {participants.map((participant: any) => (
-                <div key={participant._id} style={{
-                  backgroundColor: '#333',
-                  borderRadius: '8px',
-            display: 'flex',
-                  flexDirection: 'column',
-            alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '200px',
-                  border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #555'
-                }}>
-                <div style={{
-                    width: '80px',
-                    height: '80px',
-                    borderRadius: '50%',
-                    backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                    fontSize: '32px',
-                    fontWeight: 'bold',
-                    marginBottom: '10px'
-                }}>
-                    {participant.displayName?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-                      {participant.displayName || 'Anonymous'}
+              {participants.map((participant: any) => {
+                // Get the real display name from the populated user data
+                const realDisplayName = participant.userId?.displayName || participant.displayName || 'Anonymous';
+                const realRole = participant.role === 'HOST' ? 'Host' : 'Participant';
+                
+                return (
+                  <div key={participant._id} style={{
+                    backgroundColor: '#333',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '200px',
+                    border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #555'
+                  }}>
+                    <div style={{
+                      width: '80px',
+                      height: '80px',
+                      borderRadius: '50%',
+                      backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '32px',
+                      fontWeight: 'bold',
+                      marginBottom: '10px'
+                    }}>
+                      {realDisplayName.charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#ccc' }}>
-                      {participant.role === 'HOST' ? 'Host' : 'Participant'}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#888', marginTop: '5px' }}>
-                      {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                        {realDisplayName}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#ccc' }}>
+                        {realRole}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#888', marginTop: '5px' }}>
+                        {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               </div>
             ) : (
               <div style={{ textAlign: 'center' }}>
@@ -577,41 +583,47 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               <h3 style={{ margin: '0 0 15px 0' }}>Participants</h3>
               {participants.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {participants.map((participant: any) => (
-                    <div key={participant._id} style={{
-                      padding: '10px',
-                      backgroundColor: '#333',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px'
-                    }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
+                  {participants.map((participant: any) => {
+                    // Get the real display name from the populated user data
+                    const realDisplayName = participant.userId?.displayName || participant.displayName || 'Anonymous';
+                    const realRole = participant.role === 'HOST' ? 'Host' : 'Participant';
+                    
+                    return (
+                      <div key={participant._id} style={{
+                        padding: '10px',
+                        backgroundColor: '#333',
+                        borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '16px',
-                        fontWeight: 'bold'
+                        gap: '10px'
                       }}>
-                        {participant.displayName?.charAt(0)?.toUpperCase() || 'U'}
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          backgroundColor: participant.role === 'HOST' ? '#007bff' : '#28a745',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '16px',
+                          fontWeight: 'bold'
+                        }}>
+                          {realDisplayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 'bold' }}>
+                            {realDisplayName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#ccc' }}>
+                            {realRole}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '12px' }}>
+                          {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
+                        </div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 'bold' }}>
-                          {participant.displayName || 'Anonymous'}
-                      </div>
-                        <div style={{ fontSize: '12px', color: '#ccc' }}>
-                          {participant.role === 'HOST' ? 'Host' : 'Participant'}
-                    </div>
-                      </div>
-                      <div style={{ fontSize: '12px' }}>
-                        {participant.micState === 'OFF' ? '🔇' : '🎤'} {participant.cameraState === 'OFF' ? '📹' : '📷'}
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
               ) : (
                 <div style={{ textAlign: 'center', color: '#ccc' }}>
@@ -654,7 +666,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
                 const joinMeetingInput: JoinParticipantInput = {
                   meetingId: actualMeetingId,
-                  displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
+                  displayName: actualUserEmail || (isTutor ? 'Host' : 'Participant'),
                   role: isTutor ? 'HOST' : 'PARTICIPANT'
                 };
                 
