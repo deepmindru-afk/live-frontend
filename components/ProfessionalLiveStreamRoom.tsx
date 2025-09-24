@@ -45,6 +45,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [actualUserId, setActualUserId] = useState<string>('');
   const [actualUserEmail, setActualUserEmail] = useState<string>('');
   const [actualMeetingId, setActualMeetingId] = useState<string>('');
+  const [isJoiningMeeting, setIsJoiningMeeting] = useState(false);
+  const [hasJoinedMeeting, setHasJoinedMeeting] = useState(false);
+  const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
+  const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
 
   // Use the live room data hook for real-time updates
   const liveRoomData = useLiveRoomData(actualMeetingId || '');
@@ -221,6 +225,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     });
   }, [liveRoomData?.meeting, meeting, liveRoomData?.loading, liveRoomData?.error, actualMeetingId]);
 
+  // Add debug logging for participant data
+  useEffect(() => {
+    console.log('🔍 PARTICIPANT DEBUG:', {
+      participantsData: liveRoomData?.participants,
+      participants,
+      participantsLoading: liveRoomData?.loading,
+      participantsError: liveRoomData?.error?.message,
+      actualMeetingId
+    });
+  }, [liveRoomData?.participants, participants, liveRoomData?.loading, liveRoomData?.error, actualMeetingId]);
+
   // Meeting entry logic - Host starts meeting, Members join
   useEffect(() => {
     const handleMeetingEntry = async () => {
@@ -271,7 +286,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           
           const joinMeetingInput = {
             meetingId: actualMeetingId,
-            displayName: actualUserId || 'Host',
+            displayName: actualUserEmail || 'Host',
             role: 'HOST'
           };
           
@@ -292,7 +307,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           
           const joinMeetingInput = {
           meetingId: actualMeetingId,
-            displayName: actualUserId || 'Participant',
+            displayName: actualUserEmail || 'Participant',
             role: 'PARTICIPANT'
           };
           
@@ -663,6 +678,80 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               </div>
             )}
         </div>
+
+        {/* Manual Join Button */}
+        {!hasJoinedMeeting && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '20px',
+            backgroundColor: '#2a2a2a'
+        }}>
+          <button
+              onClick={async () => {
+                console.log('🚀 MANUAL JOIN: Button clicked');
+                setIsJoiningMeeting(true);
+                setError(null);
+                
+                try {
+                  const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
+                  
+                  if (isTutor) {
+                    // Start meeting first
+                    const { START_MEETING } = await import('../apollo/livestream/mutations');
+                    const { makeGraphQLRequest } = await import('../lib/simple-auth-handlers');
+                    
+                    const startResult = await makeGraphQLRequest(START_MEETING, {
+                      meetingId: actualMeetingId
+                    });
+                    
+                    console.log('🚀 MANUAL JOIN: Meeting started:', startResult);
+                    setMeetingStatus('ACTIVE');
+                  }
+                  
+                  // Then join
+                  const { JOIN_MEETING } = await import('../apollo/livestream/mutations');
+                  const { makeGraphQLRequest } = await import('../lib/simple-auth-handlers');
+                  
+                  const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+                    input: {
+                      meetingId: actualMeetingId,
+                      displayName: actualUserEmail || (isTutor ? 'Host' : 'Participant'),
+                      role: isTutor ? 'HOST' : 'PARTICIPANT'
+                    }
+                  });
+                  
+                  console.log('🚀 MANUAL JOIN: Joined meeting:', joinResult);
+                  
+                  if (joinResult?.joinMeeting?._id) {
+                    setCurrentParticipantId(joinResult.joinMeeting._id);
+                    setHasJoinedMeeting(true);
+                    setError(null);
+                  }
+                } catch (error: any) {
+                  console.error('🚀 MANUAL JOIN: Failed:', error);
+                  setError(`Failed to join: ${error.message || 'Unknown error'}`);
+                } finally {
+                  setIsJoiningMeeting(false);
+                }
+              }}
+              disabled={isJoiningMeeting}
+            style={{
+                padding: '15px 30px',
+                backgroundColor: '#007bff',
+              color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: isJoiningMeeting ? 'not-allowed' : 'pointer',
+                opacity: isJoiningMeeting ? 0.6 : 1,
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}
+            >
+              {isJoiningMeeting ? 'Joining...' : 'Join Meeting'}
+          </button>
+          </div>
+        )}
 
           {/* Video Controls */}
         <div style={{
