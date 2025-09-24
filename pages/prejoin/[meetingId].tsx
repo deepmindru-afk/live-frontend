@@ -163,8 +163,8 @@ const PrejoinPage = () => {
       const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
         input: {
           meetingId: meetingId as string,
-          displayName: 'Participant',
-          role: 'PARTICIPANT'
+          displayName: 'Participant'
+          // Don't send role - let backend determine it
         } as JoinParticipantInput
       });
 

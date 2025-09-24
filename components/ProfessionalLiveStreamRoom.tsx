@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLiveRoomData } from '../hooks/useLiveRoomData';
 
 interface ProfessionalLiveStreamRoomProps {
   meetingId?: string;
@@ -25,6 +26,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   role = 'HOST',
   userId = 'p1'
 }) => {
+  // Debug logging for props
+  console.log('🔍 PROFESSIONAL LIVE STREAM ROOM: Props received:', { meetingId, role, userId });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -35,31 +38,136 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   
+  // Authentication state
+  const [isAuth, setIsAuth] = useState(false);
+  const [authComplete, setAuthComplete] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('MEMBER');
+  const [actualUserId, setActualUserId] = useState<string>('');
+  const [actualUserEmail, setActualUserEmail] = useState<string>('');
+  const [actualMeetingId, setActualMeetingId] = useState<string>('');
+
+  // Use the live room data hook for real-time updates
+  const liveRoomData = useLiveRoomData(actualMeetingId || '');
+  
   // Video refs and streams
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
 
+  // Authentication effect
   useEffect(() => {
-    if (meetingId) {
+    const checkAuth = async () => {
+      try {
+        console.log('🔐 AUTH CHECK: Starting authentication check');
+        setIsAuth(false);
+        setAuthComplete(false);
+        
+        // Get actual user from localStorage
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+
+        if (user) {
+          setIsAuth(true);
+          setAuthComplete(true);
+          setCurrentUserRole(user.systemRole || 'MEMBER'); // Use actual role
+          setActualUserId(user._id || 'user123');
+          setActualUserEmail(user.email || 'user@example.com');
+          console.log('🔐 AUTH CHECK: User authenticated with role:', user.systemRole);
+        } else {
+          // Fallback: set as member for testing
+          setIsAuth(true);
+            setAuthComplete(true);
+          setCurrentUserRole('MEMBER');
+          setActualUserId('user123');
+          setActualUserEmail('user@example.com');
+          console.log('🔐 AUTH CHECK: No user found, using default member role');
+        }
+        
+        // Set meeting ID from prop or URL
+        if (meetingId) {
+          console.log('🔍 SETTING MEETING ID FROM PROP:', meetingId);
+          setActualMeetingId(meetingId);
+        } else {
+          // Extract from URL if not provided as prop
+          const pathParts = window.location.pathname.split('/');
+          const meetingIdFromUrl = pathParts[pathParts.length - 1];
+          console.log('🔍 EXTRACTING FROM URL:', { pathParts, meetingIdFromUrl });
+          if (meetingIdFromUrl && meetingIdFromUrl !== 'livestream') {
+            console.log('🔍 SETTING MEETING ID FROM URL:', meetingIdFromUrl);
+            setActualMeetingId(meetingIdFromUrl);
+          } else {
+            console.log('🔍 NO VALID MEETING ID FOUND');
+          }
+        }
+        
+        console.log('🔐 AUTH CHECK: Authentication successful');
+      } catch (error: any) {
+        console.error('🔐 AUTH CHECK: Auth failed:', error);
+        setError(`Authentication failed: ${error.message}`);
+      } finally {
+        setAuthComplete(true);
+      }
+    };
+    
+    checkAuth();
+  }, [meetingId]);
+
+  useEffect(() => {
+    console.log('🔍 LOADING CHECK:', { actualMeetingId, authComplete, loading });
+    
+    if (actualMeetingId && authComplete) {
+      console.log('🔍 STARTING MEETING LOAD...');
       // Simulate loading meeting data
       setTimeout(() => {
         setMeeting({
-          _id: meetingId,
-          title: `Meeting ${meetingId}`,
+          _id: actualMeetingId,
+          title: `Meeting ${actualMeetingId}`,
           status: 'ACTIVE',
           inviteCode: 'ABC123'
         });
         setLoading(false);
+        console.log('🔍 LOADING COMPLETE!');
       }, 1000);
       
-      // Initialize video stream
-      initializeVideo();
+      // Initialize video stream only on client side
+      if (typeof window !== 'undefined') {
+        initializeVideo();
+      }
+    } else {
+      console.log('🔍 WAITING FOR:', { actualMeetingId: !!actualMeetingId, authComplete });
+      
+      // If we have meetingId but auth is not complete, force auth complete after 2 seconds
+      if (actualMeetingId && !authComplete) {
+        console.log('🔍 FORCING AUTH COMPLETE...');
+        setTimeout(() => {
+          setAuthComplete(true);
+          setIsAuth(true);
+          setCurrentUserRole('MEMBER');
+          setActualUserId('user123');
+          setActualUserEmail('user@example.com');
+          console.log('🔍 AUTH FORCED TO COMPLETE');
+        }, 2000);
+      }
     }
-
+    
+    // Force loading to complete after 10 seconds
+    const timeout = setTimeout(() => {
+      console.log('🔍 FORCE LOADING COMPLETE - TIMEOUT REACHED');
+      setLoading(false);
+      if (!meeting) {
+        setMeeting({
+          _id: actualMeetingId || 'timeout',
+          title: `Meeting ${actualMeetingId || 'timeout'}`,
+          status: 'ACTIVE',
+          inviteCode: 'ABC123'
+        });
+      }
+    }, 10000);
+    
     // Cleanup function to stop streams when component unmounts
     return () => {
+      clearTimeout(timeout);
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -67,9 +175,106 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         remoteStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [meetingId]);
+  }, [actualMeetingId, authComplete]);
+
+  // Update local state with real-time data
+  useEffect(() => {
+    if (liveRoomData) {
+      console.log('🔄 UPDATING WITH LIVE DATA:', liveRoomData);
+      
+      // Update participants
+      if (liveRoomData.participants && Array.isArray(liveRoomData.participants)) {
+        setParticipants(liveRoomData.participants);
+        console.log('👥 PARTICIPANTS UPDATED:', liveRoomData.participants);
+      }
+      
+      // Update chat messages
+      if (liveRoomData.chatMessages && Array.isArray(liveRoomData.chatMessages)) {
+        setChatMessages(liveRoomData.chatMessages);
+        console.log('💬 CHAT MESSAGES UPDATED:', liveRoomData.chatMessages);
+      }
+      
+      // Update meeting data
+      if (liveRoomData.meeting) {
+        setMeeting(liveRoomData.meeting);
+        console.log('📋 MEETING UPDATED:', liveRoomData.meeting);
+      }
+    }
+  }, [liveRoomData]);
+
+  // Meeting entry logic - Host starts meeting, Members join
+  useEffect(() => {
+    const handleMeetingEntry = async () => {
+      if (!authComplete || !isAuth || !actualMeetingId || loading) {
+        return;
+      }
+
+      try {
+        const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
+        
+        if (isTutor) {
+          // HOST FLOW: Start meeting first, then join
+          console.log('🚀 HOST FLOW: Starting meeting...');
+          
+          // Step 1: Start the meeting
+          const { START_MEETING } = await import('../apollo/livestream/mutations');
+          const { makeGraphQLRequest } = await import('../lib/simple-auth-handlers');
+          
+          const startResult = await makeGraphQLRequest(START_MEETING, {
+            meetingId: actualMeetingId
+          });
+          
+          console.log('🚀 HOST FLOW: Meeting started:', startResult);
+          
+          // Step 2: Join the meeting
+          const { JOIN_MEETING } = await import('../apollo/livestream/mutations');
+          
+          const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+            input: {
+              meetingId: actualMeetingId,
+              displayName: actualUserId || 'Host',
+              role: 'HOST'
+            }
+          });
+          
+          console.log('🚀 HOST FLOW: Joined meeting:', joinResult);
+          
+        } else {
+          // MEMBER FLOW: Just join (if meeting is started)
+          console.log('🚀 MEMBER FLOW: Joining meeting...');
+          
+          const { JOIN_MEETING } = await import('../apollo/livestream/mutations');
+          const { makeGraphQLRequest } = await import('../lib/simple-auth-handlers');
+          
+          const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+            input: {
+              meetingId: actualMeetingId,
+              displayName: actualUserId || 'Participant',
+              role: 'PARTICIPANT'
+            }
+          });
+          
+          console.log('🚀 MEMBER FLOW: Joined meeting:', joinResult);
+        }
+        
+        console.log('✅ Successfully entered meeting!');
+        
+      } catch (error: any) {
+        console.error('❌ MEETING ENTRY: Failed:', error);
+        setError(`Failed to enter meeting: ${error.message || 'Unknown error'}`);
+      }
+    };
+    
+    handleMeetingEntry();
+  }, [authComplete, isAuth, actualMeetingId, currentUserRole, loading]);
 
   const initializeVideo = async () => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || !navigator.mediaDevices) {
+      console.log('🔍 VIDEO: Not in browser environment or mediaDevices not available');
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: true, 
@@ -91,28 +296,39 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   };
 
   const toggleMute = () => {
-    if (localStreamRef.current) {
-      const audioTracks = localStreamRef.current.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = isMuted; // Enable if currently muted, disable if currently unmuted
-      });
-    }
+    if (typeof window === 'undefined' || !localStreamRef.current) {
+      console.log('🔍 MUTE: Not in browser environment or no stream available');
+        return;
+      }
+
+    const audioTracks = localStreamRef.current.getAudioTracks();
+    audioTracks.forEach(track => {
+      track.enabled = isMuted; // Enable if currently muted, disable if currently unmuted
+    });
     setIsMuted(!isMuted);
     console.log('🎤 Mute toggled:', !isMuted);
   };
 
   const toggleCamera = () => {
-    if (localStreamRef.current) {
-      const videoTracks = localStreamRef.current.getVideoTracks();
-      videoTracks.forEach(track => {
-        track.enabled = isCameraOn; // Enable if currently off, disable if currently on
-      });
+    if (typeof window === 'undefined' || !localStreamRef.current) {
+      console.log('🔍 CAMERA: Not in browser environment or no stream available');
+      return;
     }
+
+    const videoTracks = localStreamRef.current.getVideoTracks();
+    videoTracks.forEach(track => {
+      track.enabled = isCameraOn; // Enable if currently off, disable if currently on
+    });
     setIsCameraOn(!isCameraOn);
     console.log('📹 Camera toggled:', !isCameraOn);
   };
 
   const toggleScreenShare = async () => {
+    if (typeof window === 'undefined' || !navigator.mediaDevices) {
+      console.log('🔍 SCREEN SHARE: Not in browser environment or mediaDevices not available');
+      return;
+    }
+
     try {
       if (!isScreenSharing) {
         const stream = await navigator.mediaDevices.getDisplayMedia({ 
@@ -129,7 +345,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         
         setIsScreenSharing(true);
         console.log('📺 Screen sharing started');
-      } else {
+        } else {
         // Stop the screen sharing stream
         if (remoteStreamRef.current) {
           remoteStreamRef.current.getTracks().forEach(track => track.stop());
@@ -199,6 +415,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     );
   }
 
+  // Handle chat errors gracefully
+  const handleChatError = (error: any) => {
+    if (error?.message?.includes('incoming is not iterable')) {
+      console.warn('Chat data structure error, continuing without chat...');
+      return false; // Don't treat as critical error
+    }
+    return true; // Treat as critical error
+  };
+
   if (error) {
     return (
       <div style={{
@@ -251,13 +476,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   return (
     <div style={{
       height: '100vh',
-      backgroundColor: '#1a1a1a',
+        backgroundColor: '#1a1a1a',
       color: 'white',
       display: 'flex',
       flexDirection: 'column'
-    }}>
-      {/* Header */}
-      <div style={{
+      }}>
+        {/* Header */}
+        <div style={{
         padding: '20px',
         borderBottom: '1px solid #333',
           display: 'flex',
@@ -268,7 +493,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           <div>
           <h1 style={{ margin: 0, fontSize: '24px' }}>{meeting.title}</h1>
           <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '14px' }}>
-            Meeting ID: {meetingId} | Status: {meeting.status} | Role: {role}
+            Meeting ID: {actualMeetingId} | Status: {meeting.status} | Role: {currentUserRole}
             </p>
           </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -302,24 +527,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         </div>
 
       {/* Main Content */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
+        <div style={{
+          flex: 1,
+          display: 'flex',
         padding: '20px',
         gap: '20px'
       }}>
         {/* Video Area */}
-        <div style={{
+          <div style={{
           flex: 2,
-          display: 'flex',
+            display: 'flex',
           flexDirection: 'column',
           gap: '10px'
         }}>
           {/* Main Video */}
-          <div style={{
+                <div style={{
             flex: 1,
             backgroundColor: '#2a2a2a',
-            borderRadius: '8px',
+                  borderRadius: '8px',
             position: 'relative',
             overflow: 'hidden'
           }}>
@@ -387,7 +612,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             style={{
                 padding: '12px 20px',
                 backgroundColor: isMuted ? '#dc3545' : '#28a745',
-                color: 'white',
+              color: 'white',
               border: 'none',
                 borderRadius: '50px',
               cursor: 'pointer',
@@ -439,14 +664,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       </div>
 
         {/* Sidebar */}
-        <div style={{
+      <div style={{
           width: '300px',
-          display: 'flex',
+        display: 'flex',
           flexDirection: 'column',
           gap: '20px'
-        }}>
+      }}>
           {/* Participants */}
-          <div style={{
+        <div style={{
             backgroundColor: '#2a2a2a',
             borderRadius: '8px',
             padding: '15px'
@@ -461,19 +686,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                 justifyContent: 'center',
-                color: 'white',
-                fontSize: '14px'
+              color: 'white',
+              fontSize: '14px'
               }}>
                 {role.charAt(0)}
-              </div>
+        </div>
               <span>You ({role})</span>
             </div>
             {participants.map((participant, index) => (
-              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+              <div key={participant._id || index} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                       <div style={{
                         width: '32px',
                         height: '32px',
-                  backgroundColor: '#6c757d',
+                  backgroundColor: participant.role === 'HOST' ? '#007bff' : '#6c757d',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
@@ -481,9 +706,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                         color: 'white',
                   fontSize: '14px'
                       }}>
-                  P
+                  {participant.role === 'HOST' ? 'H' : 'P'}
                       </div>
-                <span>Participant {index + 1}</span>
+                <span>{participant.displayName || `Participant ${index + 1}`} ({participant.role === 'HOST' ? 'Host' : 'Participant'})</span>
                   </div>
                 ))}
               </div>
@@ -506,18 +731,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 marginBottom: '15px',
               maxHeight: '200px'
             }}>
-              {chatMessages.length === 0 ? (
-                <p style={{ color: '#888', fontSize: '14px', textAlign: 'center' }}>No messages yet</p>
-              ) : (
-                chatMessages.map((message) => (
-                  <div key={message.id} style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '12px', color: '#888', marginBottom: '2px' }}>
-                      {message.sender} • {message.timestamp}
-                    </div>
-                    <div style={{ fontSize: '14px' }}>{message.text}</div>
+              {(() => {
+                // Add safety check for chat messages
+                const safeChatMessages = (() => {
+                  try {
+                    if (!Array.isArray(chatMessages)) {
+                      console.warn('Chat messages is not an array:', chatMessages);
+                      return [];
+                    }
+                    return chatMessages;
+                  } catch (error) {
+                    console.error('Error processing chat messages for rendering:', error);
+                    return [];
+                  }
+                })();
+
+                return safeChatMessages.length === 0 ? (
+                  <p style={{ color: '#888', fontSize: '14px', textAlign: 'center' }}>No messages yet</p>
+                ) : (
+                  safeChatMessages.map((message) => (
+                    <div key={message.id} style={{ marginBottom: '10px' }}>
+                      <div style={{ fontSize: '12px', color: '#888', marginBottom: '2px' }}>
+                        {message.sender} • {message.timestamp}
                   </div>
-                ))
-              )}
+                      <div style={{ fontSize: '14px' }}>{message.text}</div>
+              </div>
+                  ))
+                );
+              })()}
               </div>
             
             {/* Chat Input */}
