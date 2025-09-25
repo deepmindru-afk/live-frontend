@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { gql } from '@apollo/client';
-import { isAuthenticated, getCurrentUser, forceLogin } from '../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, forceLogin, makeGraphQLRequest } from '../lib/simple-auth-handlers';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
   GET_PARTICIPANTS_BY_MEETING,
@@ -454,51 +454,75 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       try {
         const isTutor = currentUserRole === 'TUTOR' || currentUserRole === 'ADMIN';
         
-        const joinMeetingInput: JoinParticipantInput = {
-          meetingId: actualMeetingId,
-          displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
-          role: isTutor ? 'HOST' : 'PARTICIPANT'
-        };
-
-        console.log('🚀 FRONTEND: Attempting to join meeting...', joinMeetingInput);
-        
-        const result: any = await joinMeeting({
-          variables: { input: joinMeetingInput }
+        // CRITICAL FIX: Check backend meeting status first
+        console.log('🔍 FRONTEND: Checking backend meeting status before joining...');
+        const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
+          meetingId: actualMeetingId
         });
 
-        console.log('🚀 FRONTEND: Join result:', result);
-        
-        if (result.data?.joinMeeting?._id) {
-          console.log('✅ FRONTEND: Successfully joined meeting!', {
-            participantId: result.data.joinMeeting._id,
+        if (!meetingResult.getMeetingById) {
+          throw new Error('Meeting not found');
+        }
+
+        const backendStatus = meetingResult.getMeetingById.status;
+        console.log('🔍 FRONTEND: Backend meeting status:', backendStatus);
+        console.log('🔍 FRONTEND: User role:', currentUserRole, 'isTutor:', isTutor);
+
+        // Only allow join if meeting is LIVE or user is a host
+        if (backendStatus === 'LIVE' || isTutor) {
+          console.log('🚀 FRONTEND: Meeting is LIVE or user is host, proceeding with join');
+          
+          const joinMeetingInput: JoinParticipantInput = {
             meetingId: actualMeetingId,
-            role: result.data.joinMeeting.role
+            displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
+            role: isTutor ? 'HOST' : 'PARTICIPANT'
+          };
+
+          console.log('🚀 FRONTEND: Attempting to join meeting...', joinMeetingInput);
+          
+          const result: any = await joinMeeting({
+            variables: { input: joinMeetingInput }
           });
+
+          console.log('🚀 FRONTEND: Join result:', result);
           
-          setCurrentParticipantId(result.data.joinMeeting._id);
-          setCurrentParticipant(result.data.joinMeeting);
-          setHasJoinedMeeting(true);
-          setAuthError(null);
-          
-          // Auto-start camera after joining
-          await startCamera();
-          
-          // Auto-start meeting for tutors
-          if (isTutor) {
-            console.log('🚀 FRONTEND: Auto-starting meeting...');
-            try {
-              const startResult = await startMeeting({
-                variables: { meetingId: actualMeetingId }
-              });
-              console.log('✅ FRONTEND: Meeting started successfully:', startResult);
-              setMeetingStatus('ACTIVE');
-              setIsRecording(true);
-            } catch (startError: any) {
-              console.error('❌ FRONTEND: Failed to start meeting:', startError);
+          if (result.data?.joinMeeting?._id) {
+            console.log('✅ FRONTEND: Successfully joined meeting!', {
+              participantId: result.data.joinMeeting._id,
+              meetingId: actualMeetingId,
+              role: result.data.joinMeeting.role
+            });
+            
+            setCurrentParticipantId(result.data.joinMeeting._id);
+            setCurrentParticipant(result.data.joinMeeting);
+            setHasJoinedMeeting(true);
+            setAuthError(null);
+            
+            // Auto-start camera after joining
+            await startCamera();
+            
+            // Auto-start meeting for tutors
+            if (isTutor) {
+              console.log('🚀 FRONTEND: Auto-starting meeting...');
+              try {
+                const startResult = await startMeeting({
+                  variables: { meetingId: actualMeetingId }
+                });
+                console.log('✅ FRONTEND: Meeting started successfully:', startResult);
+                setMeetingStatus('ACTIVE');
+                setIsRecording(true);
+              } catch (startError: any) {
+                console.error('❌ FRONTEND: Failed to start meeting:', startError);
+              }
             }
+          } else {
+            throw new Error('No participant ID received from join meeting response');
           }
         } else {
-          throw new Error('No participant ID received from join meeting response');
+          // Meeting not LIVE and user is not host, redirect to waiting room
+          console.log('🚀 FRONTEND: Meeting not LIVE and user is not host, redirecting to waiting room');
+          window.location.href = `/waiting?meetingId=${actualMeetingId}&code=${meetingResult.getMeetingById.inviteCode}`;
+          return;
         }
       } catch (error: any) {
         console.error('❌ FRONTEND: Join meeting failed:', error);

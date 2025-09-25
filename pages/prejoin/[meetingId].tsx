@@ -404,14 +404,13 @@ const PrejoinPage = () => {
   }, [meetingId]);
 
   const handleJoinMeeting = async () => {
-    if (!meetingId || !meetingInfo) return;
+    if (!meetingId) return;
 
     setIsJoining(true);
     setJoinError(null);
 
     try {
       console.log('🔍 PREJOIN: Joining meeting with ID:', meetingId);
-      console.log('🔍 PREJOIN: Meeting status:', meetingInfo.status);
       
       // Check user authentication and role
       const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
@@ -422,41 +421,52 @@ const PrejoinPage = () => {
         userRole = currentUser?.systemRole || 'MEMBER';
       }
       
-      // Join the meeting
-      const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
-        input: {
-          meetingId: meetingId as string,
-          displayName: 'Participant',
-          role: userRole === 'TUTOR' || userRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
-        } as JoinParticipantInput
+      // CRITICAL FIX: Check backend meeting status first
+      console.log('🔍 PREJOIN: Checking backend meeting status...');
+      const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
+        meetingId: meetingId as string
       });
 
-      console.log('🔍 PREJOIN: Join meeting result:', joinResult);
+      if (!meetingResult.getMeetingById) {
+        throw new Error('Meeting not found');
+      }
 
-      if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
-        console.log('✅ Successfully joined meeting:', joinResult.joinMeeting);
+      const backendStatus = meetingResult.getMeetingById.status;
+      console.log('🔍 PREJOIN: Backend meeting status:', backendStatus);
+      console.log('🔍 PREJOIN: User role:', userRole);
+
+      // Route based on backend meeting status and user role
+      if (backendStatus === 'LIVE') {
+        // Meeting is LIVE, allow direct join
+        console.log('🚀 PREJOIN: Meeting is LIVE, allowing direct join');
         
-        // Route based on meeting status and user role
-        if (meetingInfo.status === 'STARTED' || meetingInfo.status === 'ACTIVE') {
-          // Meeting is active, go directly to live room
-          console.log('🚀 PREJOIN: Meeting is active, going to live room');
+        const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+          input: {
+            meetingId: meetingId as string,
+            displayName: 'Participant',
+            role: userRole === 'TUTOR' || userRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
+          } as JoinParticipantInput
+        });
+
+        if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
+          console.log('✅ Successfully joined LIVE meeting:', joinResult.joinMeeting);
           router.push(`/livestream/${meetingId}`);
-        } else if (meetingInfo.status === 'SCHEDULED' || meetingInfo.status === 'WAITING') {
-          if (userRole === 'TUTOR' || userRole === 'ADMIN') {
-            // Host can go directly to live room even if meeting not started
-            console.log('🚀 PREJOIN: Host joining, going to live room');
-            router.push(`/livestream/${meetingId}`);
-          } else {
-            // Participants wait in waiting room
-            console.log('🚀 PREJOIN: Participant joining, going to waiting room');
-            router.push(`/waiting?meetingId=${meetingId}&code=${meetingInfo.inviteCode}`);
-          }
         } else {
-          // Meeting ended or invalid status
-          throw new Error('Meeting is no longer available');
+          throw new Error('Failed to join meeting');
         }
       } else {
-        throw new Error('Failed to join meeting');
+        // Meeting not LIVE, redirect to waiting room
+        console.log('🚀 PREJOIN: Meeting not LIVE (status:', backendStatus, '), redirecting to waiting room');
+        
+        if (userRole === 'TUTOR' || userRole === 'ADMIN') {
+          // Host can still go to live room even if meeting not started
+          console.log('🚀 PREJOIN: Host bypassing waiting room');
+          router.push(`/livestream/${meetingId}`);
+        } else {
+          // Non-host participants go to waiting room
+          console.log('🚀 PREJOIN: Participant going to waiting room');
+          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
+        }
       }
     } catch (error: any) {
       console.error('❌ Failed to join meeting:', error);
