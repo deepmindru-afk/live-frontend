@@ -327,7 +327,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       }
       
       console.log('📱 Available devices:', devices);
-    } catch (error) {
+        } catch (error) {
       console.error('❌ Failed to enumerate devices:', error);
     }
   };
@@ -391,7 +391,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         alert('Successfully left the meeting');
         window.location.href = '/dashboard';
         
-      } else {
+          } else {
         console.log('🚪 FRONTEND: No participant found, using force leave for meeting:', actualMeetingId);
         
         const result = await forceLeaveMeeting({
@@ -405,7 +405,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         window.location.href = '/dashboard';
       }
       
-    } catch (error: any) {
+        } catch (error: any) {
       console.error('❌ FRONTEND: Failed to leave meeting:', error);
       console.error('❌ FRONTEND: Error details:', {
         message: error.message,
@@ -593,6 +593,39 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     skip: !actualMeetingId
   });
 
+  // Check meeting status before allowing entry
+  if ((meetingData as any)?.getMeetingById?.status === 'ENDED') {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#1a1a1a',
+        color: 'white'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2>Meeting Ended</h2>
+          <p>The meeting has already ended.</p>
+          <button
+            onClick={() => window.location.href = '/instructor'}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              marginTop: '20px'
+            }}
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Loading state
   if (meetingLoading || !authComplete) {
     return (
@@ -720,22 +753,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         <div>Camera: {isVideoOn ? 'On' : 'Off'}</div>
         <div>Mic: {isMicOn ? 'On' : 'Off'}</div>
           <div style={{ marginTop: '10px' }}>
-            <button
+          <button
               onClick={handleLeaveMeeting}
-              style={{
+            style={{
                 padding: '5px 10px',
                 backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
+              color: 'white',
+              border: 'none',
                 borderRadius: '3px',
                 cursor: 'pointer',
                 fontSize: '10px'
-              }}
-            >
+            }}
+          >
               Test Leave Meeting
-            </button>
-          </div>
+          </button>
         </div>
+      </div>
       )}
 
       {/* Main Video Area */}
@@ -800,7 +833,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
 
         {/* Screen Share Indicator */}
         {isScreenSharing && (
-          <div style={{
+                  <div style={{
             position: 'absolute',
             top: '10px',
             left: '50%',
@@ -811,8 +844,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             borderRadius: '20px',
             fontSize: '14px',
             zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
             gap: '8px'
           }}>
             <span>🖥️</span>
@@ -831,17 +864,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             >
               ✕
             </button>
-          </div>
-        )}
+                  </div>
+                )}
 
         {/* Main Video Area - Zoom-like Layout */}
         <div
           style={{
-            flex: 1,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: '#000',
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#000',
             position: 'relative',
             overflow: 'hidden'
           }}
@@ -1070,10 +1103,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
                   fontSize: '16px'
-                }}
-              >
+            }}
+          >
                 {isRecording ? '⏹️' : '⏺️'}
-              </button>
+          </button>
             )}
             
             {/* Device Selection Dropdown */}
@@ -1442,8 +1475,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             >
               ✕
             </button>
-          </div>
         </div>
+      </div>
       )}
     </div>
   );

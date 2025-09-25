@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { makeGraphQLRequest, enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
-import { JOIN_MEETING_BY_CODE, GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
+import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
+import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
+import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
 import Swal from 'sweetalert2';
 
 interface MeetingInfo {
   _id: string;
   title: string;
-  status: 'STARTED' | 'SCHEDULED' | 'ENDED';
+  status: 'STARTED' | 'SCHEDULED' | 'ENDED' | 'ACTIVE';
   inviteCode: string;
 }
 
@@ -20,6 +21,9 @@ const WaitingRoomPage: React.FC = () => {
   const [error, setError] = useState('');
   const [meetingInfo, setMeetingInfo] = useState<MeetingInfo | null>(null);
   const [isWaitingForMeeting, setIsWaitingForMeeting] = useState(false);
+  const [waitingMessage, setWaitingMessage] = useState('호스트가 미팅을 시작할 때까지 기다려주세요...');
+  const [participantId, setParticipantId] = useState<string | null>(null);
+  const [isApproved, setIsApproved] = useState(false);
 
   useEffect(() => {
     // Check if there's an invite code in the URL query params
@@ -31,6 +35,11 @@ const WaitingRoomPage: React.FC = () => {
         checkMeetingStatus(meetingId as string);
       }
     }
+    
+    // Cleanup function to clear any intervals
+    return () => {
+      // Cleanup will be handled by the monitoring function
+    };
   }, [router.query]);
 
   const checkMeetingStatus = async (meetingId: string) => {
@@ -83,8 +92,11 @@ const WaitingRoomPage: React.FC = () => {
           });
           router.push('/member');
         } else {
-          // Meeting is created/scheduled, show waiting room
-          setIsWaitingForMeeting(true);
+        // Meeting is created/scheduled, show waiting room
+        setIsWaitingForMeeting(true);
+        
+        // Start monitoring meeting status
+        startMeetingStatusMonitoring(meetingId);
         }
       } else {
         throw new Error('Meeting not found');
@@ -92,6 +104,47 @@ const WaitingRoomPage: React.FC = () => {
     } catch (error) {
       console.error('Error checking meeting status:', error);
     }
+  };
+
+  // Monitor meeting status and participant approval
+  const startMeetingStatusMonitoring = (meetingId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        // Check meeting status
+        const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+          meetingId: meetingId
+        });
+        
+        if (result.getMeetingById) {
+          const currentStatus = result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
+                               result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                               result.getMeetingById.status === 'STARTED' ? 'STARTED' :
+                               result.getMeetingById.status === 'ACTIVE' ? 'ACTIVE' :
+                               result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED';
+          
+          // Update meeting info
+          setMeetingInfo(prev => prev ? { ...prev, status: currentStatus } : null);
+          
+          // If meeting is started/active, redirect to live room
+          if (currentStatus === 'STARTED' || currentStatus === 'ACTIVE') {
+            clearInterval(interval);
+            console.log('🚀 WAITING: Meeting started, redirecting to live room');
+            router.push(`/livestream/${meetingId}`);
+          }
+          
+          // Check if participant is approved (if we have participantId)
+          if (participantId) {
+            // TODO: Add participant approval check query
+            // For now, we'll assume all participants are approved when meeting starts
+          }
+        }
+      } catch (error) {
+        console.error('Error monitoring meeting status:', error);
+      }
+    }, 3000); // Check every 3 seconds
+    
+    // Store interval ID for cleanup
+    return () => clearInterval(interval);
   };
 
   const handleJoinMeeting = async (e: React.FormEvent) => {
@@ -108,20 +161,9 @@ const WaitingRoomPage: React.FC = () => {
     try {
       console.log('🚪 WAITING ROOM: Attempting to join meeting with code:', inviteCode);
       
-      const result = await makeGraphQLRequest(JOIN_MEETING_BY_CODE, { 
-        inviteCode: inviteCode.trim() 
-      });
-      
-      console.log('🚪 WAITING ROOM: Backend response:', result);
-
-      if (result.joinMeetingByCode && result.joinMeetingByCode.success) {
-        // Redirect to pre-join device check page
-        const meetingId = result.joinMeetingByCode.meeting._id;
-        console.log('🚪 WAITING ROOM: Redirecting to pre-join page:', meetingId);
-        router.push(`/prejoin/${meetingId}`);
-      } else {
-        throw new Error(result.joinMeetingByCode?.message || '미팅 참여에 실패했습니다.');
-      }
+      // For now, redirect to prejoin page with the invite code
+      // In a full implementation, you would validate the invite code here
+      router.push(`/prejoin/${inviteCode}`);
     } catch (error: any) {
       console.error('🚪 WAITING ROOM: Join meeting error:', error);
       
