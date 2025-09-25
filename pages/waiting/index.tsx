@@ -73,15 +73,21 @@ const WaitingRoomPage: React.FC = () => {
           title: result.getMeetingById.title,
           status: result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
                   result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                  result.getMeetingById.status === 'LIVE' ? 'STARTED' :
                   result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED',
           inviteCode: result.getMeetingById.inviteCode
         };
         setMeetingInfo(meeting);
         console.log('🚪 WAITING: Successfully loaded meeting:', meeting);
         
-        // For now, all meetings from backend are CREATED status
-        // We'll show waiting room for all non-ENDED meetings
-        // In the future, we might need to check if host has actually started the meeting
+        // Check if meeting is LIVE - redirect immediately to live room
+        if (result.getMeetingById.status === 'LIVE') {
+          console.log('🎯 WAITING: Meeting is LIVE, redirecting to live room immediately');
+          router.push(`/livestream/${meetingId}`);
+          return;
+        }
+        
+        // Check if meeting is ended
         if (meeting.status === 'ENDED') {
           // Meeting is ended, show error or redirect
           await Swal.fire({
@@ -116,19 +122,24 @@ const WaitingRoomPage: React.FC = () => {
         });
         
         if (result.getMeetingById) {
+          console.log('🔄 WAITING: Monitoring meeting status:', result.getMeetingById.status);
+          
           const currentStatus = result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
                                result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                               result.getMeetingById.status === 'LIVE' ? 'STARTED' :
                                result.getMeetingById.status === 'STARTED' ? 'STARTED' :
                                result.getMeetingById.status === 'ACTIVE' ? 'ACTIVE' :
                                result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED';
           
+          console.log('🔄 WAITING: Mapped status:', currentStatus, 'from backend status:', result.getMeetingById.status);
+          
           // Update meeting info
           setMeetingInfo(prev => prev ? { ...prev, status: currentStatus } : null);
           
-          // If meeting is started/active, redirect to live room
-          if (currentStatus === 'STARTED' || currentStatus === 'ACTIVE') {
+          // If meeting is LIVE or started/active, redirect to live room
+          if (result.getMeetingById.status === 'LIVE' || currentStatus === 'STARTED' || currentStatus === 'ACTIVE') {
             clearInterval(interval);
-            console.log('🚀 WAITING: Meeting started, redirecting to live room');
+            console.log('🚀 WAITING: Meeting started (backend status:', result.getMeetingById.status, 'mapped status:', currentStatus, '), redirecting to live room');
             router.push(`/livestream/${meetingId}`);
           }
           
@@ -141,7 +152,7 @@ const WaitingRoomPage: React.FC = () => {
       } catch (error) {
         console.error('Error monitoring meeting status:', error);
       }
-    }, 3000); // Check every 3 seconds
+    }, 2000); // Check every 2 seconds for faster response
     
     // Store interval ID for cleanup
     return () => clearInterval(interval);
@@ -249,8 +260,8 @@ const WaitingRoomPage: React.FC = () => {
                 {meetingInfo && (
                   <div className="meeting-info-card">
                     <h3>{meetingInfo.title}</h3>
-                    <p>Meeting ID: {meetingInfo._id.slice(-8)}</p>
-                    <p>Status: Pending</p>
+                    <p>Meeting ID: {meetingInfo._id}</p>
+                    <p>Status: {meetingInfo.status === 'SCHEDULED' ? 'Pending' : meetingInfo.status}</p>
                   </div>
                 )}
                 
