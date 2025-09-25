@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser, forceLogin, makeGraphQLRequest } from '../lib/simple-auth-handlers';
+import Swal from 'sweetalert2';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
   GET_PARTICIPANTS_BY_MEETING,
@@ -25,6 +26,8 @@ import {
   HOST_LOWER_HAND,
   LOWER_ALL_HANDS,
   DELETE_CHAT_MESSAGE,
+  TRANSFER_HOST,
+  TRANSFER_HOST_AND_LEAVE,
   MEETING_UPDATED,
   PARTICIPANT_JOINED,
   PARTICIPANT_LEFT,
@@ -47,7 +50,9 @@ import {
   type RaiseHandInput,
   type LowerHandInput,
   type HostLowerHandInput,
-  type DeleteMessageInput
+  type DeleteMessageInput,
+  type TransferHostInput,
+  type TransferHostAndLeaveInput
 } from '../apollo/livestream/mutations';
 
 // Add additional mutations for leave functionality
@@ -98,6 +103,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     [key: string]: { _id: string; text: string; displayName: string; createdAt: string }[];
   }>({});
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'students'>('students');
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [availableParticipants, setAvailableParticipants] = useState<Participant[]>([]);
   const [mainVideoParticipant, setMainVideoParticipant] = useState<string | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -192,6 +199,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [startMeeting] = useMutation(START_MEETING);
   const [leaveMeeting] = useMutation(LEAVE_MEETING);
   const [forceLeaveMeeting] = useMutation(FORCE_LEAVE_MEETING);
+  const [transferHost] = useMutation(TRANSFER_HOST);
+  const [transferHostAndLeave] = useMutation(TRANSFER_HOST_AND_LEAVE);
 
   // Get current user's participant data
   const { data: currentParticipantData } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
@@ -360,8 +369,63 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     }
   };
 
-  // Handle leaving the meeting
+  // Handle leaving the meeting with SweetAlert dialog
   const handleLeaveMeeting = async () => {
+    // Check if current user is host
+    const isCurrentUserHost = participants.find((p: any) => 
+      p.userId?._id === actualUserId && p.role === 'HOST'
+    );
+    
+    if (isCurrentUserHost) {
+      // Host is leaving - show transfer options
+      const eligibleParticipants = participants.filter((p: any) => 
+        p.role === 'PARTICIPANT' && 
+        p.userId?._id !== actualUserId &&
+        (p.userId?.systemRole === 'TUTOR' || p.userId?.systemRole === 'ADMIN')
+      );
+
+      if (eligibleParticipants.length > 0) {
+        // Show transfer dialog
+        setAvailableParticipants(eligibleParticipants);
+        setShowTransferDialog(true);
+      } else {
+        // No eligible participants, show exit confirmation
+        const result = await Swal.fire({
+          title: 'Exit Meeting',
+          text: 'Are you sure you want to exit? This will end the meeting for all participants.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          confirmButtonText: 'Exit Meeting',
+          cancelButtonText: 'Cancel'
+        });
+
+        if (result.isConfirmed) {
+          await executeLeaveMeeting();
+        }
+            }
+          } else {
+      // Regular participant leaving
+      const result = await Swal.fire({
+        title: 'Leave Meeting',
+        text: 'Are you sure you want to leave the meeting?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Leave',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        await executeLeaveMeeting();
+      }
+    }
+  };
+
+  // Execute the actual leave meeting logic
+  const executeLeaveMeeting = async () => {
     try {
       console.log('🚪 FRONTEND: Leaving meeting...');
       console.log('🚪 FRONTEND: Current participant data:', currentParticipantData);
@@ -384,15 +448,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           variables: {
             input: {
               participantId: currentUserParticipant._id
-            }
-          }
-        });
-        
+      }
+    }
+  });
+
         console.log('✅ FRONTEND: Leave meeting success:', (result.data as any)?.leaveMeeting?.message);
-        alert('Successfully left the meeting');
+        
+        // Check if meeting was ended (host left)
+        if ((result.data as any)?.leaveMeeting?.meetingEnded) {
+          await Swal.fire({
+            title: 'Meeting Ended',
+            text: 'The host has left and the meeting has ended for all participants.',
+            icon: 'info',
+            confirmButtonText: 'OK'
+          });
+      } else {
+          await Swal.fire({
+            title: 'Success',
+            text: 'Successfully left the meeting',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        }
+        
         window.location.href = '/dashboard';
         
-          } else {
+      } else {
         console.log('🚪 FRONTEND: No participant found, using force leave for meeting:', actualMeetingId);
         
         const result = await forceLeaveMeeting({
@@ -402,21 +484,102 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         });
         
         console.log('✅ FRONTEND: Force leave success:', result.data);
-        alert('Successfully left the meeting');
+        await Swal.fire({
+          title: 'Success',
+          text: 'Successfully left the meeting',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
         window.location.href = '/dashboard';
       }
-      
-        } catch (error: any) {
-      console.error('❌ FRONTEND: Failed to leave meeting:', error);
-      console.error('❌ FRONTEND: Error details:', {
-        message: error.message,
-        graphQLErrors: error.graphQLErrors,
-        networkError: error.networkError
+    } catch (error: any) {
+      console.error('❌ FRONTEND: Leave meeting error:', error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'Failed to leave meeting: ' + (error.message || 'Unknown error'),
+        icon: 'error',
+        confirmButtonText: 'OK'
       });
-      alert('Failed to leave meeting: ' + (error.message || 'Unknown error'));
     }
   };
 
+  // Handle transfer host and leave
+  const handleTransferAndLeave = async (newHostParticipantId: string) => {
+    try {
+      console.log('🔄 FRONTEND: Transferring host and leaving...');
+      
+      const result = await transferHostAndLeave({
+        variables: {
+          meetingId: actualMeetingId,
+          newHostParticipantId: newHostParticipantId,
+          reason: 'Host leaving meeting'
+        }
+      });
+      
+      console.log('✅ FRONTEND: Transfer and leave success:', result.data);
+      
+      await Swal.fire({
+        title: 'Success',
+        text: 'Host role transferred and left meeting successfully',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+      window.location.href = '/dashboard';
+      
+    } catch (error: any) {
+      console.error('❌ FRONTEND: Transfer and leave failed:', error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'Failed to transfer host and leave: ' + (error.message || 'Unknown error'),
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
+
+  // Handle just transfer (without leaving)
+  const handleTransferHost = async (newHostParticipantId: string) => {
+    try {
+      console.log('🔄 FRONTEND: Transferring host role...');
+      
+      const result = await transferHost({
+        variables: {
+          input: {
+            meetingId: actualMeetingId,
+            newHostParticipantId: newHostParticipantId,
+            reason: 'Host transferring role'
+          }
+        }
+      });
+      
+      console.log('✅ FRONTEND: Transfer success:', result.data);
+      
+      await Swal.fire({
+        title: 'Success',
+        text: 'Host role transferred successfully',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+      // Refresh participants to show new host
+      if (refetchParticipants) {
+        refetchParticipants();
+      }
+      
+        } catch (error: any) {
+      console.error('❌ FRONTEND: Transfer failed:', error);
+      await Swal.fire({
+        title: 'Error',
+        text: 'Failed to transfer host role: ' + (error.message || 'Unknown error'),
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    }
+  };
 
   // Enumerate devices on component mount
   useEffect(() => {
@@ -1549,7 +1712,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
 
       {/* Media Error Display */}
       {mediaError && (
-        <div style={{
+              <div style={{
           position: 'fixed',
           top: '20px',
           left: '50%',
@@ -1671,6 +1834,101 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         </div>
       </div>
       )}
+
+      {/* Host Transfer Dialog */}
+      {showTransferDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '30px',
+            borderRadius: '10px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            color: '#333'
+          }}>
+            <h3 style={{ marginTop: 0, color: '#333', textAlign: 'center' }}>
+              Transfer Host Role
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', textAlign: 'center' }}>
+              Select a participant to transfer host role to before leaving:
+            </p>
+            
+            <div style={{ marginBottom: '20px' }}>
+              {availableParticipants.map(participant => (
+                <div 
+                  key={participant._id}
+                  style={{
+                    padding: '15px',
+                    border: '1px solid #ddd',
+                    borderRadius: '5px',
+                    marginBottom: '10px',
+                    cursor: 'pointer',
+                    backgroundColor: '#f9f9f9',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#e9e9e9'}
+                  onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = '#f9f9f9'}
+                  onClick={() => handleTransferAndLeave(participant._id)}
+                >
+                  <div style={{ fontWeight: 'bold', color: '#333', fontSize: '16px' }}>
+                    {participant.displayName}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#666' }}>
+                    {(participant as any).userId?.systemRole} • {(participant as any).userId?.email}
+                  </div>
+                  </div>
+                ))}
+              </div>
+            
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowTransferDialog(false)}
+                  style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#6c757d',
+                    color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+              >
+                Cancel
+              </button>
+                <button
+                onClick={() => {
+                  setShowTransferDialog(false);
+                  executeLeaveMeeting(); // Just leave without transferring
+                }}
+                  style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                  borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                Exit Without Transfer
+                </button>
+            </div>
+              </div>
+            </div>
+          )}
     </div>
   );
 };

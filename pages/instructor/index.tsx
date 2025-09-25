@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin, showErrorAlert } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
@@ -61,29 +61,38 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (isAuthenticated()) {
-        const userData = await getCurrentUser();
-        
-        // Only allow TUTOR role to access this instructor dashboard
-        if (userData && userData.systemRole === 'TUTOR') {
-        setUser(userData);
-          await testBackendConnection();
-          await fetchMeetings();
-          await loadVODs();
-        } else {
-          // Redirect based on role
-          if (userData && userData.systemRole === 'MEMBER') {
-            window.location.href = '/member';
-          } else if (userData && userData.systemRole === 'ADMIN') {
-            window.location.href = '/dashboard';
+      try {
+        if (isAuthenticated()) {
+          const userData = await getCurrentUser();
+          
+          // Only allow TUTOR role to access this instructor dashboard
+          if (userData && userData.systemRole === 'TUTOR') {
+            setUser(userData);
+            await testBackendConnection();
+            await fetchMeetings();
+            await loadVODs();
           } else {
-            window.location.href = '/login';
+            // Redirect based on role
+            if (userData && userData.systemRole === 'MEMBER') {
+              window.location.href = '/member';
+            } else if (userData && userData.systemRole === 'ADMIN') {
+              window.location.href = '/dashboard';
+            } else {
+              // User not found or invalid role
+              await showErrorAlert('Authentication Error', 'User not found or invalid role. Please log in again.');
+              window.location.href = '/login';
+            }
           }
+        } else {
+          window.location.href = '/login';
         }
-      } else {
+      } catch (error: any) {
+        console.error('❌ INSTRUCTOR DASHBOARD: Auth check error:', error);
+        await showErrorAlert('Authentication Error', 'Failed to verify user. Please log in again.');
         window.location.href = '/login';
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     checkAuth();
   }, []);

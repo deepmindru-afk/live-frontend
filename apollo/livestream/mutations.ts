@@ -274,6 +274,33 @@ export const DELETE_CHAT_MESSAGE = gql`
   }
 `;
 
+export const TRANSFER_HOST = gql`
+  mutation TransferHost($input: TransferHostInput!) {
+    transferHost(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+export const TRANSFER_HOST_AND_LEAVE = gql`
+  mutation TransferHostAndLeave(
+    $meetingId: ID!
+    $newHostParticipantId: ID!
+    $reason: String
+  ) {
+    transferHostAndLeave(
+      meetingId: $meetingId
+      newHostParticipantId: $newHostParticipantId
+      reason: $reason
+    ) {
+      success
+      message
+      meetingEnded
+    }
+  }
+`;
+
 // Subscriptions
 export const MEETING_UPDATED = gql`
   subscription MeetingUpdated($meetingId: ID!) {
@@ -480,4 +507,16 @@ export interface HostLowerHandInput {
 export interface DeleteMessageInput {
   messageId: string;
   meetingId: string;
+}
+
+export interface TransferHostInput {
+  meetingId: string;
+  newHostParticipantId: string;
+  reason?: string;
+}
+
+export interface TransferHostAndLeaveInput {
+  meetingId: string;
+  newHostParticipantId: string;
+  reason?: string;
 }

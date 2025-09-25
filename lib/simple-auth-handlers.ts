@@ -2,11 +2,22 @@
 // These make direct HTTP requests to the GraphQL backend
 
 import { print } from 'graphql';
+import Swal from 'sweetalert2';
 
 export interface LoginCredentials {
   email: string;
   password: string;
 }
+
+// Utility function to show SweetAlert errors
+export const showErrorAlert = async (title: string, message: string) => {
+  await Swal.fire({
+    title: title,
+    text: message,
+    icon: 'error',
+    confirmButtonText: 'OK'
+  });
+};
 
 export interface SignupData {
   displayName: string;
@@ -183,9 +194,24 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
       throw new Error('TOKEN_NOT_EXIST');
     }
     
-    // For other GraphQL errors, throw with the original message
-    console.log('🌐 GRAPHQL: Throwing generic GraphQL error');
-    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+    // Handle user not found error gracefully
+    if (firstError.message === 'User not found' || firstError.extensions?.code === 'INTERNAL_SERVER_ERROR') {
+      console.log('🌐 GRAPHQL: User not found, clearing auth and returning null');
+      clearAuthToken();
+      return null;
+    }
+    
+    // Handle authentication errors gracefully
+    if (firstError.message.includes('Unauthorized') || firstError.message.includes('Forbidden')) {
+      console.log('🌐 GRAPHQL: Unauthorized access, clearing auth and returning null');
+      clearAuthToken();
+      return null;
+    }
+    
+    // For other GraphQL errors, show user-friendly error
+    console.log('🌐 GRAPHQL: Throwing user-friendly GraphQL error');
+    const errorMessage = firstError.message || 'An error occurred';
+    throw new Error(errorMessage);
   }
   
   console.log('🌐 GRAPHQL: No errors found, returning data');

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser, handleLogout } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert } from '../../lib/simple-auth-handlers';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
@@ -50,30 +50,39 @@ const MemberDashboard: React.FC = () => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (isAuthenticated()) {
-        const userData = await getCurrentUser();
-        if (userData && userData.systemRole === 'MEMBER') {
-        setUser(userData);
-          setProfileData({
-            displayName: userData.displayName || '',
-            department: userData.department || '',
-            phone: userData.phone || ''
-          });
-          await fetchMeetings();
-        } else {
-          // Redirect non-members to appropriate dashboard
-          if (userData?.systemRole === 'TUTOR') {
-            router.push('/instructor');
-          } else if (userData?.systemRole === 'ADMIN') {
-            router.push('/admin');
+      try {
+        if (isAuthenticated()) {
+          const userData = await getCurrentUser();
+          if (userData && userData.systemRole === 'MEMBER') {
+            setUser(userData);
+            setProfileData({
+              displayName: userData.displayName || '',
+              department: userData.department || '',
+              phone: userData.phone || ''
+            });
+            await fetchMeetings();
           } else {
-            router.push('/login'); // Redirect to login if unknown role
+            // Redirect non-members to appropriate dashboard
+            if (userData?.systemRole === 'TUTOR') {
+              router.push('/instructor');
+            } else if (userData?.systemRole === 'ADMIN') {
+              router.push('/admin');
+            } else {
+              // User not found or invalid role
+              await showErrorAlert('Authentication Error', 'User not found or invalid role. Please log in again.');
+              router.push('/login');
+            }
           }
+        } else {
+          router.push('/login');
         }
-      } else {
+      } catch (error: any) {
+        console.error('❌ MEMBER DASHBOARD: Auth check error:', error);
+        await showErrorAlert('Authentication Error', 'Failed to verify user. Please log in again.');
         router.push('/login');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     checkAuth();
   }, [router]);
