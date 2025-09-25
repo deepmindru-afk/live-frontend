@@ -21,6 +21,7 @@ const PrejoinPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [hasRedirectedToWaiting, setHasRedirectedToWaiting] = useState<boolean>(false);
   
   // Device testing states
   const [isVideoOn, setIsVideoOn] = useState(false);
@@ -305,8 +306,8 @@ const PrejoinPage = () => {
       let result;
       try {
         result = await makeGraphQLRequest(GET_MEETING_BY_ID, {
-          meetingId: meetingId as string
-        });
+        meetingId: meetingId as string
+      });
       } catch (authError: any) {
         // Handle authentication errors immediately
         if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
@@ -383,14 +384,14 @@ const PrejoinPage = () => {
         });
       } else {
         // Handle other errors
-        const errorMessage = error.message || '미팅 정보를 가져올 수 없습니다.';
-        await Swal.fire({
-          icon: 'error',
-          title: '미팅 정보 오류',
-          text: errorMessage,
-          confirmButtonText: '확인'
-        });
-        router.push('/instructor'); // Redirect to instructor dashboard
+      const errorMessage = error.message || '미팅 정보를 가져올 수 없습니다.';
+      await Swal.fire({
+        icon: 'error',
+        title: '미팅 정보 오류',
+        text: errorMessage,
+        confirmButtonText: '확인'
+      });
+      router.push('/instructor'); // Redirect to instructor dashboard
       }
     } finally {
       setIsLoading(false);
@@ -435,38 +436,85 @@ const PrejoinPage = () => {
       console.log('🔍 PREJOIN: Backend meeting status:', backendStatus);
       console.log('🔍 PREJOIN: User role:', userRole);
 
-      // Route based on backend meeting status and user role
-      if (backendStatus === 'LIVE') {
-        // Meeting is LIVE, allow direct join
-        console.log('🚀 PREJOIN: Meeting is LIVE, allowing direct join');
-        
-        const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
-          input: {
-            meetingId: meetingId as string,
-            displayName: 'Participant',
-            role: userRole === 'TUTOR' || userRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
-          } as JoinParticipantInput
-        });
+      // Join the meeting and check participant status
+      console.log('🚀 PREJOIN: Calling JOIN_MEETING mutation...');
+      
+      const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+        input: {
+          meetingId: meetingId as string,
+          displayName: 'Participant',
+          role: userRole === 'TUTOR' || userRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
+        } as JoinParticipantInput
+      });
 
-        if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
-          console.log('✅ Successfully joined LIVE meeting:', joinResult.joinMeeting);
+      console.log('🔍 PREJOIN: Join meeting result:', joinResult);
+
+      if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
+        console.log('✅ Successfully joined meeting:', joinResult.joinMeeting);
+        console.log('🔍 PREJOIN: Full participant object:', JSON.stringify(joinResult.joinMeeting, null, 2));
+        console.log('🔍 PREJOIN: Participant status:', joinResult.joinMeeting.status);
+        console.log('🔍 PREJOIN: Backend meeting status:', backendStatus);
+        
+        // CRITICAL FIX: Check participant status returned from backend
+        const participantStatus = joinResult.joinMeeting.status;
+        
+        if (participantStatus === 'WAITING') {
+          // Participant sent to waiting room, redirect to waiting page
+          console.log('🚀 PREJOIN: Participant sent to waiting room (status: WAITING), redirecting...');
+          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
+        } else if (participantStatus === 'ADMITTED') {
+          // Participant admitted directly, go to live room
+          console.log('🚀 PREJOIN: Participant admitted directly (status: ADMITTED), going to live room');
           router.push(`/livestream/${meetingId}`);
+        } else if (!participantStatus) {
+          // If status is undefined, fallback to backend meeting status logic
+          console.log('⚠️ PREJOIN: Participant status is undefined, using backend meeting status as fallback');
+          console.log('🔍 PREJOIN: User role check - userRole:', userRole, 'backendStatus:', backendStatus);
+          
+          // CRITICAL FIX: Only allow non-hosts into live room if meeting is truly LIVE
+          if (backendStatus === 'LIVE' && (userRole === 'TUTOR' || userRole === 'ADMIN')) {
+            // Only hosts can join LIVE meetings directly
+            console.log('🚀 PREJOIN: Host joining LIVE meeting, going to live room');
+            router.push(`/livestream/${meetingId}`);
+          } else if ((userRole === 'TUTOR' || userRole === 'ADMIN') && (backendStatus === 'CREATED' || backendStatus === 'SCHEDULED')) {
+            // Host can join even if meeting not started yet
+            console.log('🚀 PREJOIN: Host joining non-LIVE meeting, going to live room');
+            router.push(`/livestream/${meetingId}`);
+          } else {
+            // Non-host participants should go to waiting room regardless of meeting status
+            console.log('🚀 PREJOIN: Non-host participant, going to waiting room');
+            console.log('🔍 PREJOIN: Redirect details:', {
+              backendStatus,
+              userRole,
+              meetingId,
+              inviteCode: meetingResult.getMeetingById.inviteCode,
+              hasRedirectedToWaiting
+            });
+            
+            // Prevent infinite redirect loop using localStorage
+            const redirectKey = `redirected_${meetingId}_anonymous`;
+            const hasRedirected = localStorage.getItem(redirectKey);
+            
+            if (!hasRedirected) {
+              localStorage.setItem(redirectKey, 'true');
+              console.log('🚀 PREJOIN: First redirect to waiting room, setting flag');
+              router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
+            } else {
+              console.log('⚠️ PREJOIN: Already redirected to waiting room, going to live room to prevent loop');
+              // Clear the flag since we're going to live room
+              localStorage.removeItem(redirectKey);
+        router.push(`/livestream/${meetingId}`);
+            }
+          }
         } else {
-          throw new Error('Failed to join meeting');
+          console.error('❌ PREJOIN: Unknown participant status:', participantStatus);
+          console.error('❌ PREJOIN: Full participant object:', joinResult.joinMeeting);
+          throw new Error('Unknown participant status: ' + participantStatus);
         }
       } else {
-        // Meeting not LIVE, redirect to waiting room
-        console.log('🚀 PREJOIN: Meeting not LIVE (status:', backendStatus, '), redirecting to waiting room');
-        
-        if (userRole === 'TUTOR' || userRole === 'ADMIN') {
-          // Host can still go to live room even if meeting not started
-          console.log('🚀 PREJOIN: Host bypassing waiting room');
-          router.push(`/livestream/${meetingId}`);
-        } else {
-          // Non-host participants go to waiting room
-          console.log('🚀 PREJOIN: Participant going to waiting room');
-          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
-        }
+        console.error('❌ PREJOIN: Failed to join meeting - no participant ID received');
+        console.error('❌ PREJOIN: Full join result:', joinResult);
+        throw new Error('Failed to join meeting');
       }
     } catch (error: any) {
       console.error('❌ Failed to join meeting:', error);
@@ -658,36 +706,36 @@ const PrejoinPage = () => {
             The meeting with ID "{meetingId}" could not be found or may have been deleted.
           </p>
           
-          <button
-            onClick={handleCreateAndStartMeeting}
-            disabled={isJoining}
-            style={{
+        <button
+          onClick={handleCreateAndStartMeeting}
+          disabled={isJoining}
+          style={{
               width: '100%',
               padding: '16px',
               backgroundColor: isJoining ? '#6b7280' : '#10b981',
-              color: 'white',
-              border: 'none',
+            color: 'white',
+            border: 'none',
               borderRadius: '8px',
               cursor: isJoining ? 'not-allowed' : 'pointer',
               fontSize: '16px',
               fontWeight: '600',
               marginBottom: '16px'
-            }}
-          >
-            {isJoining ? 'Creating...' : 'Create New Meeting'}
-          </button>
+          }}
+        >
+          {isJoining ? 'Creating...' : 'Create New Meeting'}
+        </button>
           
-          {joinError && (
-            <div style={{
+        {joinError && (
+          <div style={{
               color: '#ffffff',
               padding: '12px',
               backgroundColor: '#ef4444',
               borderRadius: '8px',
               fontSize: '14px'
-            }}>
-              {joinError}
-            </div>
-          )}
+          }}>
+            {joinError}
+          </div>
+        )}
         </div>
       </div>
     );
@@ -701,16 +749,16 @@ const PrejoinPage = () => {
           100% { transform: rotate(360deg); }
         }
       `}</style>
-      <div style={{ 
+    <div style={{ 
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         color: '#333',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         padding: '20px',
-        display: 'flex',
+      display: 'flex', 
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+      justifyContent: 'center', 
         position: 'relative',
         overflow: 'hidden'
       }}>
@@ -1029,26 +1077,26 @@ const PrejoinPage = () => {
           </div>
 
           {/* Join Button */}
-          <button
-            onClick={handleJoinMeeting}
-            disabled={isJoining}
-            style={{
+        <button
+          onClick={handleJoinMeeting}
+          disabled={isJoining}
+          style={{
               width: '100%',
               padding: '16px',
               background: isJoining ? 'linear-gradient(135deg, #6b7280, #4b5563)' : 'linear-gradient(135deg, #4A90E2, #357ABD)',
-              color: 'white',
-              border: 'none',
+            color: 'white',
+            border: 'none',
               borderRadius: '12px',
-              cursor: isJoining ? 'not-allowed' : 'pointer',
-              fontSize: '16px',
+            cursor: isJoining ? 'not-allowed' : 'pointer',
+            fontSize: '16px',
               fontWeight: '600',
               marginBottom: '16px',
               transition: 'all 0.3s ease',
               boxShadow: '0 4px 15px rgba(74, 144, 226, 0.3)'
-            }}
-          >
-            {isJoining ? 'Joining...' : 'Join Meeting'}
-          </button>
+          }}
+        >
+          {isJoining ? 'Joining...' : 'Join Meeting'}
+        </button>
 
           {/* Meeting Details */}
           <div style={{
@@ -1075,12 +1123,12 @@ const PrejoinPage = () => {
               color: 'white',
               borderRadius: '8px',
               fontSize: '14px'
-            }}>
-              {joinError}
-            </div>
-          )}
-        </div>
+          }}>
+            {joinError}
+          </div>
+        )}
       </div>
+    </div>
 
       {/* Hidden audio element for testing */}
       <audio ref={audioRef} style={{ display: 'none' }} />

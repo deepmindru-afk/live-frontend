@@ -43,6 +43,12 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
 
   if (networkError) {
     console.error(`[Network error]: ${networkError}`);
+    console.error(`[Network error details]:`, {
+      message: networkError.message,
+      statusCode: 'statusCode' in networkError ? networkError.statusCode : 'unknown',
+      operation: operation.operationName,
+      variables: operation.variables
+    });
     
     // Handle 401 errors (unauthorized)
     if ('statusCode' in networkError && networkError.statusCode === 401) {
@@ -55,6 +61,11 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
           console.warn('localStorage not available:', error);
         }
       }
+    }
+    
+    // Handle 400 errors (Bad Request)
+    if ('statusCode' in networkError && networkError.statusCode === 400) {
+      console.error(`[GraphQL 400 Bad Request]: Check operation ${operation.operationName} with variables:`, operation.variables);
     }
   }
 });

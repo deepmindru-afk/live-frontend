@@ -113,6 +113,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [actualUserId, setActualUserId] = useState<string>('');
   const [actualUserEmail, setActualUserEmail] = useState<string>('');
   const [currentParticipant, setCurrentParticipant] = useState<any>(null);
+  const [hasRedirectedToWaiting, setHasRedirectedToWaiting] = useState<boolean>(false);
 
   // Media state
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -431,8 +432,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
       }
+      
+      // Clear any redirect flags on unmount
+      const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
+      localStorage.removeItem(redirectKey);
+      console.log('🧹 FRONTEND: Cleared redirect flag on unmount');
     };
-  }, [localStream, screenStream]);
+  }, [localStream, screenStream, actualMeetingId, actualUserId]);
 
   // Auto-join meeting when ready
   useEffect(() => {
@@ -468,63 +474,172 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         console.log('🔍 FRONTEND: Backend meeting status:', backendStatus);
         console.log('🔍 FRONTEND: User role:', currentUserRole, 'isTutor:', isTutor);
 
-        // Only allow join if meeting is LIVE or user is a host
-        if (backendStatus === 'LIVE' || isTutor) {
-          console.log('🚀 FRONTEND: Meeting is LIVE or user is host, proceeding with join');
-          
-          const joinMeetingInput: JoinParticipantInput = {
+        // Always call joinMeeting and check participant status
+        console.log('🚀 FRONTEND: Calling joinMeeting mutation...');
+        
+        const joinMeetingInput: JoinParticipantInput = {
+          meetingId: actualMeetingId,
+          displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
+          role: isTutor ? 'HOST' : 'PARTICIPANT'
+        };
+
+        console.log('🚀 FRONTEND: Attempting to join meeting...', joinMeetingInput);
+        
+        const result: any = await joinMeeting({
+          variables: { input: joinMeetingInput }
+        });
+
+        console.log('🚀 FRONTEND: Join result:', result);
+        
+        if (result.data?.joinMeeting?._id) {
+          console.log('✅ FRONTEND: Successfully joined meeting!', {
+            participantId: result.data.joinMeeting._id,
             meetingId: actualMeetingId,
-            displayName: actualUserId || (isTutor ? 'Host' : 'Participant'),
-            role: isTutor ? 'HOST' : 'PARTICIPANT'
-          };
-
-          console.log('🚀 FRONTEND: Attempting to join meeting...', joinMeetingInput);
-          
-          const result: any = await joinMeeting({
-            variables: { input: joinMeetingInput }
+            role: result.data.joinMeeting.role,
+            status: result.data.joinMeeting.status
           });
-
-          console.log('🚀 FRONTEND: Join result:', result);
           
-          if (result.data?.joinMeeting?._id) {
-            console.log('✅ FRONTEND: Successfully joined meeting!', {
-              participantId: result.data.joinMeeting._id,
-              meetingId: actualMeetingId,
-              role: result.data.joinMeeting.role
-            });
-            
-            setCurrentParticipantId(result.data.joinMeeting._id);
+          // CRITICAL FIX: Check participant status returned from backend
+          const participantStatus = result.data.joinMeeting.status;
+          console.log('🔍 FRONTEND: Full participant object:', JSON.stringify(result.data.joinMeeting, null, 2));
+          console.log('🔍 FRONTEND: Participant status:', participantStatus);
+          console.log('🔍 FRONTEND: Backend meeting status:', backendStatus);
+          
+          if (participantStatus === 'WAITING') {
+            // Participant sent to waiting room, redirect to waiting page
+            console.log('🚀 FRONTEND: Participant sent to waiting room (status: WAITING), redirecting...');
+            window.location.href = `/waiting?meetingId=${actualMeetingId}&code=${meetingResult.getMeetingById.inviteCode}`;
+            return;
+          } else if (participantStatus === 'ADMITTED') {
+            // Participant admitted directly, proceed with live room
+            console.log('🚀 FRONTEND: Participant admitted directly (status: ADMITTED), proceeding...');
+          
+          setCurrentParticipantId(result.data.joinMeeting._id);
             setCurrentParticipant(result.data.joinMeeting);
-            setHasJoinedMeeting(true);
-            setAuthError(null);
+          setHasJoinedMeeting(true);
+          setAuthError(null);
+          
+          // Clear any redirect flags since we successfully joined
+          const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
+          localStorage.removeItem(redirectKey);
+          console.log('🧹 FRONTEND: Cleared redirect flag after successful join');
             
             // Auto-start camera after joining
             await startCamera();
+          
+          // Auto-start meeting for tutors
+          if (isTutor) {
+              console.log('🚀 FRONTEND: Auto-starting meeting...');
+            try {
+              const startResult = await startMeeting({
+                variables: { meetingId: actualMeetingId }
+              });
+                console.log('✅ FRONTEND: Meeting started successfully:', startResult);
+              setMeetingStatus('ACTIVE');
+              setIsRecording(true);
+            } catch (startError: any) {
+                console.error('❌ FRONTEND: Failed to start meeting:', startError);
+              }
+            }
+          } else if (!participantStatus) {
+            // If status is undefined, fallback to backend meeting status logic
+            console.log('⚠️ FRONTEND: Participant status is undefined, using backend meeting status as fallback');
+            console.log('🔍 FRONTEND: User role check - isTutor:', isTutor, 'currentUserRole:', currentUserRole);
             
-            // Auto-start meeting for tutors
-            if (isTutor) {
+            // CRITICAL FIX: Only allow non-hosts into live room if meeting is truly LIVE
+            // For MEMBER role participants, they should go to waiting room unless explicitly admitted
+            if (backendStatus === 'LIVE' && isTutor) {
+              // Only hosts can join LIVE meetings directly
+              console.log('🚀 FRONTEND: Host joining LIVE meeting, proceeding with live room');
+              setCurrentParticipantId(result.data.joinMeeting._id);
+              setCurrentParticipant(result.data.joinMeeting);
+              setHasJoinedMeeting(true);
+              setAuthError(null);
+              
+              // Auto-start camera after joining
+              await startCamera();
+              
+              // Auto-start meeting for tutors
               console.log('🚀 FRONTEND: Auto-starting meeting...');
               try {
                 const startResult = await startMeeting({
-                  variables: { meetingId: actualMeetingId }
-                });
+        variables: { meetingId: actualMeetingId }
+      });
                 console.log('✅ FRONTEND: Meeting started successfully:', startResult);
                 setMeetingStatus('ACTIVE');
                 setIsRecording(true);
               } catch (startError: any) {
                 console.error('❌ FRONTEND: Failed to start meeting:', startError);
               }
+            } else if (isTutor && (backendStatus === 'CREATED' || backendStatus === 'SCHEDULED')) {
+              // Host can join even if meeting not started yet
+              console.log('🚀 FRONTEND: Host joining non-LIVE meeting, proceeding with live room');
+              setCurrentParticipantId(result.data.joinMeeting._id);
+              setCurrentParticipant(result.data.joinMeeting);
+              setHasJoinedMeeting(true);
+              setAuthError(null);
+              
+              // Auto-start camera after joining
+              await startCamera();
+              
+              // Auto-start meeting for tutors
+              console.log('🚀 FRONTEND: Auto-starting meeting...');
+              try {
+                const startResult = await startMeeting({
+                  variables: { meetingId: actualMeetingId }
+                });
+                console.log('✅ FRONTEND: Meeting started successfully:', startResult);
+      setMeetingStatus('ACTIVE');
+      setIsRecording(true);
+              } catch (startError: any) {
+                console.error('❌ FRONTEND: Failed to start meeting:', startError);
+              }
+            } else {
+              // Non-host participants should go to waiting room regardless of meeting status
+              // unless the backend explicitly sets them as ADMITTED
+              console.log('🚀 FRONTEND: Non-host participant, redirecting to waiting room');
+              console.log('🔍 FRONTEND: Redirect details:', {
+                backendStatus,
+                isTutor,
+                currentUserRole,
+                meetingId: actualMeetingId,
+                inviteCode: meetingResult.getMeetingById.inviteCode,
+                hasRedirectedToWaiting
+              });
+              
+              // Prevent infinite redirect loop using localStorage
+              const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
+              const hasRedirected = localStorage.getItem(redirectKey);
+              
+              if (!hasRedirected) {
+                localStorage.setItem(redirectKey, 'true');
+                console.log('🚀 FRONTEND: First redirect to waiting room, setting flag');
+                window.location.href = `/waiting?meetingId=${actualMeetingId}&code=${meetingResult.getMeetingById.inviteCode}`;
+              } else {
+                console.log('⚠️ FRONTEND: Already redirected to waiting room, staying in live room to prevent loop');
+                // Clear the flag since we're staying in live room
+                localStorage.removeItem(redirectKey);
+                console.log('🧹 FRONTEND: Cleared redirect flag after successful join (fallback)');
+                
+                // If already redirected, proceed with live room setup
+                setCurrentParticipantId(result.data.joinMeeting._id);
+                setCurrentParticipant(result.data.joinMeeting);
+                setHasJoinedMeeting(true);
+      setAuthError(null);
+                
+                await startCamera();
+              }
+              return;
             }
           } else {
-            throw new Error('No participant ID received from join meeting response');
+            console.error('❌ FRONTEND: Unknown participant status:', participantStatus);
+            console.error('❌ FRONTEND: Full participant object:', result.data.joinMeeting);
+            throw new Error('Unknown participant status: ' + participantStatus);
           }
         } else {
-          // Meeting not LIVE and user is not host, redirect to waiting room
-          console.log('🚀 FRONTEND: Meeting not LIVE and user is not host, redirecting to waiting room');
-          window.location.href = `/waiting?meetingId=${actualMeetingId}&code=${meetingResult.getMeetingById.inviteCode}`;
-          return;
+          throw new Error('No participant ID received from join meeting response');
         }
-      } catch (error: any) {
+    } catch (error: any) {
         console.error('❌ FRONTEND: Join meeting failed:', error);
         setAuthError(`Failed to join meeting: ${error.message}`);
       } finally {
@@ -559,14 +674,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       });
 
       const currentParticipant = participants.find((p: any) => {
-        const participantUserId = p.userId?._id || p.userId;
+        // Try multiple ways to get the user ID from participant
+        const participantUserId = p.userId?._id || p.userId?.id || p.userId || p.user?._id || p.user?.id;
         const matches = participantUserId && participantUserId.toString() === actualUserId.toString();
         console.log('🔍 CHECKING PARTICIPANT:', {
           participantId: p._id,
           participantUserId: participantUserId,
           actualUserId: actualUserId,
           matches: matches,
-          displayName: p.displayName
+          displayName: p.displayName,
+          fullParticipant: p // Log full participant object for debugging
         });
         return matches;
       });
@@ -585,10 +702,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           actualUserId,
           participants: participants.map((p: any) => ({
             _id: p._id,
-            userId: p.userId?._id,
-            displayName: p.displayName
+            userId: p.userId?._id || p.userId,
+            displayName: p.displayName,
+            fullParticipant: p // Log full participant for debugging
           }))
         });
+        
+        // FALLBACK: If we have a currentParticipantId from the join process, try to find it
+        if (currentParticipantId) {
+          const fallbackParticipant = participants.find((p: any) => p._id === currentParticipantId);
+          if (fallbackParticipant) {
+            console.log('🔄 FALLBACK: Found participant by ID from join process:', fallbackParticipant);
+            setCurrentParticipant(fallbackParticipant);
+          } else {
+            console.log('❌ FALLBACK: Participant not found even by ID:', currentParticipantId);
+          }
+        }
       }
     } else {
       console.log('❌ PARTICIPANT TRACKING: Missing data', {
@@ -621,11 +750,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   if ((meetingData as any)?.getMeetingById?.status === 'ENDED') {
     return (
       <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: '#1a1a1a',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          backgroundColor: '#1a1a1a',
         color: 'white'
       }}>
         <div style={{ textAlign: 'center' }}>
@@ -636,7 +765,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
             style={{
               padding: '10px 20px',
               backgroundColor: '#007bff',
-              color: 'white',
+          color: 'white',
               border: 'none',
               borderRadius: '5px',
               cursor: 'pointer',

@@ -24,6 +24,7 @@ const WaitingRoomPage: React.FC = () => {
   const [waitingMessage, setWaitingMessage] = useState('호스트가 미팅을 시작할 때까지 기다려주세요...');
   const [participantId, setParticipantId] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState(false);
+  const [hasRedirectedToLive, setHasRedirectedToLive] = useState<boolean>(false);
 
   useEffect(() => {
     // Check if there's an invite code in the URL query params
@@ -83,7 +84,18 @@ const WaitingRoomPage: React.FC = () => {
         // Check if meeting is LIVE - redirect immediately to live room
         if (result.getMeetingById.status === 'LIVE') {
           console.log('🎯 WAITING: Meeting is LIVE, redirecting to live room immediately');
-          router.push(`/livestream/${meetingId}`);
+          
+          // Prevent infinite redirect loop using localStorage
+          const redirectKey = `redirected_to_live_${meetingId}_${participantId || 'anonymous'}`;
+          const hasRedirected = localStorage.getItem(redirectKey);
+          
+          if (!hasRedirected) {
+            localStorage.setItem(redirectKey, 'true');
+            console.log('🚀 WAITING: First redirect to live room, setting flag');
+            router.push(`/livestream/${meetingId}`);
+          } else {
+            console.log('⚠️ WAITING: Already redirected to live room, staying in waiting room to prevent loop');
+          }
           return;
         }
         
@@ -140,7 +152,18 @@ const WaitingRoomPage: React.FC = () => {
           if (result.getMeetingById.status === 'LIVE' || currentStatus === 'STARTED' || currentStatus === 'ACTIVE') {
             clearInterval(interval);
             console.log('🚀 WAITING: Meeting started (backend status:', result.getMeetingById.status, 'mapped status:', currentStatus, '), redirecting to live room');
-            router.push(`/livestream/${meetingId}`);
+            
+            // Prevent infinite redirect loop using localStorage
+            const redirectKey = `redirected_to_live_${meetingId}_${participantId || 'anonymous'}`;
+            const hasRedirected = localStorage.getItem(redirectKey);
+            
+            if (!hasRedirected) {
+              localStorage.setItem(redirectKey, 'true');
+              console.log('🚀 WAITING: First redirect to live room, setting flag');
+              router.push(`/livestream/${meetingId}`);
+            } else {
+              console.log('⚠️ WAITING: Already redirected to live room, staying in waiting room to prevent loop');
+            }
           }
           
           // Check if participant is approved (if we have participantId)
