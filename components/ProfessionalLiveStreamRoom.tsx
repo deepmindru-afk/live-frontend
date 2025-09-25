@@ -435,8 +435,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
       
       // Clear any redirect flags on unmount
       const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
+      const waitingRedirectKey = `redirected_to_live_${actualMeetingId}`;
       localStorage.removeItem(redirectKey);
-      console.log('🧹 FRONTEND: Cleared redirect flag on unmount');
+      localStorage.removeItem(waitingRedirectKey);
+      console.log('🧹 FRONTEND: Cleared redirect flags on unmount');
     };
   }, [localStream, screenStream, actualMeetingId, actualUserId]);
 
@@ -519,10 +521,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           setHasJoinedMeeting(true);
           setAuthError(null);
           
-          // Clear any redirect flags since we successfully joined
-          const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
-          localStorage.removeItem(redirectKey);
-          console.log('🧹 FRONTEND: Cleared redirect flag after successful join');
+          // Update meeting status based on participant status
+          if (participantStatus === 'ADMITTED') {
+            setMeetingStatus('ACTIVE');
+            console.log('✅ FRONTEND: Participant admitted, setting meeting status to ACTIVE');
+          } else {
+            setMeetingStatus('WAITING');
+            console.log('⚠️ FRONTEND: Participant not admitted, keeping meeting status as WAITING');
+          }
+          
+        // Clear any redirect flags since we successfully joined
+        const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
+        const waitingRedirectKey = `redirected_to_live_${actualMeetingId}`;
+        localStorage.removeItem(redirectKey);
+        localStorage.removeItem(waitingRedirectKey);
+        console.log('🧹 FRONTEND: Cleared redirect flags after successful join');
             
             // Auto-start camera after joining
             await startCamera();
@@ -607,25 +620,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                 hasRedirectedToWaiting
               });
               
-              // Prevent infinite redirect loop using localStorage
+              // Prevent infinite redirect loop using localStorage with timestamp
               const redirectKey = `redirected_${actualMeetingId}_${actualUserId}`;
-              const hasRedirected = localStorage.getItem(redirectKey);
+              const lastRedirectTime = localStorage.getItem(redirectKey);
+              const now = Date.now();
+              const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
               
-              if (!hasRedirected) {
-                localStorage.setItem(redirectKey, 'true');
-                console.log('🚀 FRONTEND: First redirect to waiting room, setting flag');
+              console.log('🔍 FRONTEND: Redirect check:', {
+                meetingId: actualMeetingId,
+                userId: actualUserId,
+                redirectKey,
+                lastRedirectTime,
+                timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
+                cooldownPeriod: REDIRECT_COOLDOWN
+              });
+              
+              if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
+                localStorage.setItem(redirectKey, now.toString());
+                console.log('🚀 FRONTEND: Redirecting to waiting room (cooldown period passed)');
                 window.location.href = `/waiting?meetingId=${actualMeetingId}&code=${meetingResult.getMeetingById.inviteCode}`;
               } else {
-                console.log('⚠️ FRONTEND: Already redirected to waiting room, staying in live room to prevent loop');
-                // Clear the flag since we're staying in live room
+                console.log('⚠️ FRONTEND: Redirect cooldown active, staying in live room to prevent loop');
+                // Clear the flags since we're staying in live room
+                const waitingRedirectKey = `redirected_to_live_${actualMeetingId}`;
                 localStorage.removeItem(redirectKey);
-                console.log('🧹 FRONTEND: Cleared redirect flag after successful join (fallback)');
+                localStorage.removeItem(waitingRedirectKey);
+                console.log('🧹 FRONTEND: Cleared redirect flags after successful join (fallback)');
                 
                 // If already redirected, proceed with live room setup
                 setCurrentParticipantId(result.data.joinMeeting._id);
                 setCurrentParticipant(result.data.joinMeeting);
                 setHasJoinedMeeting(true);
       setAuthError(null);
+                
+                // Update meeting status - if we're in live room, we're active
+                setMeetingStatus('ACTIVE');
+                console.log('✅ FRONTEND: Participant in live room, setting meeting status to ACTIVE');
                 
                 await startCamera();
               }
@@ -639,7 +669,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         } else {
           throw new Error('No participant ID received from join meeting response');
         }
-    } catch (error: any) {
+      } catch (error: any) {
         console.error('❌ FRONTEND: Join meeting failed:', error);
         setAuthError(`Failed to join meeting: ${error.message}`);
       } finally {
@@ -694,9 +724,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           displayName: currentParticipant.displayName,
           role: currentParticipant.role,
           userId: currentParticipant.userId?._id,
-          actualUserId
+          actualUserId,
+          status: currentParticipant.status
         });
         setCurrentParticipantId(currentParticipant._id);
+        
+        // Update meeting status based on participant status
+        if (currentParticipant.status === 'ADMITTED') {
+      setMeetingStatus('ACTIVE');
+          console.log('✅ FRONTEND: Current participant is ADMITTED, setting meeting status to ACTIVE');
+        } else if (currentParticipant.status === 'WAITING') {
+          setMeetingStatus('WAITING');
+          console.log('⚠️ FRONTEND: Current participant is WAITING, keeping meeting status as WAITING');
+        }
       } else {
         console.log('❌ CURRENT PARTICIPANT: Not found in participants list', {
           actualUserId,

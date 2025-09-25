@@ -491,16 +491,26 @@ const PrejoinPage = () => {
               hasRedirectedToWaiting
             });
             
-            // Prevent infinite redirect loop using localStorage
+            // Prevent infinite redirect loop using localStorage with timestamp
             const redirectKey = `redirected_${meetingId}_anonymous`;
-            const hasRedirected = localStorage.getItem(redirectKey);
+            const lastRedirectTime = localStorage.getItem(redirectKey);
+            const now = Date.now();
+            const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
             
-            if (!hasRedirected) {
-              localStorage.setItem(redirectKey, 'true');
-              console.log('🚀 PREJOIN: First redirect to waiting room, setting flag');
+            console.log('🔍 PREJOIN: Redirect check:', {
+              meetingId,
+              redirectKey,
+              lastRedirectTime,
+              timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
+              cooldownPeriod: REDIRECT_COOLDOWN
+            });
+            
+            if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
+              localStorage.setItem(redirectKey, now.toString());
+              console.log('🚀 PREJOIN: Redirecting to waiting room (cooldown period passed)');
               router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
             } else {
-              console.log('⚠️ PREJOIN: Already redirected to waiting room, going to live room to prevent loop');
+              console.log('⚠️ PREJOIN: Redirect cooldown active, going to live room to prevent loop');
               // Clear the flag since we're going to live room
               localStorage.removeItem(redirectKey);
         router.push(`/livestream/${meetingId}`);

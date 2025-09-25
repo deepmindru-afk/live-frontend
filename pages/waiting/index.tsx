@@ -37,6 +37,9 @@ const WaitingRoomPage: React.FC = () => {
       }
     }
     
+    // Don't clear redirect flags on mount - this was causing infinite loops
+    // The flags will be cleared when user successfully joins the live room
+    
     // Cleanup function to clear any intervals
     return () => {
       // Cleanup will be handled by the monitoring function
@@ -85,16 +88,28 @@ const WaitingRoomPage: React.FC = () => {
         if (result.getMeetingById.status === 'LIVE') {
           console.log('🎯 WAITING: Meeting is LIVE, redirecting to live room immediately');
           
-          // Prevent infinite redirect loop using localStorage
-          const redirectKey = `redirected_to_live_${meetingId}_${participantId || 'anonymous'}`;
-          const hasRedirected = localStorage.getItem(redirectKey);
+          // Prevent infinite redirect loop using localStorage with timestamp
+          const redirectKey = `redirected_to_live_${meetingId}`;
+          const lastRedirectTime = localStorage.getItem(redirectKey);
+          const now = Date.now();
+          const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
           
-          if (!hasRedirected) {
-            localStorage.setItem(redirectKey, 'true');
-            console.log('🚀 WAITING: First redirect to live room, setting flag');
+          console.log('🔍 WAITING: Initial redirect check:', {
+            meetingId,
+            participantId,
+            redirectKey,
+            lastRedirectTime,
+            timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
+            cooldownPeriod: REDIRECT_COOLDOWN,
+            backendStatus: result.getMeetingById.status
+          });
+          
+          if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
+            localStorage.setItem(redirectKey, now.toString());
+            console.log('🚀 WAITING: Initial redirect to live room (cooldown period passed)');
             router.push(`/livestream/${meetingId}`);
           } else {
-            console.log('⚠️ WAITING: Already redirected to live room, staying in waiting room to prevent loop');
+            console.log('⚠️ WAITING: Initial redirect cooldown active, staying in waiting room to prevent loop');
           }
           return;
         }
@@ -153,16 +168,29 @@ const WaitingRoomPage: React.FC = () => {
             clearInterval(interval);
             console.log('🚀 WAITING: Meeting started (backend status:', result.getMeetingById.status, 'mapped status:', currentStatus, '), redirecting to live room');
             
-            // Prevent infinite redirect loop using localStorage
-            const redirectKey = `redirected_to_live_${meetingId}_${participantId || 'anonymous'}`;
-            const hasRedirected = localStorage.getItem(redirectKey);
+            // Prevent infinite redirect loop using localStorage with timestamp
+            const redirectKey = `redirected_to_live_${meetingId}`;
+            const lastRedirectTime = localStorage.getItem(redirectKey);
+            const now = Date.now();
+            const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
             
-            if (!hasRedirected) {
-              localStorage.setItem(redirectKey, 'true');
-              console.log('🚀 WAITING: First redirect to live room, setting flag');
+            console.log('🔍 WAITING: Redirect check:', {
+              meetingId,
+              participantId,
+              redirectKey,
+              lastRedirectTime,
+              timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
+              cooldownPeriod: REDIRECT_COOLDOWN,
+              backendStatus: result.getMeetingById.status,
+              mappedStatus: currentStatus
+            });
+            
+            if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
+              localStorage.setItem(redirectKey, now.toString());
+              console.log('🚀 WAITING: Redirecting to live room (cooldown period passed)');
               router.push(`/livestream/${meetingId}`);
             } else {
-              console.log('⚠️ WAITING: Already redirected to live room, staying in waiting room to prevent loop');
+              console.log('⚠️ WAITING: Redirect cooldown active, staying in waiting room to prevent loop');
             }
           }
           
