@@ -161,6 +161,7 @@ export const JOIN_MEETING = gql`
       cameraState
       userId
       meetingId
+      status
     }
   }
 `;
