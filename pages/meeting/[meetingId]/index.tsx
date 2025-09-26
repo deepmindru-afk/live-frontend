@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { enhancedMakeGraphQLRequest } from '../../../../lib/mock-graphql-service';
@@ -36,7 +36,7 @@ interface Meeting {
   participantCount: number;
 }
 
-const MeetingPage: React.FC = () => {
+const MeetingPage: React.FC = memo(() => {
   const router = useRouter();
   const { meetingId } = router.query;
   const [meeting, setMeeting] = useState<Meeting | null>(null);
@@ -298,23 +298,23 @@ const MeetingPage: React.FC = () => {
     }
   };
 
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = isMuted;
+        track.enabled = !isMuted;
       });
     }
-  };
+  }, [isMuted]);
 
-  const toggleCamera = () => {
-    setIsCameraOff(!isCameraOff);
+  const toggleCamera = useCallback(() => {
+    setIsCameraOff(prev => !prev);
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !isCameraOff;
+        track.enabled = isCameraOff;
       });
     }
-  };
+  }, [isCameraOff]);
 
   const toggleScreenShare = async () => {
     try {
@@ -1469,5 +1469,9 @@ const MeetingPage: React.FC = () => {
     </>
   );
 };
+
+});
+
+MeetingPage.displayName = 'MeetingPage';
 
 export default MeetingPage;

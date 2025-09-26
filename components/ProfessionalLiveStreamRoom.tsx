@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
@@ -51,7 +51,7 @@ interface ProfessionalLiveStreamRoomProps {
   userId?: string;
 }
 
-const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
+const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = memo(({
   meetingId: propMeetingId,
   role = 'HOST',
   userId = 'p1'
@@ -76,30 +76,47 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
+  
+  // 🔧 ANTI-FLICKERING: Debounce state updates to prevent rapid re-renders
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const DEBOUNCE_DELAY = 1000; // 1 second debounce
 
-  // GraphQL Queries
+  // GraphQL Queries - 🔧 OPTIMIZED: 3-second polling with anti-flickering measures
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 3000, // 🔧 NEW: Poll every 3 seconds to detect meeting status changes
-    fetchPolicy: 'cache-and-network' // 🔧 NEW: Always fetch fresh data
+    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
+    notifyOnNetworkStatusChange: false, // 🔧 FIX: Prevent loading state changes during polling
+    errorPolicy: 'ignore' // 🔧 FIX: Ignore errors to prevent UI breaking
   });
 
   const { data: participantsData, loading: participantsLoading, error: participantsError } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 5000
+    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    errorPolicy: 'ignore',
+    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
+    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
   });
 
   const { data: waitingData, loading: waitingLoading, error: waitingError } = useQuery(GET_WAITING_PARTICIPANTS, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 3000
+    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    errorPolicy: 'ignore',
+    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
+    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
   });
 
   const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
     variables: { meetingId: actualMeetingId },
-    skip: !actualMeetingId || !isAuth
+    skip: !actualMeetingId || !isAuth,
+    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    errorPolicy: 'ignore',
+    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
+    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
   });
 
   // GraphQL Mutations
@@ -192,54 +209,141 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     }
   }, [meetingData, meetingStatus]);
 
-  // Update participants
+  // Update participants - 🔧 OPTIMIZED: 3-second refresh with debouncing to prevent flickering
   useEffect(() => {
-    if (participantsData) {
-      const participantsList = (participantsData as any)?.getParticipantsByMeeting || [];
-      setParticipants(participantsList);
-      
-      // Count raised hands
-      const raisedHands = participantsList.filter((p: any) => p.hasHandRaised);
-      setRaisedHandsCount(raisedHands.length);
-    }
-  }, [participantsData]);
-
-  // Update waiting participants
-  useEffect(() => {
-    if (waitingData) {
-      const waitingList = (waitingData as any)?.getWaitingParticipants || [];
-      setWaitingParticipants(waitingList);
-    }
-  }, [waitingData]);
-
-  // Update current participant
-  useEffect(() => {
-    if (currentParticipantData) {
-      const participant = (currentParticipantData as any)?.getParticipantByUserAndMeeting;
-      if (participant) {
-        setCurrentParticipant(participant);
-        setHandRaised(participant.hasHandRaised || false);
-      }
-    }
-  }, [currentParticipantData]);
-
-  // 🔧 NEW: Fallback check for meeting status (in case polling fails)
-  useEffect(() => {
-    const checkMeetingStatus = async () => {
-      if (!actualMeetingId || meetingStatus === 'ENDED') return;
-      
+    if (participantsData && !participantsError) {
       try {
-        console.log('🔄 FALLBACK: Checking meeting status...');
-        await refetchMeeting();
+        const participantsList = (participantsData as any)?.getParticipantsByMeeting || [];
+        const now = Date.now();
+        
+        // 🔧 ANTI-FLICKERING: Debounce rapid updates
+        if (now - lastUpdateTime < DEBOUNCE_DELAY) {
+          return;
+        }
+        
+        // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
+        setParticipants(prevParticipants => {
+          const hasChanged = JSON.stringify(prevParticipants) !== JSON.stringify(participantsList);
+          if (hasChanged) {
+            setLastUpdateTime(now);
+            setIsRefreshing(true);
+            // Hide refresh indicator after 500ms
+            setTimeout(() => setIsRefreshing(false), 500);
+            return participantsList;
+          }
+          return prevParticipants;
+        });
+        
+        // Count raised hands
+        const raisedHands = participantsList.filter((p: any) => p.hasHandRaised);
+        setRaisedHandsCount(prevCount => {
+          return prevCount !== raisedHands.length ? raisedHands.length : prevCount;
+        });
       } catch (error) {
-        console.error('❌ FALLBACK: Error checking meeting status:', error);
+        console.warn('⚠️ Error processing participants data:', error);
+        // Keep existing participants to prevent UI refresh
       }
-    };
+    }
+  }, [participantsData, participantsError, lastUpdateTime, DEBOUNCE_DELAY]);
 
-    // Check every 5 seconds as a fallback
-    const interval = setInterval(checkMeetingStatus, 5000);
-    return () => clearInterval(interval);
-  }, [actualMeetingId, meetingStatus, refetchMeeting]);
+  // Update waiting participants - 🔧 OPTIMIZED: 3-second refresh with debouncing
+  useEffect(() => {
+    if (waitingData && !waitingError) {
+      try {
+        const waitingList = (waitingData as any)?.getWaitingParticipants || [];
+        const now = Date.now();
+        
+        // 🔧 ANTI-FLICKERING: Debounce rapid updates
+        if (now - lastUpdateTime < DEBOUNCE_DELAY) {
+          return;
+        }
+        
+        // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
+        setWaitingParticipants(prevWaiting => {
+          const hasChanged = JSON.stringify(prevWaiting) !== JSON.stringify(waitingList);
+          if (hasChanged) {
+            setLastUpdateTime(now);
+            return waitingList;
+          }
+          return prevWaiting;
+        });
+      } catch (error) {
+        console.warn('⚠️ Error processing waiting participants data:', error);
+        // Keep existing waiting participants
+      }
+    }
+  }, [waitingData, waitingError, lastUpdateTime, DEBOUNCE_DELAY]);
+
+  // Update current participant - 🔧 OPTIMIZED: 3-second refresh with debouncing
+  useEffect(() => {
+    if (currentParticipantData && !currentParticipantError) {
+      try {
+        const participant = (currentParticipantData as any)?.getParticipantByUserAndMeeting;
+        if (participant) {
+          const now = Date.now();
+          
+          // 🔧 ANTI-FLICKERING: Debounce rapid updates
+          if (now - lastUpdateTime < DEBOUNCE_DELAY) {
+            return;
+          }
+          
+          // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
+          setCurrentParticipant((prevParticipant: any) => {
+            const hasChanged = JSON.stringify(prevParticipant) !== JSON.stringify(participant);
+            if (hasChanged) {
+              setLastUpdateTime(now);
+              return participant;
+            }
+            return prevParticipant;
+          });
+          
+          setHandRaised(prevHandRaised => {
+            const newHandRaised = participant.hasHandRaised || false;
+            return prevHandRaised !== newHandRaised ? newHandRaised : prevHandRaised;
+          });
+        }
+      } catch (error) {
+        console.warn('⚠️ Error processing current participant data:', error);
+        // Keep existing participant data
+      }
+    }
+  }, [currentParticipantData, currentParticipantError, lastUpdateTime, DEBOUNCE_DELAY]);
+
+  // 🔧 FIX: Handle GraphQL errors gracefully
+  useEffect(() => {
+    if (currentParticipantError) {
+      console.warn('⚠️ CURRENT_PARTICIPANT_ERROR:', currentParticipantError);
+      // Don't break the UI, just log the error
+      // Reset current participant to prevent UI issues
+      setCurrentParticipant(null);
+    }
+  }, [currentParticipantError]);
+
+  useEffect(() => {
+    if (participantsError) {
+      console.warn('⚠️ PARTICIPANTS_ERROR:', participantsError);
+      // Don't break the UI, just log the error
+      // Keep existing participants to prevent UI refresh
+    }
+  }, [participantsError]);
+
+  useEffect(() => {
+    if (waitingError) {
+      console.warn('⚠️ WAITING_ERROR:', waitingError);
+      // Don't break the UI, just log the error
+      // Keep existing waiting participants
+    }
+  }, [waitingError]);
+
+  useEffect(() => {
+    if (meetingError) {
+      console.warn('⚠️ MEETING_ERROR:', meetingError);
+      // Don't break the UI, just log the error
+    }
+  }, [meetingError]);
+
+  // 🔧 FIX: Removed excessive fallback polling that was causing flickering
+  // The main polling intervals are now sufficient and less aggressive
 
   // Auto-join meeting when authenticated
   useEffect(() => {
@@ -298,19 +402,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     return () => clearTimeout(timer);
   }, [isAuth, authComplete, actualMeetingId, meetingStatus, role, currentParticipant, startMeeting]);
 
-  // Helper functions
-  const handleStartRecording = async () => {
+  // Helper functions - 🔧 FIX: Memoized callbacks to prevent unnecessary re-renders
+  const handleStartRecording = useCallback(async () => {
     try {
       setIsRecording(true);
       // Add recording start logic here
       console.log('🎥 Recording started');
-        } catch (error) {
+    } catch (error) {
       console.error('❌ Error starting recording:', error);
       setIsRecording(false);
     }
-  };
+  }, []);
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = useCallback(async () => {
     try {
       setIsRecording(false);
       // Add recording stop logic here
@@ -318,22 +422,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
     } catch (error) {
       console.error('❌ Error stopping recording:', error);
     }
-  };
+  }, []);
 
-  const handleMicToggle = () => {
-    setMicEnabled(!micEnabled);
+  const handleMicToggle = useCallback(() => {
+    setMicEnabled(prev => !prev);
     // Add mic toggle logic here
-  };
+  }, []);
 
-  const handleCameraToggle = () => {
-    setCameraEnabled(!cameraEnabled);
+  const handleCameraToggle = useCallback(() => {
+    setCameraEnabled(prev => !prev);
     // Add camera toggle logic here
-  };
+  }, []);
 
-  const handleScreenShareToggle = () => {
-    setScreenSharing(!screenSharing);
+  const handleScreenShareToggle = useCallback(() => {
+    setScreenSharing(prev => !prev);
     // Add screen share logic here
-  };
+  }, []);
 
   const handleRaiseHand = async () => {
     try {
@@ -459,7 +563,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
           console.error('❌ FORCE EXIT: Error force leaving meeting:', error);
           
           // Show detailed error message with retry option
-          const errorMessage = error.message || 'Unknown error occurred';
+          const errorMessage = (error as Error).message || 'Unknown error occurred';
           await Swal.fire({
             title: 'Force Leave Failed',
             html: `Failed to end meeting.<br><br><strong>Error:</strong> ${errorMessage}<br><br>Please try again or contact support if the issue persists.`,
@@ -541,33 +645,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
 
             console.log('✅ TRANSFER HOST: Host role transferred successfully');
 
-            // Fallback participant ID if currentParticipant is null
-            const participantId = currentParticipant?._id || participants.find(p => p.user?._id === actualUserId)?._id;
-            
-            if (!participantId) {
-              await Swal.fire('Error', 'Unable to identify participant. Please refresh and try again.', 'error');
-              return;
-            }
-            
-            console.log('🔄 LEAVE MEETING: Attempting to leave meeting...');
-            await leaveMeeting({
-              variables: {
-                input: {
-                  participantId: participantId
-                }
-              }
+            // 🔧 FIX: After host transfer, don't try to leave immediately
+            // The host transfer already handles the role change
+            // Just redirect to dashboard after a short delay
+            await Swal.fire({
+              title: 'Host Role Transferred',
+              text: 'You have successfully transferred the host role. You will be redirected to the dashboard.',
+              icon: 'success',
+              timer: 2000,
+              showConfirmButton: false
             });
-
-            console.log('✅ LEAVE MEETING: Successfully left meeting');
-            await Swal.fire('Host Role Transferred', 'You have successfully transferred the host role and left the meeting.', 'success');
             
-            // Redirect to dashboard after successful leave
-            window.location.href = '/dashboard';
-          } catch (error) {
-            console.error('❌ TRANSFER HOST: Error transferring host:', error);
-            
-            // Show detailed error message with fallback option
-            const errorMessage = error.message || 'Unknown error occurred';
+            // Redirect to dashboard after successful transfer
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 2000);
+        } catch (error) {
+          console.error('❌ TRANSFER HOST: Error transferring host:', error);
+          
+          // Show detailed error message with fallback option
+          const errorMessage = (error as Error).message || 'Unknown error occurred';
             await Swal.fire({
               title: 'Transfer Failed',
               html: `Failed to transfer host role.<br><br><strong>Error:</strong> ${errorMessage}<br><br>Would you like to try force exit instead?`,
@@ -693,7 +790,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
   const isHost = currentParticipant?.role === 'HOST';
 
     return (
-      <div style={{
+      <>
+        {/* 🔧 CSS ANIMATION FOR REFRESH SPINNER */}
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        
+        <div style={{
           display: 'flex',
           height: '100vh',
           backgroundColor: '#1a1a1a',
@@ -732,7 +838,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
         </div>
 
         {/* Live and Recording Buttons */}
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {/* 🔧 REFRESH INDICATOR */}
+          {isRefreshing && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              color: '#28a745',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}>
+              <div style={{
+                width: '12px',
+                height: '12px',
+                border: '2px solid #28a745',
+                borderTop: '2px solid transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              Refreshing...
+            </div>
+          )}
+          
           {isLive && (
             <button style={{
               backgroundColor: '#dc3545',
@@ -1152,8 +1280,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
               </div>
             </div>
           )}
-    </div>
-  );
-};
+        </div>
+      </>
+    );
+  });
+
+ProfessionalLiveStreamRoom.displayName = 'ProfessionalLiveStreamRoom';
 
 export default ProfessionalLiveStreamRoom;

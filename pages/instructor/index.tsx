@@ -15,13 +15,14 @@ import { isValidObjectId } from '../../lib/validation';
 interface Meeting {
   _id: string;
   title: string;
-  status: 'STARTED' | 'SCHEDULED' | 'ENDED';
+  status: 'LIVE' | 'STARTED' | 'SCHEDULED' | 'ENDED';
   schedule?: string;
   inviteCode: string;
   createdAt: string;
   updatedAt: string;
   participantCount: number;
   duration?: number;
+  isCurrentUserHost?: boolean; // Add this for debugging
 }
 
 interface VOD {
@@ -40,7 +41,7 @@ const Dashboard: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'STARTED' | 'SCHEDULED' | 'ENDED' | 'VOD'>('STARTED');
+  const [activeTab, setActiveTab] = useState<'LIVE' | 'SCHEDULED' | 'ENDED' | 'VOD'>('LIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
@@ -167,31 +168,127 @@ const Dashboard: React.FC = () => {
         const { makeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
         const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
           input: {
-            hostId: currentUserId // Filter by current user
+            hostId: currentUserId, // Filter by current user
+            limit: 50, // Get more meetings
+            page: 1 // Use page instead of offset
           }
         });
         
+        console.log('📊 DASHBOARD: GraphQL Response:', result);
+        console.log('📊 DASHBOARD: Current User ID:', currentUserId);
+        
         if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
-          const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => ({
-            _id: meeting._id,
-            title: meeting.title,
-            status: meeting.status === 'CREATED' ? 'STARTED' : 
-                    meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                    meeting.status === 'ENDED' ? 'ENDED' : 'STARTED',
-            schedule: meeting.scheduledFor,
-            inviteCode: meeting.inviteCode,
-            createdAt: meeting.createdAt,
-            updatedAt: meeting.updatedAt || meeting.createdAt,
-            participantCount: meeting.participantCount || 0,
-            duration: meeting.durationMin
-          }));
+          const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => {
+            // Check if current user is still the host of this meeting
+            const isCurrentUserHost = meeting.hostId === currentUserId || 
+                                    (meeting.host && meeting.host._id === currentUserId);
+            
+            // Debug logging
+            console.log(`📊 DASHBOARD: Meeting ${meeting._id} - Original Status: ${meeting.status}, Host ID: ${meeting.hostId}, Current User: ${currentUserId}, Is Host: ${isCurrentUserHost}`);
+            
+            // Determine status based on whether user is still host
+            let status: 'LIVE' | 'STARTED' | 'SCHEDULED' | 'ENDED';
+            if (isCurrentUserHost) {
+              // User is still the host, show actual meeting status
+              status = meeting.status === 'LIVE' ? 'LIVE' :
+                      meeting.status === 'CREATED' ? 'LIVE' : 
+                      meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                      meeting.status === 'ENDED' ? 'ENDED' : 'LIVE';
+            } else {
+              // User is no longer the host (transferred), show as ENDED
+              status = 'ENDED';
+            }
+            
+            console.log(`📊 DASHBOARD: Meeting ${meeting._id} - Final Status: ${status}`);
+            
+            return {
+              _id: meeting._id,
+              title: meeting.title,
+              status: status,
+              schedule: meeting.scheduledFor,
+              inviteCode: meeting.inviteCode,
+              createdAt: meeting.createdAt,
+              updatedAt: meeting.updatedAt || meeting.createdAt,
+              participantCount: meeting.participantCount || 0,
+              duration: meeting.durationMin,
+              isCurrentUserHost: isCurrentUserHost // Add this for debugging
+            };
+          });
           
           setMeetings(meetings);
           console.log('📊 DASHBOARD: Successfully loaded meetings from GraphQL:', meetings.length);
           return;
         }
       } catch (graphqlError) {
-        console.warn('📊 DASHBOARD: GraphQL request failed, falling back to mock data:', graphqlError);
+        console.warn('📊 DASHBOARD: GraphQL request failed, trying without hostId filter:', graphqlError);
+        
+        // Try without hostId filter to see if there are any meetings
+        try {
+          const { makeGraphQLRequest: fallbackMakeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
+          const fallbackResult = await fallbackMakeGraphQLRequest(GET_MY_MEETINGS, {
+            input: {
+              limit: 50,
+              page: 1
+            }
+          });
+          
+          console.log('📊 DASHBOARD: Fallback Response (no hostId filter):', fallbackResult);
+          
+          if (fallbackResult.getMeetings && fallbackResult.getMeetings.meetings && Array.isArray(fallbackResult.getMeetings.meetings)) {
+            const meetings: Meeting[] = fallbackResult.getMeetings.meetings.map((meeting: any) => {
+              // Check if current user is still the host of this meeting
+              const isCurrentUserHost = meeting.hostId === currentUserId || 
+                                      (meeting.host && meeting.host._id === currentUserId);
+              
+              // Determine status based on whether user is still host
+              let status: 'LIVE' | 'STARTED' | 'SCHEDULED' | 'ENDED';
+              if (isCurrentUserHost) {
+                // User is still the host, show actual meeting status
+                status = meeting.status === 'LIVE' ? 'LIVE' :
+                        meeting.status === 'CREATED' ? 'LIVE' : 
+                        meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                        meeting.status === 'ENDED' ? 'ENDED' : 'LIVE';
+              } else {
+                // User is no longer the host (transferred), show as ENDED
+                status = 'ENDED';
+              }
+              
+              return {
+                _id: meeting._id,
+                title: meeting.title,
+                status: status,
+                schedule: meeting.scheduledFor,
+                inviteCode: meeting.inviteCode,
+                createdAt: meeting.createdAt,
+                updatedAt: meeting.updatedAt || meeting.createdAt,
+                participantCount: meeting.participantCount || 0,
+                duration: meeting.durationMin,
+                isCurrentUserHost: isCurrentUserHost // Add this for debugging
+              };
+            });
+            
+            setMeetings(meetings);
+            console.log('📊 DASHBOARD: Successfully loaded meetings from fallback:', meetings.length);
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('📊 DASHBOARD: Fallback request also failed:', fallbackError);
+          
+          // Final fallback: Show empty state with helpful message
+          console.warn('📊 DASHBOARD: All GraphQL requests failed, showing empty state');
+          setMeetings([]);
+          
+          // Show user-friendly error message
+          Swal.fire({
+            title: 'Unable to Load Meetings',
+            text: 'There was an issue connecting to the server. Please refresh the page and try again.',
+            icon: 'warning',
+            confirmButtonText: 'Refresh Page',
+            allowOutsideClick: false
+          }).then(() => {
+            window.location.reload();
+          });
+        }
       }
       
       // If GraphQL fails, show empty state (no mock data to avoid showing all meetings)
@@ -754,9 +851,15 @@ const Dashboard: React.FC = () => {
   const filteredMeetings = meetings.filter(meeting => {
     // Filter by status
     if (activeTab === 'VOD') return false;
-    if (activeTab !== 'STARTED' && activeTab !== 'SCHEDULED' && activeTab !== 'ENDED') return true;
+    if (activeTab !== 'LIVE' && activeTab !== 'SCHEDULED' && activeTab !== 'ENDED') return true;
     
-    const statusMatch = meeting.status === activeTab;
+    // Map statuses for filtering
+    let statusMatch = false;
+    if (activeTab === 'LIVE') {
+      statusMatch = meeting.status === 'LIVE' || meeting.status === 'STARTED';
+    } else {
+      statusMatch = meeting.status === activeTab;
+    }
     
     // Filter by search query
     const searchMatch = !searchQuery || 
@@ -845,10 +948,10 @@ const Dashboard: React.FC = () => {
               {/* Tabs */}
               <div className="tabs">
                 <button
-                  className={`tab ${activeTab === 'STARTED' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('STARTED')}
+                  className={`tab ${activeTab === 'LIVE' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('LIVE')}
                 >
-                  시작된 회의
+                  진행중 회의
                 </button>
                 <button
                   className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
@@ -1001,6 +1104,7 @@ const Dashboard: React.FC = () => {
                           <th>No.</th>
                           <th>회의 제목</th>
                           <th>회의시간</th>
+                          <th>상태</th>
                           <th>초대코드</th>
                           <th>비고</th>
                         </tr>
@@ -1015,6 +1119,43 @@ const Dashboard: React.FC = () => {
                                 ? formatDate(meeting.schedule)
                                 : formatDate(meeting.createdAt)
                               }
+                            </td>
+                            <td>
+                              <span 
+                                style={{
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontWeight: '500',
+                                  color: 'white',
+                                  background: meeting.status === 'LIVE' ? '#28a745' : 
+                                             meeting.status === 'STARTED' ? '#28a745' :
+                                             meeting.status === 'SCHEDULED' ? '#ffc107' : 
+                                             meeting.status === 'ENDED' ? '#6c757d' : '#28a745'
+                                }}
+                              >
+                                {meeting.status === 'LIVE' ? '진행중' :
+                                 meeting.status === 'STARTED' ? '진행중' : 
+                                 meeting.status === 'SCHEDULED' ? '예정' : 
+                                 meeting.status === 'ENDED' ? '종료' : '진행중'}
+                              </span>
+                              {meeting.status === 'ENDED' && !meeting.isCurrentUserHost && (
+                                <span 
+                                  style={{
+                                    marginLeft: '8px',
+                                    padding: '2px 6px',
+                                    borderRadius: '3px',
+                                    fontSize: '10px',
+                                    fontWeight: '400',
+                                    color: '#6c757d',
+                                    background: '#f8f9fa',
+                                    border: '1px solid #dee2e6'
+                                  }}
+                                  title="호스트 역할이 이전되었습니다"
+                                >
+                                  이전됨
+                                </span>
+                              )}
                             </td>
                             <td>
                               <span 
@@ -1044,7 +1185,7 @@ const Dashboard: React.FC = () => {
                                     시작
                                   </button>
                                 )}
-                                {meeting.status === 'STARTED' && (
+                                {(meeting.status === 'LIVE' || meeting.status === 'STARTED') && (
                                   <>
                                     <button 
                                       onClick={() => {
@@ -1089,6 +1230,46 @@ const Dashboard: React.FC = () => {
                                       종료
                                     </button>
                                   </>
+                                )}
+                                {meeting.status === 'ENDED' && (
+                                  <button 
+                                    onClick={() => {
+                                      if (meeting.isCurrentUserHost) {
+                                        // User is still the host, can rejoin
+                                        if (isValidObjectId(meeting._id)) {
+                                          window.location.href = `/prejoin/${meeting._id}`;
+                                        } else {
+                                          Swal.fire({
+                                            icon: 'error',
+                                            title: 'Invalid Meeting',
+                                            text: 'This meeting has an invalid ID format. Please create a new meeting.',
+                                            confirmButtonText: 'OK'
+                                          });
+                                        }
+                                      } else {
+                                        // User is no longer the host, show info
+                                        Swal.fire({
+                                          icon: 'info',
+                                          title: '호스트 역할 이전됨',
+                                          text: '이 회의의 호스트 역할이 다른 사용자에게 이전되었습니다. 더 이상 참여할 수 없습니다.',
+                                          confirmButtonText: '확인'
+                                        });
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '6px 12px',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                      fontWeight: '500',
+                                      background: meeting.isCurrentUserHost ? '#6c757d' : '#e9ecef',
+                                      color: meeting.isCurrentUserHost ? 'white' : '#6c757d'
+                                    }}
+                                    disabled={!meeting.isCurrentUserHost}
+                                  >
+                                    {meeting.isCurrentUserHost ? '다시 참여' : '이전됨'}
+                                  </button>
                                 )}
                               </div>
                             </td>
