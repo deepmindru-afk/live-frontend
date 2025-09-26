@@ -309,11 +309,14 @@ const Dashboard: React.FC = () => {
           await Swal.fire({
             icon: 'success',
             title: '성공',
-            text: '회의가 시작되었습니다!',
+            text: '회의가 시작되었습니다! 프리조인 페이지로 이동합니다.',
             confirmButtonText: '확인'
           });
 
-          console.log('▶️ START MEETING: Meeting started via GraphQL:', meetingId);
+          console.log('▶️ START MEETING: Meeting started via GraphQL, navigating to prejoin:', meetingId);
+          
+          // Navigate to prejoin room
+          router.push(`/prejoin/${meetingId}`);
           return;
         }
       } catch (graphqlError) {
@@ -330,11 +333,14 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 시작되었습니다! (모의 서비스)',
+        text: '회의가 시작되었습니다! 프리조인 페이지로 이동합니다. (모의 서비스)',
         confirmButtonText: '확인'
       });
 
-      console.log('▶️ START MEETING: Mock meeting started:', meetingId);
+      console.log('▶️ START MEETING: Mock meeting started, navigating to prejoin:', meetingId);
+      
+      // Navigate to prejoin room even for mock service
+      router.push(`/prejoin/${meetingId}`);
 
     } catch (error: unknown) {
       console.error('▶️ START MEETING: Error:', error);
@@ -608,12 +614,30 @@ const Dashboard: React.FC = () => {
                           <td>
                             <div className="actions">
                               {meeting.status === 'SCHEDULED' && (
-                                <button 
-                                  className="action-btn start"
-                                  onClick={() => handleStartMeeting(meeting._id)}
-                                >
-                                  시작
-                                </button>
+                                <>
+                                  <button 
+                                    className="action-btn start"
+                                    onClick={() => handleStartMeeting(meeting._id)}
+                                    style={{ marginRight: '8px' }}
+                                  >
+                                    시작
+                                  </button>
+                                  <button 
+                                    className="action-btn join"
+                                    onClick={() => router.push(`/prejoin/${meeting._id}`)}
+                                    style={{ 
+                                      background: '#007bff',
+                                      color: 'white',
+                                      border: 'none',
+                                      padding: '6px 12px',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    참여
+                                  </button>
+                                </>
                               )}
                               {meeting.status === 'STARTED' && (
                                 <button 

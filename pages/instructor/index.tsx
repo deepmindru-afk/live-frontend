@@ -375,11 +375,14 @@ const Dashboard: React.FC = () => {
           await Swal.fire({
             icon: 'success',
             title: '성공',
-            text: '회의가 시작되었습니다!',
+            text: '회의가 시작되었습니다! 프리조인 페이지로 이동합니다.',
             confirmButtonText: '확인'
           });
 
-          console.log('▶️ START MEETING: Meeting started via GraphQL:', meetingId);
+          console.log('▶️ START MEETING: Meeting started via GraphQL, navigating to prejoin:', meetingId);
+          
+          // Navigate to prejoin room
+          router.push(`/prejoin/${meetingId}`);
           return;
         }
       } catch (graphqlError) {
@@ -396,11 +399,14 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 시작되었습니다! (모의 서비스)',
+        text: '회의가 시작되었습니다! 프리조인 페이지로 이동합니다. (모의 서비스)',
         confirmButtonText: '확인'
       });
 
-      console.log('▶️ START MEETING: Meeting started:', meetingId);
+      console.log('▶️ START MEETING: Mock meeting started, navigating to prejoin:', meetingId);
+      
+      // Navigate to prejoin room even for mock service
+      router.push(`/prejoin/${meetingId}`);
 
     } catch (error: unknown) {
       console.error('▶️ START MEETING: Error:', error);

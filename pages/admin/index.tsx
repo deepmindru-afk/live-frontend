@@ -5,19 +5,13 @@ import Image from 'next/image';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { 
   GET_ALL_MEETINGS_ADMIN, 
-  GET_MEETING_STATS, 
   GET_VOD_STATS, 
   GET_CHAT_STATS,
   GET_MEMBERS 
 } from '../../apollo/admin/queries';
+import { GET_MEETING_ATTENDANCE } from '../../apollo/livestream/queries';
 import { 
-  DELETE_MEETING, 
-  REMOVE_PARTICIPANT, 
-  UPDATE_MEETING, 
-  ROTATE_INVITE_CODE,
-  FORCE_END_MEETING,
-  PROMOTE_USER_ROLE,
-  DELETE_MEMBER
+  REMOVE_PARTICIPANT
 } from '../../apollo/admin/mutations';
 import Swal from 'sweetalert2';
 
@@ -91,6 +85,9 @@ const AdminDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [selectedMeetingParticipants, setSelectedMeetingParticipants] = useState<any[]>([]);
+  const [selectedMeetingForParticipants, setSelectedMeetingForParticipants] = useState<Meeting | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -142,6 +139,9 @@ const AdminDashboard: React.FC = () => {
         await loadVodStats();
       } else if (activeTab === 'chat') {
         await loadChatStats();
+      } else if (activeTab === 'attendance') {
+        await loadMeetings(); // Load meetings for attendance view
+        await loadMeetingStats();
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -326,6 +326,27 @@ const AdminDashboard: React.FC = () => {
         activeUsers: 8,
         averageMessagesPerUser: 12
       });
+    }
+  };
+
+  const handleMeetingParticipantsClick = async (meeting: any) => {
+    try {
+      setSelectedMeetingForParticipants(meeting);
+      setShowParticipantsModal(true);
+      
+      // Load participants for this meeting
+      const result = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
+        meetingId: meeting._id
+      });
+      
+      if (result.getMeetingAttendance) {
+        setSelectedMeetingParticipants(result.getMeetingAttendance.participants || []);
+      } else {
+        setSelectedMeetingParticipants([]);
+      }
+    } catch (error) {
+      console.error('Error loading participants:', error);
+      setSelectedMeetingParticipants([]);
     }
   };
 
@@ -576,6 +597,11 @@ const AdminDashboard: React.FC = () => {
                   {activeTab === 'chat' && <div className="nav-indicator" />}
                   <span className="nav-icon">💬</span>
                   <span className="nav-text">Chat</span>
+                </div>
+                <div className={`nav-item ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
+                  {activeTab === 'attendance' && <div className="nav-indicator" />}
+                  <span className="nav-icon">📋</span>
+                  <span className="nav-text">Attendance</span>
                 </div>
               </div>
             </nav>
@@ -949,9 +975,361 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {activeTab === 'attendance' && (
+              <div className="attendance-section">
+                <div className="section-header">
+                  <h1>출석 관리</h1>
+                  <p>완료된 회의의 출석 현황을 확인하세요</p>
+                </div>
+
+                {/* Search Bar */}
+                <div style={{
+                  marginBottom: '20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{
+                    position: 'relative',
+                    width: '300px'
+                  }}>
+                    <input
+                      type="text"
+                      placeholder="검색어를 입력하세요"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 40px 12px 16px',
+                        border: '1px solid #ddd',
+                        borderRadius: '8px',
+                        fontSize: '16px'
+                      }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#666',
+                      fontSize: '18px'
+                    }}>
+                      🔍
+                    </span>
+                  </div>
+                </div>
+
+                {/* Meetings Table */}
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  overflow: 'hidden'
+                }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse'
+                  }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa' }}>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>No.</th>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>회의 제목</th>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>회의시간</th>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>초대코드</th>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>참가자 수</th>
+                        <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: '600' }}>비고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {meetings
+                        .filter(meeting => meeting.status === 'ENDED')
+                        .filter((meeting: any) => 
+                          !searchQuery || 
+                          (meeting.title && meeting.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (meeting.inviteCode && meeting.inviteCode.toLowerCase().includes(searchQuery.toLowerCase()))
+                        )
+                        .map((meeting: any, index: number) => (
+                          <tr 
+                            key={meeting._id}
+                            style={{ 
+                              borderBottom: '1px solid #dee2e6',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                          >
+                            <td style={{ padding: '15px', color: '#666' }}>{index + 1}</td>
+                            <td style={{ padding: '15px' }}>
+                              <div style={{ fontWeight: '500', color: '#333' }}>
+                                {meeting.title || 'Untitled Meeting'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '15px', color: '#666' }}>
+                              {meeting.createdAt ? new Date(meeting.createdAt).toLocaleString('ko-KR', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) : 'N/A'}
+                            </td>
+                            <td style={{ padding: '15px' }}>
+                              <span style={{
+                                fontFamily: 'monospace',
+                                backgroundColor: '#f8f9fa',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '14px',
+                                color: '#495057'
+                              }}>
+                                {meeting.inviteCode || 'N/A'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '15px', color: '#666' }}>
+                              {meeting.participantCount || 0}명
+                            </td>
+                            <td style={{ padding: '15px' }}>
+                              <button
+                                onClick={() => handleMeetingParticipantsClick(meeting)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '18px',
+                                  color: '#6c757d',
+                                  padding: '4px'
+                                }}
+                                title="참가자 보기"
+                              >
+                                ⋯
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {meetings.filter(m => m.status === 'ENDED').length === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    color: '#666'
+                  }}>
+                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>📋</div>
+                    <h3 style={{ margin: '0 0 10px 0' }}>완료된 회의가 없습니다</h3>
+                    <p style={{ margin: 0 }}>아직 완료된 회의가 없습니다.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Participants Modal */}
+      {showParticipantsModal && selectedMeetingForParticipants && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              paddingBottom: '16px',
+              borderBottom: '1px solid #dee2e6'
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '20px', color: '#333' }}>
+                  참가자 목록
+                </h2>
+                <p style={{ margin: '4px 0 0 0', color: '#666', fontSize: '14px' }}>
+                  {selectedMeetingForParticipants.title}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowParticipantsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '4px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Participants List */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              paddingRight: '8px'
+            }}>
+              {selectedMeetingParticipants.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {selectedMeetingParticipants.map((participant, index) => (
+                    <div
+                      key={participant._id || index}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '16px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '8px',
+                        border: '1px solid #dee2e6'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          backgroundColor: '#007bff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontWeight: 'bold',
+                          fontSize: '16px'
+                        }}>
+                          {participant.displayName ? participant.displayName.charAt(0).toUpperCase() : '?'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#333', marginBottom: '4px' }}>
+                            {participant.displayName || 'Unknown User'}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            {participant.joinedAt ? new Date(participant.joinedAt).toLocaleString('ko-KR') : 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{
+                          fontSize: '12px',
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: participant.status === 'PRESENT' ? '#d4edda' : 
+                                         participant.status === 'ABSENT' ? '#f8d7da' : '#e2e3e5',
+                          color: participant.status === 'PRESENT' ? '#155724' : 
+                                 participant.status === 'ABSENT' ? '#721c24' : '#6c757d',
+                          fontWeight: '500',
+                          marginBottom: '4px'
+                        }}>
+                          {participant.status === 'PRESENT' ? '참석' : 
+                           participant.status === 'ABSENT' ? '결석' : '미정'}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          {participant.totalTime ? `${Math.round(participant.totalTime / 60)}분` : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '40px 20px',
+                  color: '#666'
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+                  <h3 style={{ margin: '0 0 8px 0' }}>참가자가 없습니다</h3>
+                  <p style={{ margin: 0 }}>이 회의에 참가한 사용자가 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              marginTop: '20px',
+              paddingTop: '16px',
+              borderTop: '1px solid #dee2e6',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px'
+            }}>
+              <button
+                onClick={() => setShowParticipantsModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                닫기
+              </button>
+              <button
+                onClick={() => {
+                  // Export participants to Excel
+                  const csvContent = [
+                    ['No', '참가자', '참석 시간', '퇴장 시간', '참여 시간', '상태'],
+                    ...selectedMeetingParticipants.map((participant, index) => [
+                      index + 1,
+                      participant.displayName || 'Unknown',
+                      participant.joinedAt ? new Date(participant.joinedAt).toLocaleString('ko-KR') : 'N/A',
+                      participant.leftAt ? new Date(participant.leftAt).toLocaleString('ko-KR') : '진행 중',
+                      participant.totalTime ? `${Math.round(participant.totalTime / 60)}분` : 'N/A',
+                      participant.status === 'PRESENT' ? '참석' : 
+                      participant.status === 'ABSENT' ? '결석' : '미정'
+                    ])
+                  ].map(row => row.join(',')).join('\n');
+
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const link = document.createElement('a');
+                  const url = URL.createObjectURL(blob);
+                  link.setAttribute('href', url);
+                  link.setAttribute('download', `participants_${selectedMeetingForParticipants.title}_${new Date().toISOString().split('T')[0]}.csv`);
+                  link.style.visibility = 'hidden';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                📊 Excel 다운로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .admin-dashboard {

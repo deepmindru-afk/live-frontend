@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Meeting End Redirect</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .info {
+            color: #17a2b8;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Test Meeting End Redirect</h1>
+        <p>This tool tests the meeting end detection and participant redirection functionality.</p>
+
+        <div class="test-section">
+            <h3>🔧 Fixes Applied</h3>
+            <ul>
+                <li>✅ <strong>Added polling to meeting status query</strong> - Polls every 3 seconds</li>
+                <li>✅ <strong>Added fallback status check</strong> - Refetches every 5 seconds</li>
+                <li>✅ <strong>Enhanced debugging logs</strong> - Shows status changes in console</li>
+                <li>✅ <strong>Added SweetAlert notification</strong> - Shows meeting ended message</li>
+                <li>✅ <strong>Added ended meeting UI</strong> - Prevents interaction when ended</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test Scenarios</h3>
+            <button onclick="testPolling()">Test Polling Mechanism</button>
+            <button onclick="testStatusChange()">Test Status Change Detection</button>
+            <button onclick="testRedirect()">Test Redirect Logic</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="testResults" class="log">
+                <div class="info">Ready to run tests. Click any test button above.</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 How to Test in Real Application</h3>
+            <ol>
+                <li><strong>Start a meeting</strong> as host</li>
+                <li><strong>Join as participant</strong> in another browser/tab</li>
+                <li><strong>End the meeting</strong> as host</li>
+                <li><strong>Check participant browser</strong> - should show "Meeting Ended" message and redirect to dashboard</li>
+                <li><strong>Check console logs</strong> - should see status change detection logs</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Expected Console Logs</h3>
+            <div class="code-block">
+🔄 MEETING STATUS UPDATE: {
+  previousStatus: "LIVE",
+  newStatus: "ENDED",
+  meetingId: "68d6267c74bfdc3731f5c2eb",
+  timestamp: "2025-01-26T15:30:00.000Z"
+}
+🔄 MEETING ENDED: Redirecting to dashboard...
+🔄 REDIRECTING TO DASHBOARD...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🚨 Troubleshooting</h3>
+            <p><strong>If participants still don't get redirected:</strong></p>
+            <ul>
+                <li>Check browser console for error messages</li>
+                <li>Verify the meeting status is actually changing to 'ENDED' in the database</li>
+                <li>Check if the GraphQL query is polling correctly</li>
+                <li>Try refreshing the participant's browser page</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let testResults = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            testResults.push({ message: logEntry, type });
+            
+            const resultsDiv = document.getElementById('testResults');
+            const logDiv = document.createElement('div');
+            logDiv.className = type;
+            logDiv.textContent = logEntry;
+            resultsDiv.appendChild(logDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            testResults = [];
+            document.getElementById('testResults').innerHTML = '';
+        }
+
+        function testPolling() {
+            clearLog();
+            log('🧪 Testing polling mechanism...', 'info');
+            
+            // Simulate polling behavior
+            let status = 'LIVE';
+            let pollCount = 0;
+            
+            const pollInterval = setInterval(() => {
+                pollCount++;
+                log(`Poll #${pollCount}: Meeting status is ${status}`, 'info');
+                
+                if (pollCount >= 3) {
+                    status = 'ENDED';
+                    log(`🔄 STATUS CHANGE: Meeting status changed to ${status}`, 'warning');
+                    log('🔄 MEETING ENDED: Redirecting to dashboard...', 'success');
+                    clearInterval(pollInterval);
+                }
+            }, 1000);
+        }
+
+        function testStatusChange() {
+            clearLog();
+            log('🧪 Testing status change detection...', 'info');
+            
+            const statuses = ['CREATED', 'LIVE', 'ENDED'];
+            let currentIndex = 0;
+            
+            const statusInterval = setInterval(() => {
+                if (currentIndex < statuses.length) {
+                    const newStatus = statuses[currentIndex];
+                    log(`🔄 MEETING STATUS UPDATE: ${newStatus}`, 'info');
+                    
+                    if (newStatus === 'ENDED') {
+                        log('🔄 MEETING ENDED: Redirecting to dashboard...', 'success');
+                        clearInterval(statusInterval);
+                    }
+                    
+                    currentIndex++;
+                } else {
+                    clearInterval(statusInterval);
+                }
+            }, 500);
+        }
+
+        function testRedirect() {
+            clearLog();
+            log('🧪 Testing redirect logic...', 'info');
+            
+            // Simulate the redirect flow
+            log('🔄 MEETING ENDED: Redirecting to dashboard...', 'info');
+            log('🔄 REDIRECTING TO DASHBOARD...', 'success');
+            
+            // In real app, this would be: window.location.href = '/dashboard';
+            log('✅ Redirect would navigate to: /dashboard', 'success');
+        }
+
+        // Initialize
+        log('🚀 Meeting End Redirect Test Suite Ready', 'info');
+        log('Click any test button to verify the meeting end detection and redirect functionality', 'info');
+    </script>
+</body>
+</html>

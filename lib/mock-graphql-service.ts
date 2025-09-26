@@ -784,7 +784,7 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
   };
 }
 
-// Enhanced makeGraphQLRequest function that uses mock service for meeting operations
+// Enhanced makeGraphQLRequest function that uses real backend for all operations
 export async function enhancedMakeGraphQLRequest(query: string | any, variables: any = {}) {
   // Convert GraphQL AST to string if needed
   let queryString = query;
@@ -792,14 +792,8 @@ export async function enhancedMakeGraphQLRequest(query: string | any, variables:
     queryString = print(query);
   }
 
-  // Check if this is a meeting operation that should use mock service
-  if (isMeetingOperation(queryString)) {
-    console.log('🎭 MOCK GRAPHQL: Using mock service for meeting operation');
-    return await mockGraphQLRequest(queryString, variables);
-  }
-
-  // Use real backend for other operations (auth, etc.)
-  console.log('🌐 REAL GRAPHQL: Using real backend for non-meeting operation');
+  // ALWAYS use real backend - disable mock service to fix participant join issues
+  console.log('🌐 REAL GRAPHQL: Using real backend for all operations (mock service disabled)');
   
   // Import the real makeGraphQLRequest function
   const { makeGraphQLRequest } = await import('./simple-auth-handlers');

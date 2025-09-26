@@ -100,7 +100,14 @@ export const useParticipants = (meetingId: string) => {
 // ===== VOD EXAMPLES =====
 
 export const useVODs = () => {
-  const { data, loading, error } = useQuery(GET_ALL_VODS);
+  const { data, loading, error } = useQuery(GET_ALL_VODS, {
+    variables: {
+      input: {
+        limit: 10,
+        offset: 0
+      }
+    }
+  });
   const [uploadVod] = useMutation(UPLOAD_VOD_FILE);
   
   const handleUpload = async (file: File, title: string, meetingId?: string) => {

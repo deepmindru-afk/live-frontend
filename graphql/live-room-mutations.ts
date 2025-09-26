@@ -100,6 +100,21 @@ export const TRANSFER_HOST = gql`
   }
 `;
 
+export const LEAVE_MEETING = gql`
+  mutation LeaveMeeting($input: LeaveMeetingInput!) {
+    leaveMeeting(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+export const FORCE_LEAVE_MEETING = gql`
+  mutation ForceLeaveMeeting($meetingId: ID!) {
+    forceLeaveMeeting(meetingId: $meetingId)
+  }
+`;
+
 // Hand Management Mutations
 export const HOST_LOWER_HAND = gql`
   mutation HostLowerHand($input: HostLowerHandInput!) {

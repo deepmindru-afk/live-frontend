@@ -1,18 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { enhancedMakeGraphQLRequest } from '../../../lib/mock-graphql-service';
-import { GET_MEETING_BY_ID } from '../../../apollo/meeting/queries';
+import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
+import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
+import { GET_MEETING_ATTENDANCE } from '../../apollo/livestream/queries';
 import Swal from 'sweetalert2';
 
-interface Participant {
+interface ParticipantAttendance {
   _id: string;
   displayName: string;
-  email: string;
   joinedAt: string;
   leftAt?: string;
-  isHost?: boolean;
-  totalTime?: number; // in minutes
+  totalTime: number; // in seconds
+  status: string;
+}
+
+interface MeetingAttendance {
+  meetingId: string;
+  totalParticipants: number;
+  presentParticipants: number;
+  absentParticipants: number;
+  averageAttendanceTime: number;
+  attendanceRate: number;
+  participants: ParticipantAttendance[];
 }
 
 interface Meeting {
@@ -20,20 +30,22 @@ interface Meeting {
   title: string;
   status: string;
   inviteCode: string;
-  participants: Participant[];
   participantCount: number;
   duration?: number; // in seconds
   createdAt: string;
   endedAt?: string;
+  scheduledFor?: string;
+  actualStartAt?: string;
 }
 
 const AttendancePage: React.FC = () => {
   const router = useRouter();
   const { meetingId } = router.query;
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [attendance, setAttendance] = useState<MeetingAttendance | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<ParticipantAttendance | null>(null);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
 
   useEffect(() => {
@@ -46,65 +58,72 @@ const AttendancePage: React.FC = () => {
     try {
       setLoading(true);
       
-      // Try to get meeting details
+      // Load meeting details
       try {
-        const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+        const meetingResult = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
           meetingId: meetingId
         });
         
-        if (result.meeting) {
-          setMeeting(result.meeting);
+        if (meetingResult.getMeetingById) {
+          setMeeting(meetingResult.getMeetingById);
         }
       } catch (error) {
         console.warn('Failed to load meeting details:', error);
-        // Fallback to mock data
-        setMeeting({
-          _id: meetingId as string,
-          title: 'Test Meeting',
-          status: 'ENDED',
-          inviteCode: 'ABC123',
+      }
+
+      // Load attendance data
+      try {
+        const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
+          meetingId: meetingId
+        });
+        
+        if (attendanceResult.getMeetingAttendance) {
+          setAttendance(attendanceResult.getMeetingAttendance);
+        }
+      } catch (error) {
+        console.warn('Failed to load attendance data:', error);
+        // Fallback to mock data if needed
+        setAttendance({
+          meetingId: meetingId as string,
+          totalParticipants: 4,
+          presentParticipants: 4,
+          absentParticipants: 0,
+          averageAttendanceTime: 3600, // 1 hour in seconds
+          attendanceRate: 100,
           participants: [
             {
               _id: 'participant-1',
               displayName: '김철수',
-              email: 'kim@example.com',
               joinedAt: '2025-01-15T09:00:00Z',
               leftAt: '2025-01-15T10:30:00Z',
-              isHost: true,
-              totalTime: 90
+              totalTime: 5400, // 90 minutes in seconds
+              status: 'PRESENT'
             },
             {
               _id: 'participant-2',
               displayName: '이영희',
-              email: 'lee@example.com',
               joinedAt: '2025-01-15T09:15:00Z',
               leftAt: '2025-01-15T10:15:00Z',
-              isHost: false,
-              totalTime: 60
+              totalTime: 3600, // 60 minutes in seconds
+              status: 'PRESENT'
             },
             {
               _id: 'participant-3',
               displayName: '박민수',
-              email: 'park@example.com',
               joinedAt: '2025-01-15T09:30:00Z',
               leftAt: '2025-01-15T10:00:00Z',
-              isHost: false,
-              totalTime: 30
+              totalTime: 1800, // 30 minutes in seconds
+              status: 'PRESENT'
             },
             {
               _id: 'participant-4',
               displayName: '정수진',
-              email: 'jung@example.com',
               joinedAt: '2025-01-15T09:45:00Z',
               leftAt: '2025-01-15T10:45:00Z',
-              isHost: false,
-              totalTime: 60
+              totalTime: 3600, // 60 minutes in seconds
+              status: 'PRESENT'
             }
-          ],
-          participantCount: 4,
-          duration: 5400, // 90 minutes in seconds
-          createdAt: '2025-01-15T09:00:00Z',
-          endedAt: '2025-01-15T10:30:00Z'
+          ]
         });
       }
       
@@ -125,44 +144,69 @@ const AttendancePage: React.FC = () => {
     });
   };
 
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}시간 ${mins}분`;
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분 ${secs}초`;
+    } else if (minutes > 0) {
+      return `${minutes}분 ${secs}초`;
+    } else {
+      return `${secs}초`;
+    }
   };
 
-  const calculateTotalTime = (joinedAt: string, leftAt?: string) => {
-    const start = new Date(joinedAt);
-    const end = leftAt ? new Date(leftAt) : new Date();
-    const diffMs = end.getTime() - start.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    return diffMinutes;
+  const formatDurationShort = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분`;
+    } else {
+      return `${minutes}분`;
+    }
   };
 
-  const filteredParticipants = meeting?.participants.filter(participant =>
-    participant.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    participant.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const calculateAttendancePercentage = (participantTime: number, totalMeetingTime: number) => {
+    if (totalMeetingTime <= 0) return 0;
+    return Math.round((participantTime / totalMeetingTime) * 100);
+  };
+
+  const getTotalMeetingDuration = () => {
+    if (!meeting?.duration) return 0;
+    return meeting.duration;
+  };
+
+  const filteredParticipants = attendance?.participants.filter(participant =>
+    participant.displayName.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
-  const handleParticipantClick = (participant: Participant) => {
+  const handleParticipantClick = (participant: ParticipantAttendance) => {
     setSelectedParticipant(participant);
     setShowParticipantModal(true);
   };
 
   const exportToExcel = () => {
-    if (!meeting) return;
+    if (!meeting || !attendance) return;
 
+    const totalMeetingDuration = getTotalMeetingDuration();
+    
     const csvContent = [
-      ['No', '참가자', '이메일', '참석 시간', '퇴장 시간', '참여 시간', '호스트 여부'],
-      ...meeting.participants.map((participant, index) => [
-        index + 1,
-        participant.displayName,
-        participant.email,
-        formatTime(participant.joinedAt),
-        participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
-        formatDuration(calculateTotalTime(participant.joinedAt, participant.leftAt)),
-        participant.isHost ? '예' : '아니오'
-      ])
+      ['No', '참가자', '참석 시간', '퇴장 시간', '참여 시간', '출석률 (%)', '상태'],
+      ...attendance.participants.map((participant, index) => {
+        const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+        return [
+          index + 1,
+          participant.displayName,
+          formatTime(participant.joinedAt),
+          participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
+          formatDuration(participant.totalTime),
+          attendancePercentage,
+          participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'
+        ];
+      })
     ].map(row => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -253,20 +297,48 @@ const AttendancePage: React.FC = () => {
             <p style={{ margin: '5px 0 0 0', color: '#666' }}>
               {meeting.title}
             </p>
+            <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#888' }}>
+              출석률은 참여 시간을 총 미팅 시간으로 나눈 비율입니다
+            </p>
+            <div style={{ marginTop: '10px', fontSize: '14px', color: '#888' }}>
+              <div>생성일: {formatTime(meeting.createdAt)}</div>
+              {meeting.endedAt && <div>종료일: {formatTime(meeting.endedAt)}</div>}
+              {meeting.scheduledFor && <div>예정일: {formatTime(meeting.scheduledFor)}</div>}
+            </div>
           </div>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            ← 대시보드로 돌아가기
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              onClick={exportToExcel}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: '500'
+              }}
+            >
+              📊 Excel 다운로드
+            </button>
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              ← 대시보드로 돌아가기
+            </button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -283,9 +355,9 @@ const AttendancePage: React.FC = () => {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참가자 수</h3>
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 참가자</h3>
             <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>
-              {meeting.participantCount}명
+              {attendance?.totalParticipants || 0}명
             </div>
           </div>
           
@@ -296,9 +368,9 @@ const AttendancePage: React.FC = () => {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>진행 시간</h3>
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참석자</h3>
             <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-              {meeting.duration ? formatDuration(Math.floor(meeting.duration / 60)) : 'N/A'}
+              {attendance?.presentParticipants || 0}명
             </div>
           </div>
           
@@ -309,29 +381,34 @@ const AttendancePage: React.FC = () => {
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             textAlign: 'center'
           }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>미팅 상태</h3>
-            <div style={{ 
-              fontSize: '18px', 
-              fontWeight: 'bold', 
-              color: meeting.status === 'ENDED' ? '#dc3545' : '#28a745'
-            }}>
-              {meeting.status === 'ENDED' ? '종료됨' : meeting.status === 'STARTED' ? '진행 중' : '예약됨'}
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참석률</h3>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ffc107' }}>
+              {attendance?.attendanceRate || 0}%
+            </div>
+          </div>
+          
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 미팅 시간</h3>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#6c757d' }}>
+              {meeting.duration ? formatDurationShort(meeting.duration) : 'N/A'}
             </div>
           </div>
         </div>
 
-        {/* Search and Export */}
+        {/* Search */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          gap: '20px'
+          marginBottom: '20px'
         }}>
-          <div style={{ flex: 1, maxWidth: '400px' }}>
+          <div style={{ maxWidth: '400px' }}>
             <input
               type="text"
-              placeholder="참가자 이름 또는 이메일로 검색..."
+              placeholder="참가자 이름으로 검색..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -343,23 +420,6 @@ const AttendancePage: React.FC = () => {
               }}
             />
           </div>
-          <button
-            onClick={exportToExcel}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            📊 엑셀 다운로드
-          </button>
         </div>
 
         {/* Attendance Table */}
@@ -380,12 +440,15 @@ const AttendancePage: React.FC = () => {
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참석 시간</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>퇴장 시간</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참여 시간</th>
+                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>출석률</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>비고</th>
               </tr>
             </thead>
             <tbody>
               {filteredParticipants.map((participant, index) => {
-                const totalTime = calculateTotalTime(participant.joinedAt, participant.leftAt);
+                const totalMeetingDuration = getTotalMeetingDuration();
+                const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+                
                 return (
                   <tr 
                     key={participant._id}
@@ -402,20 +465,17 @@ const AttendancePage: React.FC = () => {
                     <td style={{ padding: '15px' }}>
                       <div>
                         <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
-                        <div style={{ fontSize: '14px', color: '#666' }}>{participant.email}</div>
-                        {participant.isHost && (
-                          <span style={{
-                            display: 'inline-block',
-                            backgroundColor: '#ffc107',
-                            color: '#000',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontSize: '12px',
-                            marginTop: '4px'
-                          }}>
-                            호스트
-                          </span>
-                        )}
+                        <span style={{
+                          display: 'inline-block',
+                          backgroundColor: participant.status === 'PRESENT' ? '#28a745' : participant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
+                          color: 'white',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          marginTop: '4px'
+                        }}>
+                          {participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'}
+                        </span>
                       </div>
                     </td>
                     <td style={{ padding: '15px' }}>{formatTime(participant.joinedAt)}</td>
@@ -424,7 +484,34 @@ const AttendancePage: React.FC = () => {
                         <span style={{ color: '#28a745', fontWeight: '500' }}>진행 중</span>
                       )}
                     </td>
-                    <td style={{ padding: '15px' }}>{formatDuration(totalTime)}</td>
+                    <td style={{ padding: '15px' }}>{formatDuration(participant.totalTime)}</td>
+                    <td style={{ padding: '15px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '60px',
+                          height: '8px',
+                          backgroundColor: '#e9ecef',
+                          borderRadius: '4px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{
+                            width: `${Math.min(attendancePercentage, 100)}%`,
+                            height: '100%',
+                            backgroundColor: attendancePercentage >= 80 ? '#28a745' : 
+                                           attendancePercentage >= 50 ? '#ffc107' : '#dc3545',
+                            transition: 'width 0.3s ease'
+                          }} />
+                        </div>
+                        <span style={{
+                          fontSize: '14px',
+                          fontWeight: '500',
+                          color: attendancePercentage >= 80 ? '#28a745' : 
+                                 attendancePercentage >= 50 ? '#ffc107' : '#dc3545'
+                        }}>
+                          {attendancePercentage}%
+                        </span>
+                      </div>
+                    </td>
                     <td style={{ padding: '15px' }}>
                       <button
                         style={{
@@ -505,10 +592,18 @@ const AttendancePage: React.FC = () => {
                     <strong>이름:</strong> {selectedParticipant.displayName}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>이메일:</strong> {selectedParticipant.email}
-                  </div>
-                  <div style={{ marginBottom: '10px' }}>
-                    <strong>역할:</strong> {selectedParticipant.isHost ? '호스트' : '참가자'}
+                    <strong>상태:</strong> 
+                    <span style={{
+                      display: 'inline-block',
+                      backgroundColor: selectedParticipant.status === 'PRESENT' ? '#28a745' : selectedParticipant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      marginLeft: '8px'
+                    }}>
+                      {selectedParticipant.status === 'PRESENT' ? '참석' : selectedParticipant.status === 'ABSENT' ? '결석' : '미정'}
+                    </span>
                   </div>
                 </div>
 
@@ -526,7 +621,22 @@ const AttendancePage: React.FC = () => {
                     <strong>퇴장 시간:</strong> {selectedParticipant.leftAt ? formatTime(selectedParticipant.leftAt) : '진행 중'}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>총 참여 시간:</strong> {formatDuration(calculateTotalTime(selectedParticipant.joinedAt, selectedParticipant.leftAt))}
+                    <strong>총 참여 시간:</strong> {formatDuration(selectedParticipant.totalTime)}
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>출석률:</strong> 
+                    <span style={{
+                      marginLeft: '8px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()) >= 80 ? '#d4edda' : 
+                                     calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()) >= 50 ? '#fff3cd' : '#f8d7da',
+                      color: calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()) >= 80 ? '#155724' : 
+                             calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()) >= 50 ? '#856404' : '#721c24',
+                      fontWeight: '500'
+                    }}>
+                      {calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration())}%
+                    </span>
                   </div>
                 </div>
 
@@ -536,7 +646,7 @@ const AttendancePage: React.FC = () => {
                   padding: '15px',
                   borderRadius: '8px'
                 }}>
-                  {meeting.participants
+                  {attendance?.participants
                     .filter(p => p._id !== selectedParticipant._id)
                     .map((participant, index) => (
                       <div key={participant._id} style={{
@@ -544,18 +654,31 @@ const AttendancePage: React.FC = () => {
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         padding: '8px 0',
-                        borderBottom: index < meeting.participants.length - 2 ? '1px solid #dee2e6' : 'none'
+                        borderBottom: index < (attendance?.participants.length || 0) - 2 ? '1px solid #dee2e6' : 'none'
                       }}>
                         <div>
                           <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
-                          <div style={{ fontSize: '14px', color: '#666' }}>{participant.email}</div>
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: participant.status === 'PRESENT' ? '#28a745' : participant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
+                            color: 'white',
+                            padding: '2px 6px',
+                            borderRadius: '8px',
+                            fontSize: '10px',
+                            marginTop: '2px'
+                          }}>
+                            {participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'}
+                          </span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: '14px' }}>
-                            {formatDuration(calculateTotalTime(participant.joinedAt, participant.leftAt))}
+                            {formatDuration(participant.totalTime)}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>
-                            {participant.isHost ? '호스트' : '참가자'}
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                            {participant.leftAt ? '완료' : '진행중'}
+                          </div>
+                          <div style={{ fontSize: '12px', fontWeight: '500' }}>
+                            {calculateAttendancePercentage(participant.totalTime, getTotalMeetingDuration())}%
                           </div>
                         </div>
                       </div>

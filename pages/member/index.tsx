@@ -36,7 +36,7 @@ const MemberDashboard: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'meetings' | 'profile' | 'join'>('meetings');
+  const [activeTab, setActiveTab] = useState<'meetings' | 'profile' | 'join' | 'attendance'>('meetings');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -533,6 +533,21 @@ const MemberDashboard: React.FC = () => {
             >
               👤 프로필 관리
             </button>
+            <button
+              onClick={() => setActiveTab('attendance')}
+              style={{
+                padding: '15px 20px',
+                backgroundColor: activeTab === 'attendance' ? '#e3f2fd' : 'transparent',
+                border: 'none',
+                borderRadius: '8px',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '16px',
+                color: activeTab === 'attendance' ? '#1976d2' : '#333'
+              }}
+            >
+              📋 출석 현황
+            </button>
           </div>
 
           {/* Logout Button */}
@@ -579,6 +594,7 @@ const MemberDashboard: React.FC = () => {
               {activeTab === 'meetings' && '내 미팅'}
               {activeTab === 'join' && '미팅 참여'}
               {activeTab === 'profile' && '프로필 관리'}
+              {activeTab === 'attendance' && '출석 현황'}
             </h2>
             <div style={{
               display: 'flex',
@@ -1071,6 +1087,186 @@ const MemberDashboard: React.FC = () => {
                       </>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'attendance' && (
+            <div>
+              <div style={{
+                maxWidth: '1200px',
+                margin: '0 auto'
+              }}>
+                <h2 style={{
+                  margin: '0 0 30px 0',
+                  fontSize: '24px',
+                  color: '#333'
+                }}>
+                  📋 출석 현황
+                </h2>
+
+                {/* Attendance Overview Cards */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                  gap: '20px',
+                  marginBottom: '30px'
+                }}>
+                  <div style={{
+                    backgroundColor: 'white',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    textAlign: 'center'
+                  }}>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참여한 미팅</h3>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>
+                      {meetings.filter(m => m.status === 'ENDED').length}개
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'white',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    textAlign: 'center'
+                  }}>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>예정된 미팅</h3>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+                      {meetings.filter(m => m.status === 'SCHEDULED').length}개
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'white',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    textAlign: 'center'
+                  }}>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 참여 시간</h3>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffc107' }}>
+                      {meetings.reduce((sum, m) => sum + (m.duration || 0), 0) > 0 
+                        ? `${Math.round(meetings.reduce((sum, m) => sum + (m.duration || 0), 0) / 60)}분`
+                        : '0분'
+                      }
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: 'white',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    textAlign: 'center'
+                  }}>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참석률</h3>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6c757d' }}>
+                      {meetings.length > 0 ? Math.round((meetings.filter(m => m.status === 'ENDED').length / meetings.length) * 100) : 0}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* My Meeting Attendance */}
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    padding: '20px',
+                    borderBottom: '1px solid #dee2e6',
+                    backgroundColor: '#f8f9fa'
+                  }}>
+                    <h3 style={{ margin: 0, color: '#333' }}>내 미팅 출석 기록</h3>
+                    <p style={{ margin: '5px 0 0 0', color: '#666' }}>
+                      참여한 미팅의 출석 현황을 확인하세요
+                    </p>
+                  </div>
+
+                  {meetings.length > 0 ? (
+                    <div style={{ padding: '20px' }}>
+                      <div style={{
+                        display: 'grid',
+                        gap: '15px'
+                      }}>
+                        {meetings.map((meeting) => (
+                          <div
+                            key={meeting._id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '15px',
+                              border: '1px solid #dee2e6',
+                              borderRadius: '8px',
+                              backgroundColor: '#f8f9fa'
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <h4 style={{ margin: '0 0 5px 0', color: '#333' }}>
+                                {meeting.title}
+                              </h4>
+                              <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                                ID: {meeting._id.slice(-8)} | 코드: {meeting.inviteCode}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#888' }}>
+                                생성일: {new Date(meeting.createdAt).toLocaleDateString('ko-KR')}
+                                {meeting.duration && ` | 소요시간: ${Math.round(meeting.duration / 60)}분`}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                              <span style={{
+                                padding: '4px 12px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                backgroundColor: meeting.status === 'ENDED' ? '#d4edda' : 
+                                               meeting.status === 'SCHEDULED' ? '#fff3cd' : '#d1ecf1',
+                                color: meeting.status === 'ENDED' ? '#155724' : 
+                                       meeting.status === 'SCHEDULED' ? '#856404' : '#0c5460'
+                              }}>
+                                {meeting.status === 'ENDED' ? '완료' : 
+                                 meeting.status === 'SCHEDULED' ? '예정' : '진행중'}
+                              </span>
+                              {meeting.status === 'ENDED' && (
+                                <button
+                                  onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                  style={{
+                                    padding: '8px 16px',
+                                    backgroundColor: '#007bff',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '14px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                  }}
+                                >
+                                  📋 출석보기
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '40px',
+                      textAlign: 'center',
+                      color: '#666'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '20px' }}>📋</div>
+                      <h3 style={{ margin: '0 0 10px 0' }}>출석 기록이 없습니다</h3>
+                      <p style={{ margin: 0 }}>아직 참여한 미팅이 없습니다.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

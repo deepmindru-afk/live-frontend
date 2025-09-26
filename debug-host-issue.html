@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Host Transfer Issue</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .info {
+            color: #17a2b8;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Host Transfer Issue</h1>
+        <p>This tool helps diagnose why the "Only the current host can transfer host role" error is still occurring.</p>
+
+        <div class="debug-section">
+            <h3>🔧 Current Issue Analysis</h3>
+            <p>Based on the error log, the issue is still happening despite our fixes. Let's investigate:</p>
+            <ul>
+                <li><strong>Error:</strong> "Only the current host can transfer host role"</li>
+                <li><strong>Location:</strong> Backend transferHost method</li>
+                <li><strong>Status:</strong> Still occurring after fixes</li>
+            </ul>
+        </div>
+
+        <div class="debug-section">
+            <h3>🧪 Diagnostic Tests</h3>
+            <button onclick="testUserAuthentication()">Test User Authentication</button>
+            <button onclick="testMeetingData()">Test Meeting Data</button>
+            <button onclick="testHostValidation()">Test Host Validation Logic</button>
+            <button onclick="simulateTransferHost()">Simulate Transfer Host</button>
+        </div>
+
+        <div class="debug-section">
+            <h3>📊 Debug Results</h3>
+            <div id="debugResults" class="log">
+                <div class="info">Ready to run diagnostics. Click any test button above.</div>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔍 Potential Root Causes</h3>
+            <div class="code-block">
+1. <strong>JWT Token Issue:</strong> User ID in JWT doesn't match meeting hostId
+2. <strong>ObjectId Mismatch:</strong> String vs ObjectId comparison issues
+3. <strong>Database State:</strong> Meeting hostId not properly set
+4. <strong>Authentication Context:</strong> User not properly authenticated
+5. <strong>Timing Issue:</strong> User joins but hostId not updated in meeting
+6. <strong>Role Mismatch:</strong> User has HOST role in participants but not in meeting
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🛠️ Debugging Steps</h3>
+            <ol>
+                <li>Check what user ID is being passed from frontend</li>
+                <li>Check what user ID is extracted from JWT in backend</li>
+                <li>Check what hostId is stored in the meeting document</li>
+                <li>Compare the IDs to see where the mismatch occurs</li>
+                <li>Check if user has HOST role in participants table</li>
+                <li>Verify the meeting was created with correct hostId</li>
+            </ol>
+        </div>
+
+        <div class="debug-section">
+            <h3>📝 Next Steps</h3>
+            <p>After running the diagnostics above, we should be able to identify:</p>
+            <ul>
+                <li>Whether the user ID from JWT matches the meeting hostId</li>
+                <li>Whether the user has the correct role in the participants table</li>
+                <li>Whether there's a data consistency issue</li>
+                <li>What specific fix is needed</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let debugResults = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            debugResults.push({ message: logEntry, type });
+            
+            const resultsDiv = document.getElementById('debugResults');
+            const logDiv = document.createElement('div');
+            logDiv.className = type;
+            logDiv.textContent = logEntry;
+            resultsDiv.appendChild(logDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            debugResults = [];
+            document.getElementById('debugResults').innerHTML = '';
+        }
+
+        async function testUserAuthentication() {
+            clearLog();
+            log('🧪 Testing User Authentication...', 'info');
+            
+            try {
+                // Check if user is authenticated
+                const userStr = localStorage.getItem('user');
+                if (!userStr) {
+                    log('❌ No user found in localStorage', 'error');
+                    return;
+                }
+                
+                const user = JSON.parse(userStr);
+                log(`✅ User found: ${user.displayName || user.email}`, 'success');
+                log(`   User ID: ${user._id || user.id}`, 'info');
+                log(`   User Role: ${user.systemRole}`, 'info');
+                log(`   User Email: ${user.email}`, 'info');
+                
+                // Check JWT token
+                const token = localStorage.getItem('token');
+                if (token) {
+                    log('✅ JWT token found', 'success');
+                    // Decode JWT payload (basic decode, not verification)
+                    try {
+                        const payload = JSON.parse(atob(token.split('.')[1]));
+                        log(`   JWT User ID: ${payload.sub}`, 'info');
+                        log(`   JWT Email: ${payload.email}`, 'info');
+                        log(`   JWT Role: ${payload.systemRole}`, 'info');
+                        
+                        // Compare IDs
+                        const userIdFromStorage = user._id || user.id;
+                        const userIdFromJWT = payload.sub;
+                        if (userIdFromStorage === userIdFromJWT) {
+                            log('✅ User ID matches between storage and JWT', 'success');
+                        } else {
+                            log('❌ User ID mismatch between storage and JWT', 'error');
+                            log(`   Storage: ${userIdFromStorage}`, 'error');
+                            log(`   JWT: ${userIdFromJWT}`, 'error');
+                        }
+                    } catch (e) {
+                        log('❌ Failed to decode JWT token', 'error');
+                    }
+                } else {
+                    log('❌ No JWT token found', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Authentication test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testMeetingData() {
+            clearLog();
+            log('🧪 Testing Meeting Data...', 'info');
+            
+            try {
+                // Get current meeting ID from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const meetingId = urlParams.get('meetingId') || '085YW80F'; // From the error log
+                
+                log(`Meeting ID: ${meetingId}`, 'info');
+                
+                // Simulate GraphQL query to get meeting data
+                log('Simulating meeting data query...', 'info');
+                
+                // This would normally be a GraphQL query
+                const mockMeetingData = {
+                    _id: meetingId,
+                    title: 'my meeting',
+                    hostId: '507f1f77bcf86cd799439011', // This might be the issue
+                    status: 'LIVE',
+                    participantCount: 2
+                };
+                
+                log('Mock meeting data:', 'info');
+                log(`   Meeting ID: ${mockMeetingData._id}`, 'info');
+                log(`   Host ID: ${mockMeetingData.hostId}`, 'info');
+                log(`   Title: ${mockMeetingData.title}`, 'info');
+                log(`   Status: ${mockMeetingData.status}`, 'info');
+                
+                // Check if hostId is populated or direct
+                if (typeof mockMeetingData.hostId === 'object') {
+                    log('   Host ID is populated object', 'info');
+                    log(`   Host ID _id: ${mockMeetingData.hostId._id}`, 'info');
+                } else {
+                    log('   Host ID is direct string/ObjectId', 'info');
+                }
+                
+            } catch (error) {
+                log(`❌ Meeting data test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testHostValidation() {
+            clearLog();
+            log('🧪 Testing Host Validation Logic...', 'info');
+            
+            try {
+                // Get user data
+                const userStr = localStorage.getItem('user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                const userId = user?._id || user?.id;
+                
+                if (!userId) {
+                    log('❌ No user ID available for testing', 'error');
+                    return;
+                }
+                
+                log(`Testing with user ID: ${userId}`, 'info');
+                
+                // Simulate different hostId scenarios
+                const scenarios = [
+                    {
+                        name: 'Populated hostId (matches user)',
+                        meetingHostId: { _id: userId },
+                        expected: true
+                    },
+                    {
+                        name: 'Direct hostId (matches user)',
+                        meetingHostId: userId,
+                        expected: true
+                    },
+                    {
+                        name: 'Populated hostId (different user)',
+                        meetingHostId: { _id: '507f1f77bcf86cd799439012' },
+                        expected: false
+                    },
+                    {
+                        name: 'Direct hostId (different user)',
+                        meetingHostId: '507f1f77bcf86cd799439012',
+                        expected: false
+                    }
+                ];
+                
+                for (const scenario of scenarios) {
+                    log(`\nTesting: ${scenario.name}`, 'info');
+                    
+                    let isMeetingHost = false;
+                    if (scenario.meetingHostId) {
+                        if (typeof scenario.meetingHostId === 'object' && '_id' in scenario.meetingHostId) {
+                            isMeetingHost = scenario.meetingHostId._id.toString() === userId.toString();
+                            log(`   Populated comparison: ${scenario.meetingHostId._id.toString()} === ${userId.toString()} = ${isMeetingHost}`, 'info');
+                        } else {
+                            isMeetingHost = scenario.meetingHostId.toString() === userId.toString();
+                            log(`   Direct comparison: ${scenario.meetingHostId.toString()} === ${userId.toString()} = ${isMeetingHost}`, 'info');
+                        }
+                    }
+                    
+                    const result = isMeetingHost === scenario.expected;
+                    log(`   Result: ${isMeetingHost} (Expected: ${scenario.expected}) - ${result ? 'PASS' : 'FAIL'}`, 
+                        result ? 'success' : 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Host validation test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function simulateTransferHost() {
+            clearLog();
+            log('🧪 Simulating Transfer Host Request...', 'info');
+            
+            try {
+                // Get user data
+                const userStr = localStorage.getItem('user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                const userId = user?._id || user?.id;
+                
+                if (!userId) {
+                    log('❌ No user ID available for simulation', 'error');
+                    return;
+                }
+                
+                log(`Simulating transfer host request for user: ${userId}`, 'info');
+                
+                // Simulate the request data
+                const transferData = {
+                    meetingId: '085YW80F', // From error log
+                    newHostParticipantId: '507f1f77bcf86cd799439012',
+                    reason: 'Host transferring role and leaving'
+                };
+                
+                log('Transfer request data:', 'info');
+                log(`   Meeting ID: ${transferData.meetingId}`, 'info');
+                log(`   New Host Participant ID: ${transferData.newHostParticipantId}`, 'info');
+                log(`   Reason: ${transferData.reason}`, 'info');
+                
+                // Simulate the validation process
+                log('\nSimulating backend validation process...', 'info');
+                log('1. Extract user from JWT token', 'info');
+                log(`   User ID from JWT: ${userId}`, 'info');
+                log('2. Find meeting by ID', 'info');
+                log('3. Check meeting hostId', 'info');
+                log('4. Compare user ID with meeting hostId', 'info');
+                log('5. Check if user has HOST role in participants', 'info');
+                log('6. Validate new host participant', 'info');
+                
+                log('\n🔍 This is where the error likely occurs:', 'warning');
+                log('The user ID from JWT does not match the meeting hostId', 'error');
+                log('OR the user does not have HOST role in participants table', 'error');
+                
+            } catch (error) {
+                log(`❌ Transfer host simulation failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize
+        log('🚀 Host Transfer Debug Tool Ready', 'info');
+        log('Click any test button to begin debugging the issue', 'info');
+    </script>
+</body>
+</html>

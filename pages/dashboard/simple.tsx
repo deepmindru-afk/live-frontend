@@ -152,7 +152,10 @@ const SimpleDashboard: React.FC = () => {
               ? { ...meeting, status: 'STARTED' as const }
               : meeting
           ));
-          alert('Meeting started! (Mock Service)');
+          alert('Meeting started! Navigating to prejoin page...');
+          
+          // Navigate to prejoin room
+          router.push(`/prejoin/${meetingId}`);
           return;
         }
       } catch (graphqlError) {
@@ -165,7 +168,10 @@ const SimpleDashboard: React.FC = () => {
           ? { ...meeting, status: 'STARTED' as const }
           : meeting
       ));
-      alert('Meeting started! (Mock Service)');
+      alert('Meeting started! Navigating to prejoin page... (Mock Service)');
+      
+      // Navigate to prejoin room even for mock service
+      router.push(`/prejoin/${meetingId}`);
     } catch (error) {
       console.error('Error starting meeting:', error);
       alert('Error starting meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
