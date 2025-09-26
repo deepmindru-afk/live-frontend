@@ -12,7 +12,8 @@ export interface Meeting {
   participantCount: number;
   createdAt: string;
   updatedAt: string;
-  hostId: string;
+  hostId: string; // Original tutor/creator (never changes)
+  currentHostId?: string; // Current host for meeting management (can change)
   host: {
     _id: string;
     email: string;

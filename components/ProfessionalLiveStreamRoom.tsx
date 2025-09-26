@@ -77,46 +77,46 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   
-  // 🔧 ANTI-FLICKERING: Debounce state updates to prevent rapid re-renders
+  // 🔧 ANTI-FLICKERING: Reduced debounce for faster updates
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const DEBOUNCE_DELAY = 1000; // 1 second debounce
+  const DEBOUNCE_DELAY = 300; // 🔧 FIX: Reduced from 1s to 300ms for faster updates
 
-  // GraphQL Queries - 🔧 OPTIMIZED: 3-second polling with anti-flickering measures
+  // GraphQL Queries - 🔧 OPTIMIZED: Fast polling for real-time updates
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
-    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
-    notifyOnNetworkStatusChange: false, // 🔧 FIX: Prevent loading state changes during polling
-    errorPolicy: 'ignore' // 🔧 FIX: Ignore errors to prevent UI breaking
+    pollInterval: 2000, // 🔧 FIX: Faster 2-second refresh for meeting data
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: false,
+    errorPolicy: 'ignore'
   });
 
   const { data: participantsData, loading: participantsLoading, error: participantsError } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    pollInterval: 1500, // 🔧 FIX: Fast 1.5-second refresh for participants
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
-    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: false
   });
 
   const { data: waitingData, loading: waitingLoading, error: waitingError } = useQuery(GET_WAITING_PARTICIPANTS, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    pollInterval: 2000, // 🔧 FIX: 2-second refresh for waiting participants
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
-    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: false
   });
 
   const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 3000, // 🔧 OPTIMIZED: 3-second refresh as requested
+    pollInterval: 1000, // 🔧 FIX: Very fast 1-second refresh for current participant
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network', // 🔧 OPTIMIZED: Get fresh data but use cache
-    notifyOnNetworkStatusChange: false // 🔧 FIX: Prevent loading state changes during polling
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: false
   });
 
   // GraphQL Mutations
@@ -209,26 +209,45 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [meetingData, meetingStatus]);
 
-  // Update participants - 🔧 OPTIMIZED: 3-second refresh with debouncing to prevent flickering
+  // Update participants - 🔧 OPTIMIZED: Fast refresh with smart debouncing
   useEffect(() => {
     if (participantsData && !participantsError) {
       try {
         const participantsList = (participantsData as any)?.getParticipantsByMeeting || [];
         const now = Date.now();
         
-        // 🔧 ANTI-FLICKERING: Debounce rapid updates
-        if (now - lastUpdateTime < DEBOUNCE_DELAY) {
+        // 🔧 DEBUG: Log participant data for debugging
+        console.log('🔍 PARTICIPANTS UPDATE:', {
+          totalParticipants: participantsList.length,
+          participants: participantsList.map((p: any) => ({
+            _id: p._id,
+            displayName: p.displayName,
+            status: p.status,
+            role: p.role
+          }))
+        });
+        
+        // 🔧 OPTIMIZED: Only debounce if data hasn't changed significantly
+        const hasSignificantChange = participantsList.length !== participants.length ||
+          participantsList.some((p: any, index: number) => 
+            !participants[index] || 
+            p.status !== participants[index].status ||
+            p.role !== participants[index].role
+          );
+        
+        if (!hasSignificantChange && now - lastUpdateTime < DEBOUNCE_DELAY) {
           return;
         }
         
-        // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
+        // 🔧 OPTIMIZED: Update immediately for significant changes
         setParticipants(prevParticipants => {
           const hasChanged = JSON.stringify(prevParticipants) !== JSON.stringify(participantsList);
           if (hasChanged) {
             setLastUpdateTime(now);
             setIsRefreshing(true);
-            // Hide refresh indicator after 500ms
-            setTimeout(() => setIsRefreshing(false), 500);
+            // Hide refresh indicator after 300ms for faster feedback
+            setTimeout(() => setIsRefreshing(false), 300);
+            console.log('🔄 PARTICIPANTS UPDATED:', participantsList.length, 'participants');
             return participantsList;
           }
           return prevParticipants;
@@ -244,7 +263,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         // Keep existing participants to prevent UI refresh
       }
     }
-  }, [participantsData, participantsError, lastUpdateTime, DEBOUNCE_DELAY]);
+  }, [participantsData, participantsError, lastUpdateTime, DEBOUNCE_DELAY, participants.length]);
 
   // Update waiting participants - 🔧 OPTIMIZED: 3-second refresh with debouncing
   useEffect(() => {
@@ -579,8 +598,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           });
         }
       } else if (exitOption === 'transfer') {
-        // Show transfer dialog
-        const eligibleParticipants = participants.filter(p => p.role !== 'HOST' && p.user);
+        // Show transfer dialog - 🔧 FIX: Filter only active participants
+        console.log('🔍 TRANSFER HOST: All participants:', participants.map(p => ({
+          _id: p._id,
+          displayName: p.displayName,
+          role: p.role,
+          status: p.status,
+          hasUser: !!p.user
+        })));
+        
+        const eligibleParticipants = participants.filter(p => {
+          // Basic checks
+          if (p.role === 'HOST' || !p.user) {
+            console.log('❌ Excluding participant - role:', p.role, 'hasUser:', !!p.user);
+            return false;
+          }
+          
+          // If status field exists, use it for filtering
+          if (p.status) {
+            const isEligible = p.status !== 'LEFT' && (p.status === 'ADMITTED' || p.status === 'APPROVED');
+            console.log(`🔍 Participant ${p.displayName}: status=${p.status}, eligible=${isEligible}`);
+            return isEligible;
+          }
+          
+          // 🔧 FALLBACK: If no status field, assume participant is eligible
+          // This handles cases where the status field might not be populated
+          console.warn('⚠️ Participant missing status field, assuming eligible:', p);
+          return true;
+        });
+        
+        console.log('🔍 TRANSFER HOST: Eligible participants:', eligibleParticipants.map(p => ({
+          _id: p._id,
+          displayName: p.displayName,
+          role: p.role,
+          status: p.status
+        })));
+        
         if (eligibleParticipants.length === 0) {
           await Swal.fire({
             title: 'No Participants',
