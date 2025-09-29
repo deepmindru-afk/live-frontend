@@ -12,8 +12,8 @@ export const CREATE_LIVEKIT_TOKEN = gql`
 `;
 
 export const END_LIVEKIT_ROOM = gql`
-  mutation EndLivekitRoom($roomName: String!) {
-    endLivekitRoom(roomName: $roomName) {
+  mutation EndLivekitRoom($meetingId: String!) {
+    endLivekitRoom(meetingId: $meetingId) {
       success
       message
     }
@@ -21,8 +21,8 @@ export const END_LIVEKIT_ROOM = gql`
 `;
 
 export const KICK_LIVEKIT_PARTICIPANT = gql`
-  mutation KickLivekitParticipant($roomName: String!, $participantIdentity: String!) {
-    kickLivekitParticipant(roomName: $roomName, participantIdentity: $participantIdentity) {
+  mutation KickLivekitParticipant($meetingId: String!, $identity: String!) {
+    kickLivekitParticipant(meetingId: $meetingId, identity: $identity) {
       success
       message
     }

@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JWT Token Test</title>
+    <title>WebSocket Debug Test</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background-color: #1a1a1a;
@@ -40,7 +41,7 @@
             border-radius: 5px;
             font-family: monospace;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
             margin-top: 10px;
         }
@@ -53,10 +54,20 @@
             background-color: #333;
             color: white;
         }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .connected { background-color: #28a745; color: white; }
+        .disconnected { background-color: #dc3545; color: white; }
+        .connecting { background-color: #ffc107; color: black; }
     </style>
 </head>
 <body>
-    <h1>JWT Token Test</h1>
+    <h1>WebSocket Debug Test</h1>
     
     <div class="test-section">
         <h3>1. Current JWT Token</h3>
@@ -66,32 +77,64 @@
     </div>
 
     <div class="test-section">
-        <h3>2. Test JWT Token with Backend</h3>
-        <input type="text" id="testToken" placeholder="Enter JWT token to test">
-        <button onclick="testTokenWithBackend()">Test Token</button>
-        <div id="backendTestResult"></div>
+        <h3>2. WebSocket Connection Test</h3>
+        <div>
+            <span>Status: </span>
+            <span id="connectionStatus" class="status disconnected">Disconnected</span>
+        </div>
+        <button onclick="testWebSocketConnection()" id="connectBtn">Connect to Chat WebSocket</button>
+        <button onclick="disconnectWebSocket()" id="disconnectBtn" disabled>Disconnect</button>
+        <div id="connectionResult"></div>
     </div>
 
     <div class="test-section">
-        <h3>3. WebSocket Connection Test</h3>
-        <button onclick="testWebSocketWithToken()">Test WebSocket Connection</button>
-        <div id="websocketTestResult"></div>
+        <h3>3. Chat Room Test</h3>
+        <input type="text" id="meetingId" placeholder="Meeting ID" value="68d9c93163602aa9f7619a50">
+        <button onclick="joinChatRoom()" id="joinBtn" disabled>Join Chat Room</button>
+        <button onclick="sendTestMessage()" id="sendBtn" disabled>Send Test Message</button>
+        <div id="chatResult"></div>
     </div>
 
     <div class="test-section">
-        <h3>Logs</h3>
+        <h3>4. Real-time Logs</h3>
         <div id="logs" class="log"></div>
     </div>
 
     <script>
+        let socket = null;
+        let isConnected = false;
+
         function log(message, type = 'info') {
             const logs = document.getElementById('logs');
             const timestamp = new Date().toLocaleTimeString();
             const logEntry = document.createElement('div');
-            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#fff';
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#fff';
             logEntry.textContent = `[${timestamp}] ${message}`;
             logs.appendChild(logEntry);
             logs.scrollTop = logs.scrollHeight;
+        }
+
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const joinBtn = document.getElementById('joinBtn');
+            const sendBtn = document.getElementById('sendBtn');
+
+            statusEl.textContent = status;
+            statusEl.className = `status ${status.toLowerCase()}`;
+
+            if (status === 'Connected') {
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                joinBtn.disabled = false;
+                sendBtn.disabled = false;
+            } else {
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                joinBtn.disabled = true;
+                sendBtn.disabled = true;
+            }
         }
 
         function loadCurrentToken() {
@@ -102,7 +145,6 @@
             if (token) {
                 tokenTextarea.value = token;
                 
-                // Try to decode JWT (basic decode, not verification)
                 try {
                     const parts = token.split('.');
                     if (parts.length === 3) {
@@ -146,118 +188,34 @@
             }
         }
 
-        async function testTokenWithBackend() {
-            const token = document.getElementById('testToken').value || localStorage.getItem('jwt');
-            const resultDiv = document.getElementById('backendTestResult');
+        function testWebSocketConnection() {
+            const token = localStorage.getItem('jwt');
+            const resultDiv = document.getElementById('connectionResult');
             
             if (!token) {
-                resultDiv.innerHTML = `
-                    <div class="warning">
-                        ⚠️ No token provided
-                    </div>
-                `;
-                return;
-            }
-
-            resultDiv.innerHTML = 'Testing token with backend...';
-            
-            try {
-                const response = await fetch('http://localhost:3007/graphql', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        query: `
-                            query {
-                                getProfile {
-                                    _id
-                                    email
-                                    displayName
-                                    systemRole
-                                }
-                            }
-                        `
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (data.errors) {
-                    resultDiv.innerHTML = `
-                        <div class="error">
-                            ❌ Backend rejected token<br>
-                            Error: ${data.errors[0].message}
-                        </div>
-                    `;
-                    log(`❌ Backend rejected token: ${data.errors[0].message}`, 'error');
-                } else if (data.data && data.data.getProfile) {
-                    resultDiv.innerHTML = `
-                        <div class="success">
-                            ✅ Token is valid!<br>
-                            User: ${data.data.getProfile.displayName}<br>
-                            Email: ${data.data.getProfile.email}<br>
-                            Role: ${data.data.getProfile.systemRole}
-                        </div>
-                    `;
-                    log('✅ Token is valid with backend', 'success');
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="error">
-                            ❌ Unexpected response format
-                        </div>
-                    `;
-                    log('❌ Unexpected response format', 'error');
-                }
-            } catch (error) {
                 resultDiv.innerHTML = `
                     <div class="error">
-                        ❌ Failed to test token<br>
-                        Error: ${error.message}
-                    </div>
-                `;
-                log(`❌ Failed to test token: ${error.message}`, 'error');
-            }
-        }
-
-        function testWebSocketWithToken() {
-            const token = localStorage.getItem('jwt');
-            const resultDiv = document.getElementById('websocketTestResult');
-            
-            if (!token) {
-                resultDiv.innerHTML = `
-                    <div class="warning">
                         ⚠️ No JWT token found. Please login first.
                     </div>
                 `;
                 return;
             }
 
-            resultDiv.innerHTML = 'Testing WebSocket connection...';
+            updateConnectionStatus('Connecting');
+            resultDiv.innerHTML = 'Connecting to chat WebSocket...';
+            log('🔌 Attempting to connect to chat WebSocket...', 'info');
             
-            // Load socket.io from CDN
-            if (typeof io === 'undefined') {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.socket.io/4.8.1/socket.io.min.js';
-                script.onload = () => {
-                    performWebSocketTest(token, resultDiv);
-                };
-                document.head.appendChild(script);
-            } else {
-                performWebSocketTest(token, resultDiv);
-            }
-        }
-
-        function performWebSocketTest(token, resultDiv) {
             try {
-                const socket = io('http://localhost:3007/chat', {
+                socket = io('http://localhost:3007/chat', {
                     auth: { token },
                     transports: ['websocket', 'polling'],
-                    timeout: 5000
+                    timeout: 10000,
+                    forceNew: true
                 });
 
                 socket.on('connect', () => {
+                    isConnected = true;
+                    updateConnectionStatus('Connected');
                     resultDiv.innerHTML = `
                         <div class="success">
                             ✅ WebSocket connected successfully!<br>
@@ -265,10 +223,17 @@
                         </div>
                     `;
                     log('✅ WebSocket connected successfully', 'success');
-                    socket.disconnect();
+                });
+
+                socket.on('disconnect', (reason) => {
+                    isConnected = false;
+                    updateConnectionStatus('Disconnected');
+                    log(`🔌 WebSocket disconnected: ${reason}`, 'warning');
                 });
 
                 socket.on('connect_error', (error) => {
+                    isConnected = false;
+                    updateConnectionStatus('Disconnected');
                     resultDiv.innerHTML = `
                         <div class="error">
                             ❌ WebSocket connection failed<br>
@@ -278,11 +243,26 @@
                     log(`❌ WebSocket connection failed: ${error.message}`, 'error');
                 });
 
-                socket.on('disconnect', (reason) => {
-                    log(`🔌 WebSocket disconnected: ${reason}`, 'warning');
+                socket.on('ERROR', (data) => {
+                    log(`❌ Server error: ${data.message}`, 'error');
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Server error: ${data.message}
+                        </div>
+                    `;
+                });
+
+                socket.on('CHAT_PEER_LIST', (data) => {
+                    log(`👥 Chat participants: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('CHAT_MESSAGE', (message) => {
+                    log(`📨 Received message: ${message.text} from ${message.displayName}`, 'info');
                 });
 
             } catch (error) {
+                isConnected = false;
+                updateConnectionStatus('Disconnected');
                 resultDiv.innerHTML = `
                     <div class="error">
                         ❌ Failed to create WebSocket<br>
@@ -293,9 +273,55 @@
             }
         }
 
+        function joinChatRoom() {
+            if (!socket || !isConnected) {
+                log('❌ Not connected to WebSocket', 'error');
+                return;
+            }
+
+            const meetingId = document.getElementById('meetingId').value;
+            if (!meetingId) {
+                log('❌ Please enter a meeting ID', 'error');
+                return;
+            }
+
+            log(`📤 Joining chat room: ${meetingId}`, 'info');
+            socket.emit('JOIN_CHAT_ROOM', { meetingId });
+        }
+
+        function sendTestMessage() {
+            if (!socket || !isConnected) {
+                log('❌ Not connected to WebSocket', 'error');
+                return;
+            }
+
+            const meetingId = document.getElementById('meetingId').value;
+            if (!meetingId) {
+                log('❌ Please enter a meeting ID', 'error');
+                return;
+            }
+
+            const message = `Test message at ${new Date().toLocaleTimeString()}`;
+            log(`📤 Sending test message: ${message}`, 'info');
+            socket.emit('SEND_CHAT_MESSAGE', {
+                meetingId,
+                message
+            });
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                isConnected = false;
+                updateConnectionStatus('Disconnected');
+                log('🔌 WebSocket disconnected manually', 'warning');
+            }
+        }
+
         // Auto-load token on page load
         window.addEventListener('load', () => {
-            log('🚀 Starting JWT token tests...', 'info');
+            log('🚀 Starting WebSocket debug tests...', 'info');
             loadCurrentToken();
         });
     </script>

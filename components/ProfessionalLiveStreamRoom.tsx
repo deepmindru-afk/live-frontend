@@ -20,6 +20,8 @@ import {
 } from '../apollo/livestream/mutations';
 import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
+import WebSocketChatView from './WebSocketChatView';
+import ChatDebug from './ChatDebug';
 
 // Additional mutations for leave functionality
 const FORCE_LEAVE_MEETING = gql`
@@ -528,9 +530,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       try {
         await removeParticipant({
           variables: {
-            input: {
-              participantId: participantId
-            }
+            participantId: participantId
           }
         });
         await Swal.fire('Participant Removed', 'The participant has been removed from the meeting.', 'success');
@@ -1302,6 +1302,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 fontSize: '14px'
               }}
             >
+              Waiting ({waitingParticipants.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: 'none',
+                backgroundColor: activeTab === 'chat' ? '#007bff' : 'transparent',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
               Chat (0)
             </button>
         </div>
@@ -1324,16 +1338,97 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             )}
 
             {activeTab === 'waiting' && (
-              <ChatView
+              <div>
+                {waitingParticipants.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    color: '#ccc',
+                    padding: '20px'
+                  }}>
+                    No participants waiting
+                  </div>
+                ) : (
+                  <div>
+                    <h4 style={{ color: '#fff', marginBottom: '15px' }}>
+                      Waiting for Approval ({waitingParticipants.length})
+                    </h4>
+                    {waitingParticipants.map((participant) => (
+                      <div
+                        key={participant._id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px',
+                          backgroundColor: '#333',
+                          borderRadius: '6px',
+                          marginBottom: '8px'
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: '#fff', fontWeight: 'bold' }}>
+                            {participant.displayName}
+                          </div>
+                          <div style={{ color: '#ccc', fontSize: '12px' }}>
+                            {participant.user?.email}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleApproveParticipant(participant._id)}
+                            style={{
+                              backgroundColor: '#28a745',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectParticipant(participant._id)}
+                            style={{
+                              backgroundColor: '#dc3545',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'chat' && (
+              <WebSocketChatView
                 meetingId={actualMeetingId}
                 currentUser={currentUser}
                 isHost={isHost}
+                token={localStorage.getItem('jwt') || ''}
               />
             )}
               </div>
             </div>
           )}
         </div>
+        {/* Debug Component - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <ChatDebug
+            meetingId={actualMeetingId}
+            token={localStorage.getItem('jwt') || ''}
+          />
+        )}
       </>
     );
   });

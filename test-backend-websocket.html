@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background-color: #2a2a2a;
+        }
+        .success { border-color: #28a745; background-color: #1e3a1e; }
+        .error { border-color: #dc3545; background-color: #3a1e1e; }
+        .warning { border-color: #ffc107; background-color: #3a3a1e; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #666; cursor: not-allowed; }
+        .log {
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Backend WebSocket Test</h1>
+    
+    <div class="test-section">
+        <h3>1. Backend Health Check</h3>
+        <button onclick="testBackendHealth()">Test Backend Health</button>
+        <div id="healthResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. WebSocket Connection Test</h3>
+        <button onclick="testWebSocketConnection()">Test WebSocket Connection</button>
+        <button onclick="disconnectWebSocket()">Disconnect</button>
+        <div id="websocketResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Chat WebSocket Test</h3>
+        <input type="text" id="tokenInput" placeholder="JWT Token" style="width: 300px; padding: 5px; margin: 5px;">
+        <button onclick="testChatWebSocket()">Test Chat WebSocket</button>
+        <button onclick="disconnectChatWebSocket()">Disconnect Chat</button>
+        <div id="chatResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Logs</h3>
+        <div id="logs" class="log"></div>
+    </div>
+
+    <script>
+        let chatSocket = null;
+
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#fff';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(logEntry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        async function testBackendHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch('http://localhost:3007/health');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Backend is running!<br>
+                            Status: ${data.status}<br>
+                            Uptime: ${data.uptime}s<br>
+                            Memory: ${Math.round(data.memory.heapUsed / 1024 / 1024)}MB used
+                        </div>
+                    `;
+                    log('✅ Backend health check passed', 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${data.message || 'Unknown error'}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Backend is not accessible<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+                log(`❌ Backend health check failed: ${error.message}`, 'error');
+            }
+        }
+
+        function testWebSocketConnection() {
+            const resultDiv = document.getElementById('websocketResult');
+            resultDiv.innerHTML = 'Testing WebSocket connection...';
+            
+            try {
+                const socket = io('http://localhost:3007', {
+                    transports: ['websocket', 'polling'],
+                    timeout: 5000
+                });
+
+                socket.on('connect', () => {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ WebSocket connected!<br>
+                            Socket ID: ${socket.id}
+                        </div>
+                    `;
+                    log('✅ WebSocket connected successfully', 'success');
+                });
+
+                socket.on('connect_error', (error) => {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ WebSocket connection failed<br>
+                            Error: ${error.message}
+                        </div>
+                    `;
+                    log(`❌ WebSocket connection failed: ${error.message}`, 'error');
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`🔌 WebSocket disconnected: ${reason}`, 'warning');
+                });
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Failed to create WebSocket<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+                log(`❌ Failed to create WebSocket: ${error.message}`, 'error');
+            }
+        }
+
+        function testChatWebSocket() {
+            const resultDiv = document.getElementById('chatResult');
+            const token = document.getElementById('tokenInput').value;
+            
+            if (!token) {
+                resultDiv.innerHTML = `
+                    <div class="warning">
+                        ⚠️ Please enter a JWT token
+                    </div>
+                `;
+                return;
+            }
+
+            resultDiv.innerHTML = 'Testing Chat WebSocket connection...';
+            
+            try {
+                chatSocket = io('http://localhost:3007/chat', {
+                    auth: { token },
+                    transports: ['websocket', 'polling'],
+                    timeout: 5000
+                });
+
+                chatSocket.on('connect', () => {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Chat WebSocket connected!<br>
+                            Socket ID: ${chatSocket.id}
+                        </div>
+                    `;
+                    log('✅ Chat WebSocket connected successfully', 'success');
+                    
+                    // Test joining a room
+                    chatSocket.emit('JOIN_CHAT_ROOM', { meetingId: 'test-meeting-123' });
+                    log('📤 Sent JOIN_CHAT_ROOM event', 'info');
+                });
+
+                chatSocket.on('connect_error', (error) => {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Chat WebSocket connection failed<br>
+                            Error: ${error.message}
+                        </div>
+                    `;
+                    log(`❌ Chat WebSocket connection failed: ${error.message}`, 'error');
+                });
+
+                chatSocket.on('ERROR', (data) => {
+                    log(`❌ Chat WebSocket error: ${data.message}`, 'error');
+                });
+
+                chatSocket.on('CHAT_PEER_LIST', (data) => {
+                    log(`👥 Chat participants: ${JSON.stringify(data)}`, 'info');
+                });
+
+                chatSocket.on('disconnect', (reason) => {
+                    log(`🔌 Chat WebSocket disconnected: ${reason}`, 'warning');
+                });
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Failed to create Chat WebSocket<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+                log(`❌ Failed to create Chat WebSocket: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnectWebSocket() {
+            // Disconnect all sockets
+            if (typeof io !== 'undefined') {
+                io.disconnect();
+                log('🔌 Disconnected all WebSocket connections', 'warning');
+            }
+        }
+
+        function disconnectChatWebSocket() {
+            if (chatSocket) {
+                chatSocket.disconnect();
+                chatSocket = null;
+                log('🔌 Disconnected Chat WebSocket', 'warning');
+            }
+        }
+
+        // Auto-test backend health on load
+        window.addEventListener('load', () => {
+            log('🚀 Starting backend tests...', 'info');
+            testBackendHealth();
+        });
+    </script>
+</body>
+</html>

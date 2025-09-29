@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JWT Token Test</title>
+    <title>JWT Verification Test</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -33,18 +33,17 @@
             margin: 5px;
         }
         button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #666; cursor: not-allowed; }
         .log {
             background-color: #1a1a1a;
             padding: 10px;
             border-radius: 5px;
             font-family: monospace;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
             margin-top: 10px;
         }
-        input, textarea {
+        textarea {
             width: 100%;
             padding: 8px;
             margin: 5px 0;
@@ -56,7 +55,7 @@
     </style>
 </head>
 <body>
-    <h1>JWT Token Test</h1>
+    <h1>JWT Verification Test</h1>
     
     <div class="test-section">
         <h3>1. Current JWT Token</h3>
@@ -66,29 +65,30 @@
     </div>
 
     <div class="test-section">
-        <h3>2. Test JWT Token with Backend</h3>
-        <input type="text" id="testToken" placeholder="Enter JWT token to test">
-        <button onclick="testTokenWithBackend()">Test Token</button>
-        <div id="backendTestResult"></div>
+        <h3>2. JWT Decode Test</h3>
+        <button onclick="decodeJWT()">Decode JWT Token</button>
+        <div id="decodeResult"></div>
     </div>
 
     <div class="test-section">
-        <h3>3. WebSocket Connection Test</h3>
-        <button onclick="testWebSocketWithToken()">Test WebSocket Connection</button>
-        <div id="websocketTestResult"></div>
+        <h3>3. Backend JWT Verification Test</h3>
+        <button onclick="testBackendJWT()">Test JWT with Backend</button>
+        <div id="backendResult"></div>
     </div>
 
     <div class="test-section">
-        <h3>Logs</h3>
+        <h3>4. Real-time Logs</h3>
         <div id="logs" class="log"></div>
     </div>
 
     <script>
+        let currentToken = '';
+
         function log(message, type = 'info') {
             const logs = document.getElementById('logs');
             const timestamp = new Date().toLocaleTimeString();
             const logEntry = document.createElement('div');
-            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#fff';
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : type === 'warning' ? '#ffc107' : '#fff';
             logEntry.textContent = `[${timestamp}] ${message}`;
             logs.appendChild(logEntry);
             logs.scrollTop = logs.scrollHeight;
@@ -100,12 +100,13 @@
             const tokenInfo = document.getElementById('tokenInfo');
             
             if (token) {
+                currentToken = token;
                 tokenTextarea.value = token;
                 
-                // Try to decode JWT (basic decode, not verification)
                 try {
                     const parts = token.split('.');
                     if (parts.length === 3) {
+                        const header = JSON.parse(atob(parts[0]));
                         const payload = JSON.parse(atob(parts[1]));
                         const exp = new Date(payload.exp * 1000);
                         const now = new Date();
@@ -113,9 +114,10 @@
                         tokenInfo.innerHTML = `
                             <div class="success">
                                 ✅ Token found<br>
-                                User ID: ${payload.sub || 'N/A'}<br>
-                                Expires: ${exp.toLocaleString()}<br>
-                                Status: ${exp > now ? 'Valid' : 'Expired'}
+                                <strong>Header:</strong> ${JSON.stringify(header)}<br>
+                                <strong>Payload:</strong> ${JSON.stringify(payload, null, 2)}<br>
+                                <strong>Expires:</strong> ${exp.toLocaleString()}<br>
+                                <strong>Status:</strong> ${exp > now ? 'Valid' : 'Expired'}
                             </div>
                         `;
                         log('✅ JWT token loaded and decoded', 'success');
@@ -146,32 +148,60 @@
             }
         }
 
-        async function testTokenWithBackend() {
-            const token = document.getElementById('testToken').value || localStorage.getItem('jwt');
-            const resultDiv = document.getElementById('backendTestResult');
-            
-            if (!token) {
-                resultDiv.innerHTML = `
-                    <div class="warning">
-                        ⚠️ No token provided
-                    </div>
-                `;
+        function decodeJWT() {
+            if (!currentToken) {
+                log('❌ No token loaded', 'error');
                 return;
             }
 
-            resultDiv.innerHTML = 'Testing token with backend...';
-            
             try {
+                const parts = currentToken.split('.');
+                const header = JSON.parse(atob(parts[0]));
+                const payload = JSON.parse(atob(parts[1]));
+                
+                const decodeResult = document.getElementById('decodeResult');
+                decodeResult.innerHTML = `
+                    <div class="success">
+                        <h4>JWT Header:</h4>
+                        <pre>${JSON.stringify(header, null, 2)}</pre>
+                        <h4>JWT Payload:</h4>
+                        <pre>${JSON.stringify(payload, null, 2)}</pre>
+                    </div>
+                `;
+                log('✅ JWT decoded successfully', 'success');
+            } catch (error) {
+                const decodeResult = document.getElementById('decodeResult');
+                decodeResult.innerHTML = `
+                    <div class="error">
+                        ❌ Failed to decode JWT: ${error.message}
+                    </div>
+                `;
+                log(`❌ Failed to decode JWT: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBackendJWT() {
+            if (!currentToken) {
+                log('❌ No token loaded', 'error');
+                return;
+            }
+
+            const backendResult = document.getElementById('backendResult');
+            backendResult.innerHTML = 'Testing JWT with backend...';
+            log('🔍 Testing JWT with backend...', 'info');
+
+            try {
+                // Test with a simple GraphQL query that requires authentication
                 const response = await fetch('http://localhost:3007/graphql', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${currentToken}`
                     },
                     body: JSON.stringify({
                         query: `
                             query {
-                                getProfile {
+                                getMe {
                                     _id
                                     email
                                     displayName
@@ -185,117 +215,35 @@
                 const data = await response.json();
                 
                 if (data.errors) {
-                    resultDiv.innerHTML = `
+                    backendResult.innerHTML = `
                         <div class="error">
-                            ❌ Backend rejected token<br>
-                            Error: ${data.errors[0].message}
+                            ❌ Backend JWT verification failed<br>
+                            <strong>Error:</strong> ${data.errors[0].message}
                         </div>
                     `;
-                    log(`❌ Backend rejected token: ${data.errors[0].message}`, 'error');
-                } else if (data.data && data.data.getProfile) {
-                    resultDiv.innerHTML = `
-                        <div class="success">
-                            ✅ Token is valid!<br>
-                            User: ${data.data.getProfile.displayName}<br>
-                            Email: ${data.data.getProfile.email}<br>
-                            Role: ${data.data.getProfile.systemRole}
-                        </div>
-                    `;
-                    log('✅ Token is valid with backend', 'success');
+                    log(`❌ Backend JWT verification failed: ${data.errors[0].message}`, 'error');
                 } else {
-                    resultDiv.innerHTML = `
-                        <div class="error">
-                            ❌ Unexpected response format
+                    backendResult.innerHTML = `
+                        <div class="success">
+                            ✅ Backend JWT verification successful<br>
+                            <strong>User:</strong> ${JSON.stringify(data.data.getMe, null, 2)}
                         </div>
                     `;
-                    log('❌ Unexpected response format', 'error');
+                    log('✅ Backend JWT verification successful', 'success');
                 }
             } catch (error) {
-                resultDiv.innerHTML = `
+                backendResult.innerHTML = `
                     <div class="error">
-                        ❌ Failed to test token<br>
-                        Error: ${error.message}
+                        ❌ Failed to test with backend: ${error.message}
                     </div>
                 `;
-                log(`❌ Failed to test token: ${error.message}`, 'error');
-            }
-        }
-
-        function testWebSocketWithToken() {
-            const token = localStorage.getItem('jwt');
-            const resultDiv = document.getElementById('websocketTestResult');
-            
-            if (!token) {
-                resultDiv.innerHTML = `
-                    <div class="warning">
-                        ⚠️ No JWT token found. Please login first.
-                    </div>
-                `;
-                return;
-            }
-
-            resultDiv.innerHTML = 'Testing WebSocket connection...';
-            
-            // Load socket.io from CDN
-            if (typeof io === 'undefined') {
-                const script = document.createElement('script');
-                script.src = 'https://cdn.socket.io/4.8.1/socket.io.min.js';
-                script.onload = () => {
-                    performWebSocketTest(token, resultDiv);
-                };
-                document.head.appendChild(script);
-            } else {
-                performWebSocketTest(token, resultDiv);
-            }
-        }
-
-        function performWebSocketTest(token, resultDiv) {
-            try {
-                const socket = io('http://localhost:3007/chat', {
-                    auth: { token },
-                    transports: ['websocket', 'polling'],
-                    timeout: 5000
-                });
-
-                socket.on('connect', () => {
-                    resultDiv.innerHTML = `
-                        <div class="success">
-                            ✅ WebSocket connected successfully!<br>
-                            Socket ID: ${socket.id}
-                        </div>
-                    `;
-                    log('✅ WebSocket connected successfully', 'success');
-                    socket.disconnect();
-                });
-
-                socket.on('connect_error', (error) => {
-                    resultDiv.innerHTML = `
-                        <div class="error">
-                            ❌ WebSocket connection failed<br>
-                            Error: ${error.message}
-                        </div>
-                    `;
-                    log(`❌ WebSocket connection failed: ${error.message}`, 'error');
-                });
-
-                socket.on('disconnect', (reason) => {
-                    log(`🔌 WebSocket disconnected: ${reason}`, 'warning');
-                });
-
-            } catch (error) {
-                resultDiv.innerHTML = `
-                    <div class="error">
-                        ❌ Failed to create WebSocket<br>
-                        Error: ${error.message}
-                    </div>
-                `;
-                log(`❌ Failed to create WebSocket: ${error.message}`, 'error');
+                log(`❌ Failed to test with backend: ${error.message}`, 'error');
             }
         }
 
         // Auto-load token on page load
         window.addEventListener('load', () => {
-            log('🚀 Starting JWT token tests...', 'info');
+            log('🚀 Starting JWT verification tests...', 'info');
             loadCurrentToken();
         });
     </script>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting ID Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background-color: #2a2a2a;
+        }
+        .log {
+            background-color: #1a1a1a;
+            border: 1px solid #444;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background-color: #28a745; color: white; }
+        .error { background-color: #dc3545; color: white; }
+        .warning { background-color: #ffc107; color: black; }
+        .info { background-color: #17a2b8; color: white; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        input {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Meeting ID Debug Test</h1>
+        
+        <div class="section">
+            <h3>📋 Test Configuration</h3>
+            <div>
+                <label>Real Meeting ID (from URL):</label>
+                <input type="text" id="realMeetingId" value="68d9d55aad3da2683f05b2d0" readonly>
+            </div>
+            <div>
+                <label>Test Meeting ID:</label>
+                <input type="text" id="testMeetingId" value="67890abcdef1234567890123">
+            </div>
+            <div>
+                <label>JWT Token:</label>
+                <input type="text" id="jwtToken" placeholder="Enter JWT token" style="width: 400px;">
+            </div>
+            <div>
+                <button onclick="getTokenFromStorage()">Get Token from localStorage</button>
+                <button onclick="testRealMeetingId()">🔍 Test Real Meeting ID</button>
+                <button onclick="testFakeMeetingId()">🔍 Test Fake Meeting ID</button>
+                <button onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📊 Test Results</h3>
+            <div id="testResults" class="log">
+                <div>Test results will appear here...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📝 Event Logs</h3>
+            <div id="eventLogs" class="log">
+                <div>Event logs will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let isConnected = false;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('eventLogs');
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.style.color = type === 'error' ? '#ff6b6b' : 
+                                  type === 'success' ? '#51cf66' : 
+                                  type === 'warning' ? '#ffd43b' : '#74c0fc';
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function addTestResult(message, type = 'info') {
+            const testResults = document.getElementById('testResults');
+            const resultEntry = document.createElement('div');
+            resultEntry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            resultEntry.style.color = type === 'error' ? '#ff6b6b' : 
+                                    type === 'success' ? '#51cf66' : 
+                                    type === 'warning' ? '#ffd43b' : '#74c0fc';
+            testResults.appendChild(resultEntry);
+            testResults.scrollTop = testResults.scrollHeight;
+        }
+
+        function getTokenFromStorage() {
+            const token = localStorage.getItem('jwt');
+            if (token) {
+                document.getElementById('jwtToken').value = token;
+                log('✅ JWT token retrieved from localStorage', 'success');
+            } else {
+                log('❌ No JWT token found in localStorage', 'error');
+            }
+        }
+
+        function testMeetingId(meetingId, isReal = false) {
+            const token = document.getElementById('jwtToken').value.trim();
+
+            if (!token) {
+                log('❌ Please provide a JWT token', 'error');
+                return;
+            }
+
+            if (!meetingId) {
+                log('❌ Please provide a meeting ID', 'error');
+                return;
+            }
+
+            const meetingType = isReal ? 'REAL' : 'FAKE';
+            log(`🔍 Testing ${meetingType} meeting ID: ${meetingId}`, 'info');
+            addTestResult(`Testing ${meetingType} meeting ID: ${meetingId}`, 'info');
+
+            try {
+                // Disconnect existing socket if any
+                if (socket) {
+                    socket.disconnect();
+                }
+
+                // Create new socket connection to chat namespace
+                socket = io('http://localhost:3007/chat', {
+                    auth: {
+                        token: token
+                    },
+                    transports: ['websocket', 'polling'],
+                    timeout: 20000,
+                    forceNew: true
+                });
+
+                // Connection events
+                socket.on('connect', () => {
+                    isConnected = true;
+                    log(`✅ Connected to WebSocket for ${meetingType} meeting`, 'success');
+                    addTestResult(`✅ Connected to WebSocket for ${meetingType} meeting`, 'success');
+                    
+                    // Join the chat room
+                    log(`📤 Joining chat room for ${meetingType} meeting...`, 'info');
+                    socket.emit('JOIN_CHAT_ROOM', { meetingId: meetingId });
+                });
+
+                socket.on('disconnect', (reason) => {
+                    isConnected = false;
+                    log(`🔌 Disconnected: ${reason}`, 'warning');
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                    addTestResult(`❌ Connection error: ${error.message}`, 'error');
+                });
+
+                socket.on('ERROR', (data) => {
+                    log(`❌ Server error: ${data.message}`, 'error');
+                    addTestResult(`❌ Server error: ${data.message}`, 'error');
+                });
+
+                // Chat events
+                socket.on('CHAT_MESSAGES_LOADED', (data) => {
+                    const messageCount = data.messages.length;
+                    log(`📚 ${meetingType} meeting - Loaded existing messages: ${messageCount}`, 'success');
+                    addTestResult(`📚 ${meetingType} meeting - Loaded existing messages: ${messageCount}`, messageCount > 0 ? 'success' : 'warning');
+                    
+                    if (messageCount === 0) {
+                        addTestResult(`⚠️ ${meetingType} meeting - No existing messages found!`, 'warning');
+                    }
+                });
+
+                socket.on('CHAT_MESSAGE', (message) => {
+                    log(`📨 ${meetingType} meeting - Received new message: ${message.text}`, 'success');
+                    addTestResult(`📨 ${meetingType} meeting - Received new message: ${message.text}`, 'success');
+                });
+
+                socket.on('USER_JOINED_CHAT', (participant) => {
+                    log(`👤 ${meetingType} meeting - User joined chat: ${participant.displayName}`, 'info');
+                });
+
+                socket.on('CHAT_PEER_LIST', (data) => {
+                    log(`👥 ${meetingType} meeting - Chat participants: ${data.participants.length}`, 'info');
+                    addTestResult(`👥 ${meetingType} meeting - Chat participants: ${data.participants.length}`, 'info');
+                });
+
+                // Send a test message after 2 seconds
+                setTimeout(() => {
+                    if (isConnected) {
+                        const testMessage = `Test message for ${meetingType} meeting at ${new Date().toLocaleTimeString()}`;
+                        log(`📤 Sending test message to ${meetingType} meeting...`, 'info');
+                        socket.emit('SEND_CHAT_MESSAGE', {
+                            meetingId: meetingId,
+                            message: testMessage
+                        });
+                    }
+                }, 2000);
+
+            } catch (error) {
+                log(`❌ Failed to create WebSocket connection: ${error.message}`, 'error');
+                addTestResult(`❌ Failed to create WebSocket connection: ${error.message}`, 'error');
+            }
+        }
+
+        function testRealMeetingId() {
+            const realMeetingId = document.getElementById('realMeetingId').value.trim();
+            testMeetingId(realMeetingId, true);
+        }
+
+        function testFakeMeetingId() {
+            const fakeMeetingId = document.getElementById('testMeetingId').value.trim();
+            testMeetingId(fakeMeetingId, false);
+        }
+
+        function clearLogs() {
+            document.getElementById('eventLogs').innerHTML = '<div>Event logs cleared...</div>';
+            document.getElementById('testResults').innerHTML = '<div>Test results will appear here...</div>';
+        }
+
+        // Auto-get token on page load
+        window.onload = function() {
+            getTokenFromStorage();
+            log('🚀 Meeting ID Debug Test page loaded', 'info');
+            log('💡 Instructions: 1) Get JWT token 2) Test both meeting IDs 3) Compare results', 'info');
+        };
+    </script>
+</body>
+</html>
