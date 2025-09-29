@@ -59,7 +59,7 @@ export const useWebSocketChat = ({
 
     try {
       console.log('🔌 Creating new socket connection...');
-      const newSocket = io('http://localhost:3007/chat', {
+      const newSocket = io('http://localhost:3007/signaling', {
         auth: {
           token,
         },
@@ -74,8 +74,8 @@ export const useWebSocketChat = ({
       setError(null);
       reconnectAttempts.current = 0;
       
-      // Join the chat room
-      newSocket.emit('JOIN_CHAT_ROOM', { meetingId });
+      // Don't join chat room immediately - wait for authentication to complete
+      console.log('🔌 Waiting for authentication to complete...');
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -106,6 +106,15 @@ export const useWebSocketChat = ({
       const errorMessage = `Server error: ${data.message || 'Unknown server error'}`;
       setError(errorMessage);
       onError?.(errorMessage);
+    });
+
+    newSocket.on('CONNECTION_SUCCESS', (data) => {
+      console.log('✅ Chat WebSocket connection successful:', data);
+      setError(null);
+      
+      // Now that authentication is complete, join the chat room
+      console.log('📤 Joining chat room after successful authentication...');
+      newSocket.emit('JOIN_CHAT_ROOM', { meetingId });
     });
 
     newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
@@ -174,9 +183,9 @@ export const useWebSocketChat = ({
   const sendMessage = useCallback((message: string, replyToMessageId?: string) => {
     console.log('🚀 sendMessage called:', { message, meetingId, isConnected, socket: !!socket });
     if (socket && isConnected) {
-      console.log('📤 Emitting SEND_CHAT_MESSAGE:', { meetingId, message, replyToMessageId });
-      socket.emit('SEND_CHAT_MESSAGE', {
-        meetingId,
+      console.log('📤 Emitting CHAT_SEND:', { roomName: meetingId, message, replyToMessageId });
+      socket.emit('CHAT_SEND', {
+        roomName: meetingId,
         message,
         replyToMessageId,
       });

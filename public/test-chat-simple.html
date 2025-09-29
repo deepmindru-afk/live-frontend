@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chat Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background-color: #2a2a2a;
+        }
+        .log {
+            background-color: #1a1a1a;
+            border: 1px solid #444;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background-color: #28a745; color: white; }
+        .error { background-color: #dc3545; color: white; }
+        .warning { background-color: #ffc107; color: black; }
+        .info { background-color: #17a2b8; color: white; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        input {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px;
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Simple Chat Test (Test Server)</h1>
+        
+        <div class="section">
+            <h3>📋 Test Configuration</h3>
+            <div>
+                <label>Meeting ID:</label>
+                <input type="text" id="meetingId" value="68d9d55aad3da2683f05b2d0">
+            </div>
+            <div>
+                <button onclick="testConnection()">🔌 Test Connection</button>
+                <button onclick="joinChatRoom()">📤 Join Chat Room</button>
+                <button onclick="sendTestMessage()">💬 Send Test Message</button>
+                <button onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📊 Connection Status</h3>
+            <div id="connectionStatus" class="status info">Disconnected</div>
+            <div id="socketId" class="status info">Socket ID: None</div>
+            <div id="chatStatus" class="status info">Chat: Not joined</div>
+        </div>
+
+        <div class="section">
+            <h3>💬 Chat Messages</h3>
+            <div id="messagesList" class="log">
+                <div>No messages received yet...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📝 Event Logs</h3>
+            <div id="eventLogs" class="log">
+                <div>Event logs will appear here...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let isConnected = false;
+        let isJoined = false;
+        let messageCount = 0;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('eventLogs');
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.style.color = type === 'error' ? '#ff6b6b' : 
+                                  type === 'success' ? '#51cf66' : 
+                                  type === 'warning' ? '#ffd43b' : '#74c0fc';
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        function testConnection() {
+            const meetingId = document.getElementById('meetingId').value.trim();
+
+            if (!meetingId) {
+                log('❌ Please provide a meeting ID', 'error');
+                return;
+            }
+
+            log('🔌 Testing WebSocket connection to real backend server...', 'info');
+
+            try {
+                // Disconnect existing socket if any
+                if (socket) {
+                    socket.disconnect();
+                }
+
+                // Create new socket connection to real backend server
+                socket = io('http://localhost:3007/chat', {
+                    auth: {
+                        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OGQ5ZDU1YWFkM2RhMjY4M2YwNWIyZDAiLCJlbWFpbCI6InRlc3RAdGVzdC5jb20iLCJyb2xlIjoiTUVNQkVSIiwiaWF0IjoxNzM1NTY0MjAwLCJleHAiOjE3MzU2NTA2MDB9.test' // Mock JWT token
+                    },
+                    transports: ['websocket', 'polling'],
+                    timeout: 20000,
+                    forceNew: true
+                });
+
+                // Connection events
+                socket.on('connect', () => {
+                    isConnected = true;
+                    updateStatus('connectionStatus', 'Connected to Real Backend Server', 'success');
+                    updateStatus('socketId', `Socket ID: ${socket.id}`, 'success');
+                    log(`✅ Connected to real backend server!`, 'success');
+                    log(`Socket ID: ${socket.id}`, 'info');
+                });
+
+                socket.on('disconnect', (reason) => {
+                    isConnected = false;
+                    isJoined = false;
+                    updateStatus('connectionStatus', `Disconnected: ${reason}`, 'warning');
+                    updateStatus('chatStatus', 'Chat: Disconnected', 'warning');
+                    log(`🔌 Disconnected: ${reason}`, 'warning');
+                });
+
+                socket.on('connect_error', (error) => {
+                    isConnected = false;
+                    updateStatus('connectionStatus', `Connection Error: ${error.message}`, 'error');
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                });
+
+                // Chat events
+                socket.on('CHAT_MESSAGES_LOADED', (data) => {
+                    log(`📚 Loaded existing messages: ${data.messages.length}`, 'success');
+                    updateMessagesList(data.messages);
+                });
+
+                socket.on('CHAT_MESSAGE', (message) => {
+                    messageCount++;
+                    log(`📨 Received new message: ${message.text}`, 'success');
+                    addMessageToList(message);
+                });
+
+                socket.on('ERROR', (error) => {
+                    log(`❌ Server error: ${error.message}`, 'error');
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                });
+
+            } catch (error) {
+                log(`❌ Failed to create WebSocket connection: ${error.message}`, 'error');
+                updateStatus('connectionStatus', 'Connection Failed', 'error');
+            }
+        }
+
+        function joinChatRoom() {
+            if (!socket || !isConnected) {
+                log('❌ Not connected to WebSocket. Please test connection first.', 'error');
+                return;
+            }
+
+            const meetingId = document.getElementById('meetingId').value.trim();
+            if (!meetingId) {
+                log('❌ Please provide a meeting ID', 'error');
+                return;
+            }
+
+            log('📤 Sending JOIN_CHAT_ROOM event...', 'info');
+            socket.emit('JOIN_CHAT_ROOM', { meetingId: meetingId });
+            isJoined = true;
+            updateStatus('chatStatus', 'Chat: Joined room', 'success');
+        }
+
+        function sendTestMessage() {
+            if (!socket || !isConnected || !isJoined) {
+                log('❌ Not connected or not joined to chat room', 'error');
+                return;
+            }
+
+            const meetingId = document.getElementById('meetingId').value.trim();
+            const testMessage = `Test message ${messageCount + 1} at ${new Date().toLocaleTimeString()}`;
+
+            log(`📤 Sending test message: "${testMessage}"`, 'info');
+            socket.emit('SEND_CHAT_MESSAGE', {
+                meetingId: meetingId,
+                message: testMessage
+            });
+        }
+
+        function updateMessagesList(messages) {
+            const messagesList = document.getElementById('messagesList');
+            messagesList.innerHTML = '';
+
+            if (messages.length === 0) {
+                messagesList.innerHTML = '<div>No existing messages found</div>';
+                return;
+            }
+
+            messages.forEach(message => {
+                addMessageToList(message, false);
+            });
+        }
+
+        function addMessageToList(message, isNew = true) {
+            const messagesList = document.getElementById('messagesList');
+            const messageElement = document.createElement('div');
+            
+            const timestamp = new Date(message.createdAt).toLocaleTimeString();
+            messageElement.innerHTML = `
+                <div style="border-bottom: 1px solid #444; padding: 5px 0; ${isNew ? 'background-color: #2a4a2a;' : ''}">
+                    <strong>${message.displayName}</strong> 
+                    <span style="color: #888; font-size: 11px;">[${timestamp}]</span>
+                    <div>${message.text}</div>
+                </div>
+            `;
+            
+            messagesList.appendChild(messageElement);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('eventLogs').innerHTML = '<div>Event logs cleared...</div>';
+            document.getElementById('messagesList').innerHTML = '<div>No messages received yet...</div>';
+            messageCount = 0;
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            log('🚀 Simple Chat Test page loaded', 'info');
+            log('💡 Instructions: 1) Test connection 2) Join chat room 3) Send test message', 'info');
+        };
+    </script>
+</body>
+</html>
