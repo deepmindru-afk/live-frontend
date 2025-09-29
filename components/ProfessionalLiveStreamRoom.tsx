@@ -17,12 +17,14 @@ import {
   RAISE_HAND,
   LOWER_HAND,
   TRANSFER_HOST,
+  TRANSFER_HOST_AND_LEAVE,
   REMOVE_PARTICIPANT,
 } from '../apollo/livestream/mutations';
 import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
 import WebSocketChatView from './WebSocketChatView';
 import ChatDebug from './ChatDebug';
+import MinimalistChat from './MinimalistChat';
 
 // Additional mutations for leave functionality
 const FORCE_LEAVE_MEETING = gql`
@@ -62,8 +64,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // State management
   const [actualMeetingId, setActualMeetingId] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'participants' | 'waiting' | 'chat'>('participants');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
   const [isRecording, setIsRecording] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
@@ -79,17 +81,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
+  const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   
-  // 🔧 ANTI-FLICKERING: Reduced debounce for faster updates
-  const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const DEBOUNCE_DELAY = 300; // 🔧 FIX: Reduced from 1s to 300ms for faster updates
-
-  // GraphQL Queries - 🔧 OPTIMIZED: Fast polling for real-time updates
+  // GraphQL Queries
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 2000, // 🔧 FIX: Faster 2-second refresh for meeting data
+    pollInterval: 2000,
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: false,
     errorPolicy: 'ignore'
@@ -98,7 +97,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const { data: participantsData, loading: participantsLoading, error: participantsError } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 1500, // 🔧 FIX: Fast 1.5-second refresh for participants
+    pollInterval: 1500,
     errorPolicy: 'ignore',
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: false
@@ -107,7 +106,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const { data: waitingData, loading: waitingLoading, error: waitingError } = useQuery(GET_WAITING_PARTICIPANTS, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 2000, // 🔧 FIX: 2-second refresh for waiting participants
+    pollInterval: 2000,
     errorPolicy: 'ignore',
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: false
@@ -116,7 +115,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 1000, // 🔧 FIX: Very fast 1-second refresh for current participant
+    pollInterval: 1000,
     errorPolicy: 'ignore',
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: false
@@ -133,6 +132,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [raiseHand] = useMutation(RAISE_HAND);
   const [lowerHand] = useMutation(LOWER_HAND);
   const [transferHost] = useMutation(TRANSFER_HOST);
+  const [transferHostAndLeave] = useMutation(TRANSFER_HOST_AND_LEAVE);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
 
   // WebSocket connection for real-time features
@@ -148,943 +148,462 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onParticipantLeft: (participant) => {
       console.log('👋 Participant left:', participant);
     },
-    onError: (error) => {
-      console.error('❌ WebSocket error:', error);
+    onHandRaised: (participant) => {
+      console.log('✋ Hand raised:', participant);
+      setRaisedHandsCount(prev => prev + 1);
+    },
+    onHandLowered: (participant) => {
+      console.log('✋ Hand lowered:', participant);
+      setRaisedHandsCount(prev => Math.max(0, prev - 1));
     }
   });
 
-  // Hand raise event listeners
+  // Initialize meeting ID and authentication
   useEffect(() => {
-    if (!socket) return;
-
-    const handleHandRaised = (data: any) => {
-      console.log('✋ Hand raised by:', data);
-      // Update participants list to show raised hand
-      setParticipants(prev => prev.map(p => 
-        p._id === data.participantId 
-          ? { ...p, hasHandRaised: true, handRaisedAt: data.raisedAt }
-          : p
-      ));
-    };
-
-    const handleHandLowered = (data: any) => {
-      console.log('✋ Hand lowered by:', data);
-      // Update participants list to hide raised hand
-      setParticipants(prev => prev.map(p => 
-        p._id === data.participantId 
-          ? { ...p, hasHandRaised: false, handLoweredAt: data.loweredAt }
-          : p
-      ));
-    };
-
-    const handleHandRaiseSuccess = (data: any) => {
-      console.log('✅ Hand raise success:', data);
-      if (data.success) {
-        setHandRaised(data.hasHandRaised || false);
-      }
-    };
-
-    const handleHandRaiseError = (data: any) => {
-      console.error('❌ Hand raise error:', data);
-      // Only show error for actual errors, not for "already raised" which is handled by toggle
-      if (data.message && !data.message.includes('already raised')) {
-        Swal.fire('Error', data.message || 'Failed to raise hand', 'error');
-      } else {
-        // If hand is already raised, just toggle the state
-        setHandRaised(false);
-        console.log('🔄 Hand was already raised, toggling to lowered');
-      }
-    };
-
-    // Add event listeners
-    socket.on('HAND_RAISED', handleHandRaised);
-    socket.on('HAND_LOWERED', handleHandLowered);
-    socket.on('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
-    socket.on('HAND_RAISE_ERROR', handleHandRaiseError);
-    socket.on('HAND_LOWER_SUCCESS', handleHandRaiseSuccess);
-    socket.on('HAND_LOWER_ERROR', handleHandRaiseError);
-
-    return () => {
-      socket.off('HAND_RAISED', handleHandRaised);
-      socket.off('HAND_LOWERED', handleHandLowered);
-      socket.off('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
-      socket.off('HAND_RAISE_ERROR', handleHandRaiseError);
-      socket.off('HAND_LOWER_SUCCESS', handleHandRaiseSuccess);
-      socket.off('HAND_LOWER_ERROR', handleHandRaiseError);
-    };
-  }, [socket]);
-
-  // Authentication and initialization
-  useEffect(() => {
-    const checkAuth = async () => {
+    const initializeMeeting = async () => {
       try {
-        const authStatus = isAuthenticated();
+        const meetingIdToUse = propMeetingId || 'DEMO123';
+        setActualMeetingId(meetingIdToUse);
+
+        const authStatus = await isAuthenticated();
         setIsAuth(authStatus);
         
         if (authStatus) {
           const user = await getCurrentUser();
-          console.log('🔍 USER AUTH DEBUG:', { user, userId: user?._id || user?.id });
-          if (user && typeof user === 'object') {
             setCurrentUser(user);
-            setActualUserId(user._id || user.id || '');
-            console.log('✅ User ID set:', user._id || user.id);
+          setActualUserId(user?.id || userId);
           } else {
-            console.error('❌ No user data found');
-          }
+          const mockUser = {
+            id: userId,
+            displayName: role === 'HOST' ? 'Host User' : 'Participant User',
+            email: role === 'HOST' ? 'host@demo.com' : 'participant@demo.com',
+            role: role,
+            token: 'mock-token'
+          };
+          setCurrentUser(mockUser);
+          setActualUserId(userId);
         }
         
         setAuthComplete(true);
+        setLoading(false);
     } catch (error) {
-        console.error('❌ AUTH: Error checking authentication:', error);
-        setIsAuth(false);
-        setAuthComplete(true);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  // Meeting ID initialization
-  useEffect(() => {
-    if (propMeetingId) {
-      setActualMeetingId(propMeetingId);
-      setLoading(false);
-    } else {
-      // Try to get from URL or other sources
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlMeetingId = urlParams.get('meetingId');
-      if (urlMeetingId) {
-        setActualMeetingId(urlMeetingId);
+        console.error('Error initializing meeting:', error);
         setLoading(false);
       }
-    }
-  }, [propMeetingId]);
-
-  // Update meeting status
-  useEffect(() => {
-    if (meetingData) {
-      const meeting = (meetingData as any)?.getMeetingById;
-      if (meeting) {
-        console.log('🔄 MEETING STATUS UPDATE:', {
-          previousStatus: meetingStatus,
-          newStatus: meeting.status,
-          meetingId: meeting._id,
-          timestamp: new Date().toISOString()
-        });
-        
-        setMeetingStatus(meeting.status);
-        setIsLive(meeting.status === 'LIVE' || meeting.status === 'ACTIVE');
-        setIsRecording(meeting.isRecording || false);
-        
-        // 🔧 NEW: Redirect to dashboard when meeting ends
-        if (meeting.status === 'ENDED') {
-          console.log('🔄 MEETING ENDED: Redirecting to dashboard...');
-          Swal.fire({
-            title: 'Meeting Ended',
-            text: 'The meeting has been ended by the host. You will be redirected to the dashboard.',
-            icon: 'info',
-            confirmButtonText: 'Go to Dashboard',
-            allowOutsideClick: false,
-            allowEscapeKey: false
-          }).then(() => {
-            console.log('🔄 REDIRECTING TO DASHBOARD...');
-            window.location.href = '/dashboard';
-          });
-        }
-      }
-    }
-  }, [meetingData, meetingStatus]);
-
-  // Update participants - 🔧 OPTIMIZED: Fast refresh with smart debouncing
-  useEffect(() => {
-    if (participantsData && !participantsError) {
-      try {
-        const participantsList = (participantsData as any)?.getParticipantsByMeeting || [];
-        const now = Date.now();
-        
-        // 🔧 DEBUG: Log participant data for debugging
-        console.log('🔍 PARTICIPANTS UPDATE:', {
-          totalParticipants: participantsList.length,
-          participants: participantsList.map((p: any) => ({
-            _id: p._id,
-            displayName: p.displayName,
-            status: p.status,
-            role: p.role
-          }))
-        });
-        
-        // 🔧 OPTIMIZED: Only debounce if data hasn't changed significantly
-        const hasSignificantChange = participantsList.length !== participants.length ||
-          participantsList.some((p: any, index: number) => 
-            !participants[index] || 
-            p.status !== participants[index].status ||
-            p.role !== participants[index].role
-          );
-        
-        if (!hasSignificantChange && now - lastUpdateTime < DEBOUNCE_DELAY) {
-          return;
-        }
-        
-        // 🔧 OPTIMIZED: Update immediately for significant changes
-        setParticipants(prevParticipants => {
-          const hasChanged = JSON.stringify(prevParticipants) !== JSON.stringify(participantsList);
-          if (hasChanged) {
-            setLastUpdateTime(now);
-            setIsRefreshing(true);
-            // Hide refresh indicator after 300ms for faster feedback
-            setTimeout(() => setIsRefreshing(false), 300);
-            console.log('🔄 PARTICIPANTS UPDATED:', participantsList.length, 'participants');
-            return participantsList;
-          }
-          return prevParticipants;
-        });
-        
-        // Count raised hands
-        const raisedHands = participantsList.filter((p: any) => p.hasHandRaised);
-        setRaisedHandsCount(prevCount => {
-          return prevCount !== raisedHands.length ? raisedHands.length : prevCount;
-        });
-      } catch (error) {
-        console.warn('⚠️ Error processing participants data:', error);
-        // Keep existing participants to prevent UI refresh
-      }
-    }
-  }, [participantsData, participantsError, lastUpdateTime, DEBOUNCE_DELAY, participants.length]);
-
-  // Update waiting participants - 🔧 OPTIMIZED: 3-second refresh with debouncing
-  useEffect(() => {
-    if (waitingData && !waitingError) {
-      try {
-        const waitingList = (waitingData as any)?.getWaitingParticipants || [];
-        const now = Date.now();
-        
-        // 🔧 ANTI-FLICKERING: Debounce rapid updates
-        if (now - lastUpdateTime < DEBOUNCE_DELAY) {
-          return;
-        }
-        
-        // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
-        setWaitingParticipants(prevWaiting => {
-          const hasChanged = JSON.stringify(prevWaiting) !== JSON.stringify(waitingList);
-          if (hasChanged) {
-            setLastUpdateTime(now);
-            return waitingList;
-          }
-          return prevWaiting;
-        });
-      } catch (error) {
-        console.warn('⚠️ Error processing waiting participants data:', error);
-        // Keep existing waiting participants
-      }
-    }
-  }, [waitingData, waitingError, lastUpdateTime, DEBOUNCE_DELAY]);
-
-  // Update current participant - 🔧 OPTIMIZED: 3-second refresh with debouncing
-  useEffect(() => {
-    if (currentParticipantData && !currentParticipantError) {
-      try {
-        const participant = (currentParticipantData as any)?.getParticipantByUserAndMeeting;
-        if (participant) {
-          const now = Date.now();
-          
-          // 🔧 ANTI-FLICKERING: Debounce rapid updates
-          if (now - lastUpdateTime < DEBOUNCE_DELAY) {
-            return;
-          }
-          
-          // 🔧 OPTIMIZED: Only update if data actually changed to prevent flickering
-          setCurrentParticipant((prevParticipant: any) => {
-            const hasChanged = JSON.stringify(prevParticipant) !== JSON.stringify(participant);
-            if (hasChanged) {
-              setLastUpdateTime(now);
-              // Update hand raise state from participant data
-              setHandRaised(participant.hasHandRaised || false);
-              console.log('✋ Hand raise state updated from participant data:', participant.hasHandRaised);
-              return participant;
-            }
-            return prevParticipant;
-          });
-        }
-      } catch (error) {
-        console.warn('⚠️ Error processing current participant data:', error);
-        // Keep existing participant data
-      }
-    }
-  }, [currentParticipantData, currentParticipantError, lastUpdateTime, DEBOUNCE_DELAY]);
-
-  // 🔧 FIX: Handle GraphQL errors gracefully
-  useEffect(() => {
-    if (currentParticipantError) {
-      console.warn('⚠️ CURRENT_PARTICIPANT_ERROR:', currentParticipantError);
-      // Don't break the UI, just log the error
-      // Reset current participant to prevent UI issues
-      setCurrentParticipant(null);
-    }
-  }, [currentParticipantError]);
-
-  useEffect(() => {
-    if (participantsError) {
-      console.warn('⚠️ PARTICIPANTS_ERROR:', participantsError);
-      // Don't break the UI, just log the error
-      // Keep existing participants to prevent UI refresh
-    }
-  }, [participantsError]);
-
-  useEffect(() => {
-    if (waitingError) {
-      console.warn('⚠️ WAITING_ERROR:', waitingError);
-      // Don't break the UI, just log the error
-      // Keep existing waiting participants
-    }
-  }, [waitingError]);
-
-  useEffect(() => {
-    if (meetingError) {
-      console.warn('⚠️ MEETING_ERROR:', meetingError);
-      // Don't break the UI, just log the error
-    }
-  }, [meetingError]);
-
-  // 🔧 FIX: Removed excessive fallback polling that was causing flickering
-  // The main polling intervals are now sufficient and less aggressive
-
-  // Auto-join meeting when authenticated
-  useEffect(() => {
-    const autoJoinMeeting = async () => {
-      if (!isAuth || !authComplete || !actualMeetingId || !currentUser) return;
-      
-      // 🔧 NEW: Don't auto-join if meeting is ended
-      if (meetingStatus === 'ENDED') {
-        console.log('🚫 AUTO-JOIN: Meeting is ended, skipping auto-join');
-        return;
-      }
-      
-      try {
-        console.log('🔄 AUTO-JOIN: Attempting to join meeting...');
-        await joinMeeting({
-          variables: {
-            input: {
-              meetingId: actualMeetingId,
-              displayName: currentUser.displayName || currentUser.email || 'User',
-              role: role
-            }
-          }
-        });
-        console.log('✅ AUTO-JOIN: Successfully joined meeting');
-      } catch (error) {
-        console.error('❌ AUTO-JOIN: Error joining meeting:', error);
-      }
     };
 
-    autoJoinMeeting();
-  }, [isAuth, authComplete, actualMeetingId, currentUser, role, joinMeeting, meetingStatus]);
+    initializeMeeting();
+  }, [propMeetingId, userId, role]);
 
-  // Auto-start meeting if host
+  // Update meeting data
   useEffect(() => {
-    const autoStartMeeting = async () => {
-      if (!isAuth || !authComplete || !actualMeetingId || meetingStatus !== 'CREATED') return;
-      if (role !== 'HOST' && currentParticipant?.role !== 'HOST') return;
+    if (meetingData?.getMeetingById) {
+      const meeting = meetingData.getMeetingById;
+      setMeetingStatus(meeting.status || 'CREATED');
+      setIsLive(meeting.status === 'LIVE');
+    }
+  }, [meetingData]);
+
+  // Update participants data
+  useEffect(() => {
+    if (participantsData?.getParticipantsByMeeting) {
+      const participantsList = participantsData.getParticipantsByMeeting;
+      const previousParticipants = participants;
       
-      try {
-        console.log('🔄 AUTO-START: Starting meeting...');
-        await startMeeting({
-          variables: {
-            meetingId: actualMeetingId
-          }
+      setParticipants(participantsList);
+      
+      const raisedCount = participantsList.filter(p => p.hasHandRaised).length;
+      setRaisedHandsCount(raisedCount);
+
+      // Check for new participants (joined)
+      if (previousParticipants.length > 0) {
+        const newParticipants = participantsList.filter(newP => 
+          !previousParticipants.find(oldP => oldP._id === newP._id)
+        );
+        
+        newParticipants.forEach(participant => {
+          console.log('🎉 New participant joined meeting:', participant);
+          // This will be handled by the chat component
         });
-        console.log('✅ AUTO-START: Meeting started successfully');
+
+        // Check for left participants
+        const leftParticipants = previousParticipants.filter(oldP => 
+          !participantsList.find(newP => newP._id === oldP._id)
+        );
+        
+        leftParticipants.forEach(participant => {
+          console.log('👋 Participant left meeting:', participant);
+          // This will be handled by the chat component
+        });
+      }
+    }
+  }, [participantsData, participants]);
+
+  // Update waiting participants data
+  useEffect(() => {
+    if (waitingData?.getWaitingParticipants) {
+      setWaitingParticipants(waitingData.getWaitingParticipants);
+    }
+  }, [waitingData]);
+
+  // Update current participant data
+  useEffect(() => {
+    if (currentParticipantData?.getParticipantByUserAndMeeting) {
+      setCurrentParticipant(currentParticipantData.getParticipantByUserAndMeeting);
+    }
+  }, [currentParticipantData]);
+
+  // Event handlers
+  const handleStartMeeting = async () => {
+    try {
+        await startMeeting({
+        variables: { meetingId: actualMeetingId }
+        });
         setMeetingStatus('LIVE');
         setIsLive(true);
+      Swal.fire({
+        icon: 'success',
+        title: 'Meeting Started',
+        text: 'The meeting has been started successfully!',
+        timer: 2000,
+        showConfirmButton: false
+      });
       } catch (error) {
-        console.error('❌ AUTO-START: Error starting meeting:', error);
-      }
-    };
-
-    // Auto-start after a short delay
-    const timer = setTimeout(autoStartMeeting, 2000);
-    return () => clearTimeout(timer);
-  }, [isAuth, authComplete, actualMeetingId, meetingStatus, role, currentParticipant, startMeeting]);
-
-  // Helper functions - 🔧 FIX: Memoized callbacks to prevent unnecessary re-renders
-  const handleStartRecording = useCallback(async () => {
-    try {
-      setIsRecording(true);
-      // Add recording start logic here
-      console.log('🎥 Recording started');
-    } catch (error) {
-      console.error('❌ Error starting recording:', error);
-      setIsRecording(false);
+      console.error('Error starting meeting:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to start the meeting. Please try again.'
+      });
     }
-  }, []);
+  };
 
-  const handleStopRecording = useCallback(async () => {
+  const handleEndMeeting = async () => {
     try {
-      setIsRecording(false);
-      // Add recording stop logic here
-      console.log('🎥 Recording stopped');
-    } catch (error) {
-      console.error('❌ Error stopping recording:', error);
-    }
-  }, []);
-
-  const handleMicToggle = useCallback(() => {
-    setMicEnabled(prev => !prev);
-    // Add mic toggle logic here
-  }, []);
-
-  const handleCameraToggle = useCallback(() => {
-    setCameraEnabled(prev => !prev);
-    // Add camera toggle logic here
-  }, []);
-
-  const handleScreenShareToggle = useCallback(() => {
-    setScreenSharing(prev => !prev);
-    // Add screen share logic here
-  }, []);
-
-  const handleRaiseHand = async () => {
-    try {
-      console.log('🔍 HAND RAISE DEBUGGING:', {
-        meetingId: actualMeetingId,
-        actualUserId,
-        participantsCount: participants.length,
-        participants: participants.map(p => ({
-          _id: p._id,
-          userId: p.user?._id,
-          displayName: p.displayName,
-          hasHandRaised: p.hasHandRaised
-        })),
-        currentParticipant: currentParticipant ? {
-          _id: currentParticipant._id,
-          userId: currentParticipant.user?._id,
-          displayName: currentParticipant.displayName,
-          hasHandRaised: currentParticipant.hasHandRaised
-        } : null
+      await endMeeting({
+        variables: { meetingId: actualMeetingId }
       });
-
-      // Check if we have participants data
-      if (!participants || participants.length === 0) {
-        console.error('❌ No participants data available');
-        console.log('🔍 Participants loading state:', { participantsLoading, participantsError });
-        await Swal.fire('Error', 'Unable to raise hand: No participants found. Please wait for the meeting to load and try again.', 'error');
-        return;
-      }
-
-      // Check if we have a valid user ID
-      if (!actualUserId) {
-        console.error('❌ No user ID available');
-        console.log('🔍 User auth state:', { isAuth, authComplete, currentUser });
-        await Swal.fire('Error', 'Unable to raise hand: User not authenticated. Please refresh the page and try again.', 'error');
-        return;
-      }
-
-      // Find the participant that belongs to the current user
-      let participantId = null;
-      let userParticipant = null;
-
-      // Strategy 1: Use currentParticipant if it belongs to the current user
-      if (currentParticipant && currentParticipant.user?._id === actualUserId) {
-        participantId = currentParticipant._id;
-        userParticipant = currentParticipant;
-        console.log('✅ Using currentParticipant:', participantId);
-      } else {
-        // Strategy 2: Find participant by user ID in participants list (exact match)
-        userParticipant = participants.find(p => p.user?._id === actualUserId);
-        if (userParticipant) {
-          participantId = userParticipant._id;
-          console.log('✅ Found participant in participants list (exact match):', participantId);
-        } else {
-          // Strategy 3: Try string comparison
-          userParticipant = participants.find(p => p.user?._id?.toString() === actualUserId?.toString());
-          if (userParticipant) {
-            participantId = userParticipant._id;
-            console.log('✅ Found participant with string comparison:', participantId);
-          } else {
-            // Strategy 4: Try to find by user ID field (in case of different structure)
-            userParticipant = participants.find(p => p.userId === actualUserId);
-            if (userParticipant) {
-              participantId = userParticipant._id;
-              console.log('✅ Found participant by userId field:', participantId);
-            }
-          }
-        }
-      }
-
-      if (!participantId || !userParticipant) {
-        console.error('❌ No participant found for current user:', {
-          actualUserId,
-          participants: participants.map(p => ({
-            _id: p._id,
-            userId: p.user?._id,
-            displayName: p.displayName,
-            isCurrentUser: p.user?._id === actualUserId
-          })),
-          currentParticipant: currentParticipant ? {
-            _id: currentParticipant._id,
-            userId: currentParticipant.user?._id,
-            displayName: currentParticipant.displayName
-          } : null
-        });
-        
-        // Check if user needs to join the meeting first
-        if (participants.length > 0 && !currentParticipant) {
-          await Swal.fire('Error', 'Unable to raise hand: You are not a participant in this meeting. Please join the meeting first.', 'error');
-        } else {
-          await Swal.fire('Error', 'Unable to raise hand: Could not find your participant record. Please refresh the page and try again.', 'error');
-        }
-        return;
-      }
-
-      console.log('✅ Using participant:', {
-        participantId,
-        displayName: userParticipant.displayName,
-        userId: userParticipant.user?._id,
-        currentHandState: userParticipant.hasHandRaised
+      setMeetingStatus('ENDED');
+      setIsLive(false);
+      Swal.fire({
+        icon: 'success',
+        title: 'Meeting Ended',
+        text: 'The meeting has been ended successfully! All participants have been disconnected.',
+        timer: 2000,
+        showConfirmButton: false
       });
-
-      // Check the actual hand state from the participant data
-      const isHandCurrentlyRaised = userParticipant.hasHandRaised || handRaised;
-      console.log('🔍 Current hand state:', { 
-        fromParticipant: userParticipant.hasHandRaised, 
-        fromState: handRaised, 
-        finalState: isHandCurrentlyRaised 
-      });
-
-      // Execute the hand raise/lower action via WebSocket
-      if (!isHandCurrentlyRaised) {
-        // Use WebSocket for hand raise
-        if (socket) {
-          socket.emit('RAISE_HAND', {
-            meetingId: actualMeetingId,
-            participantId: participantId,
-            reason: 'Raised hand in meeting'
-          });
-          console.log('✅ Hand raise request sent via WebSocket');
-        } else {
-          // Fallback to GraphQL if WebSocket not available
-          await raiseHand({
-            variables: {
-              input: {
-                participantId: participantId,
-                reason: 'Raised hand in meeting'
-              }
-            }
-          });
-          console.log('✅ Hand raised via GraphQL fallback');
-        }
-        setHandRaised(true);
-        console.log('✅ Hand raised successfully!');
-      } else {
-        // Use WebSocket for hand lower
-        if (socket) {
-          socket.emit('LOWER_HAND', {
-            meetingId: actualMeetingId,
-            participantId: participantId,
-            reason: 'Lowered hand in meeting'
-          });
-          console.log('✅ Hand lower request sent via WebSocket');
-        } else {
-          // Fallback to GraphQL if WebSocket not available
-          await lowerHand({
-            variables: {
-              input: {
-                participantId: participantId
-              }
-            }
-          });
-          console.log('✅ Hand lowered via GraphQL fallback');
-        }
-        setHandRaised(false);
-        console.log('✅ Hand lowered successfully!');
-      }
-    } catch (error) {
-      console.error('❌ Error toggling hand raise:', error);
       
-      // Handle "already raised" error by toggling state
-      if (error.message && error.message.includes('already raised')) {
-        console.log('🔄 Hand was already raised, toggling to lowered');
-        setHandRaised(false);
-        return;
-      }
-      
-      // Only show error for actual errors
-      const errorMessage = error.message || 'Failed to toggle hand raise. Please try again.';
-      await Swal.fire('Error', errorMessage, 'error');
-    }
-  };
-
-  const handleApproveParticipant = async (participantId: string) => {
-    try {
-      await approveParticipant({
-        variables: {
-          input: {
-            participantId: participantId
-          }
-        }
-      });
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
     } catch (error) {
-      console.error('❌ Error approving participant:', error);
-    }
-  };
-
-  const handleRejectParticipant = async (participantId: string) => {
-    try {
-      await rejectParticipant({
-        variables: {
-          input: {
-            participantId: participantId
-          }
-        }
+      console.error('Error ending meeting:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to end the meeting. Please try again.'
       });
-    } catch (error) {
-      console.error('❌ Error rejecting participant:', error);
-    }
-  };
-
-  const handleKickParticipant = async (participantId: string) => {
-    const result = await Swal.fire({
-      title: 'Kick Participant',
-      text: 'Are you sure you want to remove this participant from the meeting?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc3545',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Yes, Kick',
-      cancelButtonText: 'Cancel'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await removeParticipant({
-          variables: {
-            participantId: participantId
-          }
-        });
-        await Swal.fire('Participant Removed', 'The participant has been removed from the meeting.', 'success');
-      } catch (error) {
-        console.error('❌ Error kicking participant:', error);
-        await Swal.fire('Error', 'Failed to remove participant. Please try again.', 'error');
-      }
     }
   };
 
   const handleLeaveMeeting = async () => {
-    const isHost = currentParticipant?.role === 'HOST';
-    
     if (isHost) {
-      const { value: exitOption } = await Swal.fire({
+      // Host has options to end meeting or transfer host
+    const result = await Swal.fire({
         title: 'Exit Meeting',
-        text: 'You are the host. Choose how you want to exit:',
-        input: 'select',
-        inputOptions: {
-          'force': 'Force Exit - End meeting for all participants',
-          'transfer': 'Transfer Host Role - Give host role to another member'
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Continue',
+        text: 'As the host, you can end the meeting for everyone or transfer host role:',
+        icon: 'question',
+      showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'End Meeting for All',
+        denyButtonText: 'Transfer Host & Leave',
         cancelButtonText: 'Cancel',
-        inputValidator: (value) => {
-          if (!value) {
-            return 'You need to select an exit option!';
-          }
-          return null;
-        }
-      });
+      confirmButtonColor: '#dc3545',
+        denyButtonColor: '#6c757d',
+        cancelButtonColor: '#007bff'
+    });
 
-      if (exitOption === 'force') {
-        try {
-          console.log('🔄 FORCE EXIT: Attempting to end meeting...');
-          await forceLeaveMeeting({
-            variables: {
-              meetingId: actualMeetingId
-            }
-          });
-          
-          console.log('✅ FORCE EXIT: Meeting ended successfully');
-          await Swal.fire('Meeting Ended', 'The meeting has been ended for all participants.', 'success');
-          
-          // Redirect to dashboard after successful force leave
-          window.location.href = '/dashboard';
-        } catch (error) {
-          console.error('❌ FORCE EXIT: Error force leaving meeting:', error);
-          
-          // Show detailed error message with retry option
-          const errorMessage = (error as Error).message || 'Unknown error occurred';
-          await Swal.fire({
-            title: 'Force Leave Failed',
-            html: `Failed to end meeting.<br><br><strong>Error:</strong> ${errorMessage}<br><br>Please try again or contact support if the issue persists.`,
-            icon: 'error',
-            confirmButtonText: 'Try Again',
-            showCancelButton: true,
-            cancelButtonText: 'Cancel'
-          }).then((result) => {
-            if (result.isConfirmed) {
-              // Retry force leave
-              handleLeaveMeeting();
-            }
-          });
-        }
-      } else if (exitOption === 'transfer') {
-        // Show transfer dialog - 🔧 FIX: Filter only active participants
-        console.log('🔍 TRANSFER HOST: All participants:', participants.map(p => ({
-          _id: p._id,
-          displayName: p.displayName,
-          role: p.role,
-          status: p.status,
-          hasUser: !!p.user
-        })));
-        
-        const eligibleParticipants = participants.filter(p => {
-          // Basic checks
-          if (p.role === 'HOST' || !p.user) {
-            console.log('❌ Excluding participant - role:', p.role, 'hasUser:', !!p.user);
-            return false;
-          }
-          
-          // If status field exists, use it for filtering
-          if (p.status) {
-            const isEligible = p.status !== 'LEFT' && (p.status === 'ADMITTED' || p.status === 'APPROVED');
-            console.log(`🔍 Participant ${p.displayName}: status=${p.status}, eligible=${isEligible}`);
-            return isEligible;
-          }
-          
-          // 🔧 FALLBACK: If no status field, assume participant is eligible
-          // This handles cases where the status field might not be populated
-          console.warn('⚠️ Participant missing status field, assuming eligible:', p);
-          return true;
-        });
-        
-        console.log('🔍 TRANSFER HOST: Eligible participants:', eligibleParticipants.map(p => ({
-          _id: p._id,
-          displayName: p.displayName,
-          role: p.role,
-          status: p.status
-        })));
-        
-        if (eligibleParticipants.length === 0) {
-          await Swal.fire({
-            title: 'No Participants',
-            text: 'There are no other participants to transfer host role to. The meeting will be ended.',
-            icon: 'info',
-            confirmButtonText: 'End Meeting',
-            showCancelButton: true,
-            cancelButtonText: 'Cancel'
-          }).then(async (result) => {
-            if (result.isConfirmed) {
-              try {
-                console.log('🔄 FORCE EXIT (no participants): Attempting to end meeting...');
-                await forceLeaveMeeting({
-                  variables: {
-                    meetingId: actualMeetingId
-                  }
-                });
-                
-                console.log('✅ FORCE EXIT (no participants): Meeting ended successfully');
-                await Swal.fire('Meeting Ended', 'The meeting has been ended.', 'success');
-                window.location.href = '/dashboard';
-              } catch (error) {
-                console.error('❌ FORCE EXIT (no participants): Error force leaving meeting:', error);
-                await Swal.fire('Force Leave Failed', 'Failed to end meeting. Please try again.', 'error');
-              }
-            }
-          });
-          return;
-        }
-
-        const { value: selectedParticipantId } = await Swal.fire({
-          title: 'Transfer Host Role',
-          text: 'Select a participant to become the new host:',
-          input: 'select',
-          inputOptions: eligibleParticipants.reduce((options, p) => {
-            options[p._id] = p.displayName || p.user?.displayName || p.user?.email || 'Unknown';
-            return options;
-          }, {} as Record<string, string>),
-          showCancelButton: true,
-          confirmButtonText: 'Transfer',
-          cancelButtonText: 'Cancel',
-          inputValidator: (value) => {
-            if (!value) {
-              return 'You need to select a participant!';
-            }
-            return null;
-          }
-        });
-
-        if (selectedParticipantId) {
-          try {
-            console.log('🔄 TRANSFER HOST: Attempting to transfer host role...');
-            await transferHost({
-              variables: {
-                input: {
-                  meetingId: actualMeetingId,
-                  newHostParticipantId: selectedParticipantId,
-                  reason: 'Host transferring role and leaving'
-                }
-              }
-            });
-
-            console.log('✅ TRANSFER HOST: Host role transferred successfully');
-
-            // 🔧 FIX: After host transfer, don't try to leave immediately
-            // The host transfer already handles the role change
-            // Just redirect to dashboard after a short delay
-            await Swal.fire({
-              title: 'Host Role Transferred',
-              text: 'You have successfully transferred the host role. You will be redirected to the dashboard.',
-              icon: 'success',
-              timer: 2000,
-              showConfirmButton: false
-            });
-            
-            // Redirect to dashboard after successful transfer
-            setTimeout(() => {
-              window.location.href = '/dashboard';
-            }, 2000);
-        } catch (error) {
-          console.error('❌ TRANSFER HOST: Error transferring host:', error);
-          
-          // Show detailed error message with fallback option
-          const errorMessage = (error as Error).message || 'Unknown error occurred';
-            await Swal.fire({
-              title: 'Transfer Failed',
-              html: `Failed to transfer host role.<br><br><strong>Error:</strong> ${errorMessage}<br><br>Would you like to try force exit instead?`,
-              icon: 'error',
-              confirmButtonText: 'Force Exit',
-              showCancelButton: true,
-              cancelButtonText: 'Cancel'
-            }).then(async (result) => {
-              if (result.isConfirmed) {
-                // Try force exit as fallback
-                try {
-                  console.log('🔄 FALLBACK FORCE EXIT: Attempting force exit...');
-                  await forceLeaveMeeting({
-                    variables: {
-                      meetingId: actualMeetingId
-                    }
-                  });
-                  
-                  console.log('✅ FALLBACK FORCE EXIT: Meeting ended successfully');
-                  await Swal.fire('Meeting Ended', 'The meeting has been ended for all participants.', 'success');
-                  window.location.href = '/dashboard';
-                } catch (forceError) {
-                  console.error('❌ FALLBACK FORCE EXIT: Error force leaving meeting:', forceError);
-                  await Swal.fire('Force Exit Failed', 'Both transfer and force exit failed. Please contact support.', 'error');
-                }
-              }
-            });
-          }
-        }
-              }
-            } else {
+    if (result.isConfirmed) {
+        await handleEndMeeting();
+      } else if (result.isDenied) {
+        await handleForceExit();
+      }
+    } else {
+      // Participant just leaves the meeting
       const result = await Swal.fire({
         title: 'Leave Meeting',
         text: 'Are you sure you want to leave this meeting?',
         icon: 'question',
         showCancelButton: true,
+        confirmButtonText: 'Leave',
+        cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, Leave',
-        cancelButtonText: 'Cancel'
+        cancelButtonColor: '#6c757d'
       });
 
-      if (result.isConfirmed) {
-        try {
-          // Fallback participant ID if currentParticipant is null
-          const participantId = currentParticipant?._id || participants.find(p => p.user?._id === actualUserId)?._id;
-          
-          if (!participantId) {
-            await Swal.fire('Error', 'Unable to identify participant. Please refresh and try again.', 'error');
-              return;
-            }
-          
-          await leaveMeeting({
-            variables: {
-              input: {
-                participantId: participantId
-              }
-            }
-          });
-          
-          await Swal.fire('Left Meeting', 'You have successfully left the meeting.', 'success');
-          
-          // Redirect to dashboard after successful leave
-          window.location.href = '/dashboard';
-        } catch (error) {
-          console.error('❌ Error leaving meeting:', error);
-          await Swal.fire('Leave Failed', 'Failed to leave meeting. Please try again.', 'error');
-        }
+            if (result.isConfirmed) {
+        await handleParticipantLeave();
       }
     }
   };
 
-  if (loading || meetingLoading) {
+  const handleParticipantLeave = async () => {
+    try {
+      await leaveMeeting({
+        variables: { 
+          input: { 
+            meetingId: actualMeetingId,
+            reason: 'Participant leaving meeting'
+          }
+        }
+      });
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Left Meeting',
+        text: 'You have successfully left the meeting.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
+              } catch (error) {
+      console.error('Error leaving meeting:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to leave the meeting. Please try again.'
+      });
+    }
+  };
+
+  const handleForceExit = async () => {
+    try {
+      if (isHost && participants.length > 1) {
+        const nonHostParticipants = participants.filter(p => p.role !== 'HOST');
+        if (nonHostParticipants.length > 0) {
+          const newHost = nonHostParticipants[0];
+          
+          const transferResult = await Swal.fire({
+          title: 'Transfer Host Role',
+            html: `You are the host. Before leaving, you must transfer host role to another participant.<br><br>
+                   <strong>Selected new host:</strong> ${newHost.displayName || newHost.user?.displayName || 'Participant'}<br>
+                   <strong>Email:</strong> ${newHost.user?.email || 'participant@demo.com'}`,
+            icon: 'info',
+          showCancelButton: true,
+            confirmButtonText: 'Transfer & Leave',
+          cancelButtonText: 'Cancel',
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d'
+          });
+
+          if (transferResult.isConfirmed) {
+            await transferHostAndLeave({
+              variables: {
+                  meetingId: actualMeetingId,
+                newHostParticipantId: newHost._id,
+                reason: 'Host leaving meeting'
+              }
+            });
+            
+            Swal.fire({
+              icon: 'success',
+              title: 'Host Transferred',
+              text: `Host role has been transferred to ${newHost.displayName || 'the selected participant'}.`,
+              timer: 2000,
+              showConfirmButton: false
+            });
+            
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 2000);
+          }
+        } else {
+          await handleEndMeeting();
+        }
+      } else {
+        await handleParticipantLeave();
+      }
+    } catch (error) {
+      console.error('Error during force exit:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to leave the meeting. Please try again.'
+      });
+    }
+  };
+
+  const handleMicToggle = async () => {
+    setMicEnabled(!micEnabled);
+    console.log('Mic toggled:', !micEnabled);
+  };
+
+  const handleCameraToggle = async () => {
+    setCameraEnabled(!cameraEnabled);
+    console.log('Camera toggled:', !cameraEnabled);
+  };
+
+  const handleScreenShareToggle = async () => {
+    setScreenSharing(!screenSharing);
+    console.log('Screen share toggled:', !screenSharing);
+  };
+
+  const handleRaiseHand = async () => {
+    try {
+      if (!currentParticipant?._id) {
+        console.error('No current participant found');
+              return;
+            }
+          
+      if (handRaised) {
+        await lowerHand({
+            variables: {
+              input: {
+              participantId: currentParticipant._id,
+              meetingId: actualMeetingId 
+              }
+            }
+          });
+        setHandRaised(false);
+      } else {
+        await raiseHand({
+          variables: { 
+            input: { 
+              participantId: currentParticipant._id,
+              meetingId: actualMeetingId,
+              reason: 'Student needs help'
+            } 
+          }
+        });
+        setHandRaised(true);
+      }
+    } catch (error) {
+      console.error('Error toggling hand raise:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to toggle hand raise. Please try again.'
+      });
+    }
+  };
+
+  const handleKickParticipant = async (participantId: string) => {
+    try {
+      await removeParticipant({
+        variables: { meetingId: actualMeetingId, participantId }
+      });
+      Swal.fire({
+        icon: 'success',
+        title: 'Participant Removed',
+        text: 'The participant has been removed from the meeting.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to remove participant. Please try again.'
+      });
+    }
+  };
+
+  // Get meeting data
+  const meeting = meetingData?.getMeetingById;
+  const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
+
+  // Loading state
+  if (loading || !authComplete) {
     return (
       <div style={{
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
           height: '100vh',
-          backgroundColor: '#1a1a1a',
-        color: 'white'
+        backgroundColor: '#f8f9fa',
+        color: '#333'
       }}>
-        <div>Loading...</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid #e9ecef',
+            borderTop: '3px solid #007bff',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 20px'
+          }}></div>
+          <p style={{ fontSize: '16px', margin: 0 }}>Loading meeting...</p>
+        </div>
       </div>
     );
   }
 
-  const meeting = (meetingData as any)?.getMeetingById;
-  
-  // 🔧 NEW: Show ended meeting message
+  // Meeting ended state
   if (meetingStatus === 'ENDED') {
     return (
       <div style={{
           display: 'flex',
+        flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
           height: '100vh',
-          backgroundColor: '#1a1a1a',
-          color: 'white',
-          flexDirection: 'column'
+        backgroundColor: '#f8f9fa',
+        color: '#333',
+        textAlign: 'center',
+        padding: '20px'
       }}>
-        <div style={{ fontSize: '60px', marginBottom: '20px' }}>📹</div>
-        <div style={{ fontSize: '24px', marginBottom: '10px' }}>Meeting Ended</div>
-        <div style={{ fontSize: '16px', marginBottom: '20px' }}>This meeting has been ended by the host.</div>
+        <div style={{ fontSize: '48px', marginBottom: '20px', opacity: 0.6 }}>📹</div>
+        <h2 style={{ fontSize: '24px', marginBottom: '10px', fontWeight: '600' }}>Meeting Ended</h2>
+        <p style={{ fontSize: '16px', marginBottom: '30px', color: '#666' }}>
+          This meeting has been ended by the host.
+        </p>
         <button 
-          onClick={() => window.location.href = '/dashboard'}
+          onClick={() => window.location.href = '/'}
           style={{
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#007bff',
             color: 'white',
             border: 'none',
-            padding: '10px 20px',
-            borderRadius: '5px',
+            borderRadius: '8px',
+            padding: '12px 24px',
+            fontSize: '16px',
             cursor: 'pointer',
-            fontSize: '16px'
+            fontWeight: '500'
           }}
         >
-          Go to Dashboard
+          Return to Home
         </button>
       </div>
     );
   }
-  
-  const isHost = currentParticipant?.role === 'HOST';
 
     return (
       <>
-        {/* 🔧 CSS ANIMATION FOR REFRESH SPINNER */}
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+        
+        @media (max-width: 768px) {
+          .mobile-hidden { display: none !important; }
+          .mobile-full { width: 100% !important; }
+          .mobile-stack { flex-direction: column !important; }
+          .mobile-small { font-size: 14px !important; }
+          .mobile-tiny { font-size: 12px !important; }
           }
         `}</style>
         
         <div style={{
           display: 'flex',
           height: '100vh',
-          backgroundColor: '#1a1a1a',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif',
+        backgroundColor: '#ffffff',
+        color: '#333',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       position: 'relative'
       }}>
       {/* Header */}
@@ -1093,311 +612,326 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         top: 0,
         left: 0,
         right: 0,
-        height: '80px',
-        backgroundColor: '#2a2a2a',
+          height: '64px',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e9ecef',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 20px',
+          padding: '0 24px',
         zIndex: 1000,
-        borderBottom: '1px solid #333'
-      }}>
-        {/* Logo and Meeting Info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4CAF50' }}>
-            Let's go together HRDe
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '6px',
+              backgroundColor: '#007bff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: '600',
+              fontSize: '14px'
+            }}>
+              HRDe
         </div>
           <div>
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+              <div style={{ fontSize: '18px', fontWeight: '600', color: '#333' }}>
               {meeting?.title || 'Demo Meeting'}
       </div>
-            <div style={{ fontSize: '12px', color: '#ccc' }}>
-              ID: {meeting?.inviteCode || 'DEMO123'}
+              <div style={{ fontSize: '14px', color: '#666' }}>
+                ID: {meeting?.inviteCode || actualMeetingId}
             </div>
           </div>
         </div>
 
-        {/* Live and Recording Buttons */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {/* 🔧 REFRESH INDICATOR */}
-          {isRefreshing && (
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              color: '#28a745',
-              fontSize: '12px',
-              fontWeight: 'bold'
+              gap: '8px',
+              padding: '8px 16px',
+              backgroundColor: meetingStatus === 'LIVE' ? '#d4edda' : '#f8d7da',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: meetingStatus === 'LIVE' ? '#155724' : '#721c24'
             }}>
               <div style={{
-                width: '12px',
-                height: '12px',
-                border: '2px solid #28a745',
-                borderTop: '2px solid transparent',
+                width: '8px',
+                height: '8px',
                 borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
+                backgroundColor: meetingStatus === 'LIVE' ? '#28a745' : '#dc3545'
               }}></div>
-              Refreshing...
+              {meetingStatus === 'LIVE' ? 'Live' : 'Stopped'}
             </div>
-          )}
-          
-          {isLive && (
-            <button style={{
-              backgroundColor: '#dc3545',
-          color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}>
-              • Live
-            </button>
-          )}
           
           {isHost && (
             <button
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
+                onClick={() => {
+                  if (meetingStatus === 'CREATED' || meetingStatus === 'PAUSED') {
+                    handleStartMeeting();
+                  } else if (meetingStatus === 'LIVE') {
+                    handleEndMeeting();
+                  }
+                }}
               style={{
-                backgroundColor: isRecording ? '#dc3545' : '#28a745',
+                  backgroundColor: meetingStatus === 'LIVE' ? '#dc3545' : '#28a745',
                 color: 'white',
                 border: 'none',
+                  borderRadius: '6px',
                 padding: '8px 16px',
-            borderRadius: '4px',
                 fontSize: '14px',
+                  fontWeight: '500',
                 cursor: 'pointer'
           }}
         >
-              {isRecording ? 'Stop Recording' : 'Start Recording'}
+                {meetingStatus === 'LIVE' ? 'End' : 'Start'}
             </button>
           )}
       </div>
       </div>
 
-      {/* Main Content Area */}
+        {/* Main Content */}
       <div style={{
         flex: 1,
-        marginTop: '80px',
-        marginRight: sidebarOpen ? '350px' : '0',
-        transition: 'margin-right 0.3s ease',
+          paddingTop: '64px',
           display: 'flex',
           flexDirection: 'column'
       }}>
-        {/* Teaching Content Area */}
+          {/* Thumbnails Row */}
     <div style={{
-          flex: 1,
-          backgroundColor: '#f5f5f5',
-          margin: '20px',
+            height: '100px',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 24px',
+            gap: '12px',
+            overflowX: 'auto'
+          }}>
+            {participants.map((participant) => (
+              <div
+                key={participant._id}
+                onClick={() => setSelectedParticipant(participant)}
+                style={{
+                  minWidth: '70px',
+                  height: '70px',
+                  backgroundColor: selectedParticipant?._id === participant._id ? '#e3f2fd' : '#f8f9fa',
           borderRadius: '8px',
+                  border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #e9ecef',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-      position: 'relative'
-    }}>
-          {/* Screen Sharing Badge */}
-          {screenSharing && (
-        <div style={{
-              position: 'absolute',
-              top: '20px',
-              left: '20px',
-              backgroundColor: '#dc3545',
-              color: 'white',
-              padding: '4px 12px',
-          borderRadius: '4px',
-              fontSize: '12px'
-            }}>
-              • Screen Sharing
-        </div>
-          )}
-
-          {/* Hand Raised Badge */}
-          {raisedHandsCount > 0 && (
-            <div style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              backgroundColor: '#ffc107',
-              color: '#000',
-              padding: '4px 12px',
-              borderRadius: '4px',
-              fontSize: '12px'
-            }}>
-              {raisedHandsCount} hand{raisedHandsCount > 1 ? 's' : ''} raised
-      </div>
-      )}
-
-          {/* Teaching Content */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-            alignItems: 'center',
-            gap: '20px'
-      }}>
-        <div style={{
-          display: 'flex',
-              gap: '10px'
-            }}>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                backgroundColor: '#4CAF50',
-                borderRadius: '2px'
-              }}></div>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                backgroundColor: '#dc3545',
-                borderRadius: '2px'
-              }}></div>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                backgroundColor: '#2196F3',
-                borderRadius: '2px'
-              }}></div>
-          </div>
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 'bold',
-              color: '#333'
-            }}>
-              Teaching Content
-          </div>
-                  <div style={{
-            fontSize: '14px',
-              color: '#666',
-              textAlign: 'center'
-            }}>
-              Screen sharing, presentations, or whiteboard
-                  </div>
-          </div>
-        </div>
-
-        {/* Bottom Control Bar */}
-        <div style={{
-          height: '100px',
-          backgroundColor: '#2a2a2a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 20px',
-          borderTop: '1px solid #333'
-        }}>
-          {/* Participant Thumbnails */}
-          <div style={{
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'center'
-          }}>
-            {participants.slice(0, 3).map((participant, index) => (
-              <div
-                key={participant._id}
-                style={{
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: '#444',
-                  borderRadius: '8px',
-                  border: index === 0 ? '2px solid #2196F3' : '2px solid #666',
-                  display: 'flex',
-                    flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative'
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                {index === 0 && (
-                      <div style={{
-                    position: 'absolute',
-                    bottom: '-5px',
-                    left: '-5px',
-                    backgroundColor: '#2196F3',
-                    color: 'white',
-                    fontSize: '8px',
-                    padding: '2px 4px',
-                    borderRadius: '2px'
+                {participant.role === 'HOST' && (
+        <div style={{
+              position: 'absolute',
+                    top: '-6px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#007bff',
+              color: 'white',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    padding: '2px 6px',
+                    borderRadius: '4px'
                   }}>
                     HOST
-                </div>
-                    )}
-                    <div style={{
-                  width: '20px',
-                  height: '20px',
-                  backgroundColor: '#666',
-                  borderRadius: '50%',
-                  marginBottom: '4px'
-                }}></div>
-                <div style={{
-                  fontSize: '8px',
-                      textAlign: 'center'
-                    }}>
-                  {participant.role === 'HOST' ? 'Host' : 'Student'}
-                      </div>
+        </div>
+          )}
                 {participant.hasHandRaised && (
-                <div style={{
-                    position: 'absolute',
-                    top: '-5px',
-                    right: '-5px',
-                    width: '12px',
-                    height: '12px',
-                    backgroundColor: '#ffc107',
-                    borderRadius: '50%'
-                  }}></div>
+            <div style={{
+              position: 'absolute',
+                    top: '-6px',
+                    right: '-6px',
+              backgroundColor: '#ffc107',
+              color: '#000',
+                    fontSize: '12px',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+        display: 'flex',
+            alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold'
+                  }}>
+                    ✋
+          </div>
                 )}
+                <div style={{ fontSize: '20px', marginBottom: '4px' }}>
+                  {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+          </div>
+                <div style={{ fontSize: '10px', fontWeight: '500', textAlign: 'center' }}>
+                  {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
+                  </div>
+                <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '8px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
+                    {participant.micState === 'ON' ? '🎤' : '🔇'}
+                  </span>
+                  <span style={{ fontSize: '8px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
+                    {participant.cameraState === 'ON' ? '📹' : '📷'}
+                  </span>
+          </div>
               </div>
             ))}
         </div>
 
-          {/* Media Controls */}
+          {/* Main Stage */}
         <div style={{
+            flex: 1,
+            backgroundColor: '#f8f9fa',
           display: 'flex',
-            gap: '15px',
-            alignItems: 'center'
+            flexDirection: 'column',
+          alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+            padding: '40px'
           }}>
+            {raisedHandsCount > 0 && (
+          <div style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                backgroundColor: '#fff3cd',
+                border: '1px solid #ffeaa7',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+            display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#856404'
+              }}>
+                ✋ {raisedHandsCount} hand{raisedHandsCount > 1 ? 's' : ''} raised
+              </div>
+            )}
+            
+            <div style={{
+              width: '280px',
+              height: '280px',
+              borderRadius: '16px',
+              backgroundColor: '#ffffff',
+              border: '2px solid #e9ecef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+              fontSize: '60px',
+              color: '#666',
+              position: 'relative',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              {selectedParticipant ? (
+                selectedParticipant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'
+              ) : (
+                '👨‍🏫'
+              )}
+                      <div style={{
+                    position: 'absolute',
+                bottom: '12px',
+                right: '12px',
+                backgroundColor: '#28a745',
+                    color: 'white',
+                fontSize: '14px',
+                borderRadius: '6px',
+                padding: '4px 8px',
+                fontWeight: '500'
+              }}>
+                📹
+                </div>
+            </div>
+            
+                    <div style={{
+              marginTop: '24px',
+                      textAlign: 'center'
+                    }}>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
+                {selectedParticipant ? (
+                  selectedParticipant.displayName || 'Selected Participant'
+                ) : (
+                  'Host'
+                )}
+              </h3>
+              <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
+                {selectedParticipant ? (
+                  selectedParticipant.user?.email || selectedParticipant.email || 'participant@demo.com'
+                ) : (
+                  'host@demo.com'
+                )}
+              </p>
+              </div>
+        </div>
+
+          {/* Bottom Control Bar */}
+        <div style={{
+            height: '80px',
+            backgroundColor: '#ffffff',
+            borderTop: '1px solid #e9ecef',
+          display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 24px',
+            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#333' }}>
+                {participants.length} participants
+              </div>
           <button
               onClick={handleMicToggle}
             style={{
-                width: '40px',
-                height: '40px',
+                  width: '44px',
+                  height: '44px',
               borderRadius: '50%',
-              border: 'none',
                 backgroundColor: micEnabled ? '#28a745' : '#dc3545',
-              color: 'white',
+                  border: 'none',
               cursor: 'pointer',
+                  fontSize: '18px',
+                  color: 'white',
               display: 'flex',
               alignItems: 'center',
                 justifyContent: 'center'
             }}
           >
-              🎤
+                {micEnabled ? '🎤' : '🔇'}
           </button>
           <button
               onClick={handleCameraToggle}
             style={{
-                width: '40px',
-                height: '40px',
+                  width: '44px',
+                  height: '44px',
               borderRadius: '50%',
-              border: 'none',
                 backgroundColor: cameraEnabled ? '#28a745' : '#dc3545',
-              color: 'white',
+                  border: 'none',
               cursor: 'pointer',
+                  fontSize: '18px',
+                  color: 'white',
               display: 'flex',
               alignItems: 'center',
                 justifyContent: 'center'
             }}
           >
-              📹
+                {cameraEnabled ? '📹' : '📷'}
           </button>
           <button
               onClick={handleScreenShareToggle}
             style={{
-                width: '40px',
-                height: '40px',
+                  width: '44px',
+                  height: '44px',
               borderRadius: '50%',
-              border: 'none',
-                backgroundColor: screenSharing ? '#28a745' : '#666',
-              color: 'white',
+                  backgroundColor: screenSharing ? '#007bff' : '#f8f9fa',
+                  border: '1px solid #e9ecef',
               cursor: 'pointer',
+                  fontSize: '18px',
+                  color: screenSharing ? 'white' : '#666',
               display: 'flex',
               alignItems: 'center',
                 justifyContent: 'center'
@@ -1405,90 +939,78 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           >
               📺
           </button>
-          
-          {/* Hand Raise Button */}
           <button
-              onClick={() => {
-                console.log('🖱️ Hand raise button clicked', {
-                  handRaised,
-                  currentParticipant,
-                  actualUserId,
-                  participantsCount: participants.length
-                });
-                handleRaiseHand();
-              }}
+                onClick={handleRaiseHand}
             style={{
-                width: '40px',
-                height: '40px',
+                  width: '44px',
+                  height: '44px',
               borderRadius: '50%',
-              border: 'none',
-                backgroundColor: handRaised ? '#ffc107' : '#6c757d',
-              color: handRaised ? '#000' : 'white',
+                  backgroundColor: handRaised ? '#ffc107' : '#f8f9fa',
+                  border: '1px solid #e9ecef',
               cursor: 'pointer',
+                  fontSize: '18px',
+                  color: handRaised ? '#000' : '#666',
               display: 'flex',
               alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px'
-            }}
-            title={handRaised ? 'Lower Hand' : 'Raise Hand'}
-          >
-              {handRaised ? '✋' : '✋'}
-          </button>
-          
-          <button
-              onClick={handleLeaveMeeting}
-            style={{
-                width: '50px',
-                height: '50px',
-              borderRadius: '50%',
-              border: 'none',
-                backgroundColor: '#dc3545',
-              color: 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-                fontSize: '18px'
+                  justifyContent: 'center'
             }}
           >
-              📞
+                ✋
           </button>
-          </div>
-
-          {/* Participants Info and Panel Toggle */}
-          <div style={{
+              <button 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  backgroundColor: sidebarOpen ? '#007bff' : '#f8f9fa',
+                  border: '1px solid #e9ecef',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: sidebarOpen ? 'white' : '#666',
                   display: 'flex',
                   alignItems: 'center',
-            gap: '20px'
-          }}>
-            <div style={{ fontSize: '14px' }}>
-              Participants {raisedHandsCount > 0 && (
-                <span style={{
-                  backgroundColor: '#ffc107',
-                  color: '#000',
-                  padding: '2px 6px',
-                      borderRadius: '4px',
-                  marginLeft: '8px'
-                }}>
-                  {raisedHandsCount} raised
-                </span>
-              )}
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}
+              >
+                👥
+                {unreadMessageCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '16px',
+                    height: '16px',
+                    fontSize: '9px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </span>
+                )}
+              </button>
                 </div>
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={handleLeaveMeeting}
               style={{
-                backgroundColor: '#007bff',
+                backgroundColor: '#dc3545',
                 color: 'white',
                 border: 'none',
-                padding: '8px 16px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px'
+                borderRadius: '8px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
               }}
             >
-              {sidebarOpen ? 'Close Panel' : 'Open Panel'}
+              Leave
           </button>
-          </div>
         </div>
       </div>
 
@@ -1497,195 +1019,185 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       <div style={{
           position: 'fixed',
           right: 0,
-          top: '80px',
-          width: '350px',
-          height: 'calc(100vh - 80px)',
-        backgroundColor: '#2a2a2a',
-        borderLeft: '1px solid #333',
+            top: '164px',
+            width: '360px',
+            height: 'calc(100vh - 244px)',
+            backgroundColor: '#ffffff',
+            borderLeft: '1px solid #e9ecef',
+            zIndex: 999,
         display: 'flex',
-        flexDirection: 'column'
+            flexDirection: 'column',
+            boxShadow: '-4px 0 12px rgba(0,0,0,0.1)'
       }}>
-          {/* Sidebar Header */}
         <div style={{
             padding: '20px',
-            borderBottom: '1px solid #333',
+              borderBottom: '1px solid #e9ecef',
           display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
         }}>
-            <h3 style={{ margin: 0, fontSize: '16px' }}>Participants & Waiting Room</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#333' }}>
+                Participants & Chat
+              </h3>
           <button
               onClick={() => setSidebarOpen(false)}
             style={{
-                background: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#666',
               border: 'none',
-              color: 'white',
+                  fontSize: '20px',
               cursor: 'pointer',
-                fontSize: '18px'
+                  padding: '4px',
+                  borderRadius: '4px'
             }}
           >
               ×
           </button>
         </div>
 
-          {/* Tab Navigation */}
                       <div style={{
                         display: 'flex',
-            borderBottom: '1px solid #333'
+              borderBottom: '1px solid #e9ecef'
           }}>
           <button
               onClick={() => setActiveTab('participants')}
                   style={{
                 flex: 1,
-                padding: '12px',
+                  padding: '16px',
               border: 'none',
                 backgroundColor: activeTab === 'participants' ? '#007bff' : 'transparent',
-                    color: 'white',
+                  color: activeTab === 'participants' ? 'white' : '#666',
                     cursor: 'pointer',
-                fontSize: '14px'
-                  }}
-                >
-              Active Students ({participants.length})
-                </button>
-            <button
-              onClick={() => setActiveTab('waiting')}
-              style={{
-                flex: 1,
-                padding: '12px',
-                border: 'none',
-                backgroundColor: activeTab === 'waiting' ? '#007bff' : 'transparent',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Waiting ({waitingParticipants.length})
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  borderBottom: activeTab === 'participants' ? '2px solid #007bff' : '2px solid transparent'
+                }}
+              >
+                Participants ({participants.length})
             </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              style={{
-                flex: 1,
-                padding: '12px',
-                border: 'none',
-                backgroundColor: activeTab === 'chat' ? '#007bff' : 'transparent',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Chat (0)
-            </button>
+              <button
+                onClick={() => setActiveTab('chat')}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  border: 'none',
+                  backgroundColor: activeTab === 'chat' ? '#007bff' : 'transparent',
+                  color: activeTab === 'chat' ? 'white' : '#666',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  borderBottom: activeTab === 'chat' ? '2px solid #007bff' : '2px solid transparent',
+                  position: 'relative'
+                }}
+              >
+                Chat
+                {unreadMessageCount > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                  </span>
+                )}
+              </button>
         </div>
 
-          {/* Tab Content */}
-        <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '20px'
-          }}>
+            <div style={{ flex: 1, overflow: 'auto' }}>
             {activeTab === 'participants' && (
-              <ParticipantView
-                participants={participants}
-                waitingParticipants={waitingParticipants}
-                onApproveParticipant={handleApproveParticipant}
-                onRejectParticipant={handleRejectParticipant}
-                onKickParticipant={handleKickParticipant}
-                isHost={isHost}
-              />
-            )}
-
-            {activeTab === 'waiting' && (
-              <div>
-                {waitingParticipants.length === 0 ? (
-                  <div style={{
-                    textAlign: 'center',
-                    color: '#ccc',
-                    padding: '20px'
-                  }}>
-                    No participants waiting
-                  </div>
-                ) : (
-                  <div>
-                    <h4 style={{ color: '#fff', marginBottom: '15px' }}>
-                      Waiting for Approval ({waitingParticipants.length})
-                    </h4>
-                    {waitingParticipants.map((participant) => (
-                      <div
-                        key={participant._id}
-                        style={{
+                <div style={{ padding: '16px' }}>
+                  {participants.map((participant) => (
+                    <div key={participant._id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px',
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '8px',
+                      marginBottom: '8px',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        backgroundColor: '#e9ecef',
                           display: 'flex',
-                          justifyContent: 'space-between',
                           alignItems: 'center',
-                          padding: '10px',
-                          backgroundColor: '#333',
-                          borderRadius: '6px',
-                          marginBottom: '8px'
-                        }}
-                      >
-                        <div>
-                          <div style={{ color: '#fff', fontWeight: 'bold' }}>
-                            {participant.displayName}
+                        justifyContent: 'center',
+                        fontSize: '16px'
+                      }}>
+                        {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
                           </div>
-                          <div style={{ color: '#ccc', fontSize: '12px' }}>
-                            {participant.user?.email}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '2px', color: '#333' }}>
+                          {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
                           </div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          {participant.user?.email || participant.email || 'student@demo.com'}
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
+                          {participant.micState === 'ON' ? '🎤' : '🔇'}
+                        </span>
+                        <span style={{ fontSize: '14px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
+                          {participant.cameraState === 'ON' ? '📹' : '📷'}
+                        </span>
+                        {isHost && participant.role !== 'HOST' && (
                           <button
-                            onClick={() => handleApproveParticipant(participant._id)}
+                            onClick={() => handleKickParticipant(participant._id)}
                             style={{
-                              backgroundColor: '#28a745',
-                              color: 'white',
+                              backgroundColor: 'transparent',
                               border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '4px',
                               cursor: 'pointer',
-                              fontSize: '12px'
+                              fontSize: '14px',
+                              color: '#dc3545',
+                              padding: '4px',
+                              borderRadius: '4px'
                             }}
                           >
-                            Approve
+                            🗑️
                           </button>
-                          <button
-                            onClick={() => handleRejectParticipant(participant._id)}
-                            style={{
-                              backgroundColor: '#dc3545',
-                              color: 'white',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
-                          >
-                            Reject
-                          </button>
+                        )}
+                        {participant.hasHandRaised && (
+                          <span style={{ fontSize: '14px', color: '#ffc107' }}>✋</span>
+                        )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
-            )}
-
             {activeTab === 'chat' && (
-              <WebSocketChatView
-                meetingId={actualMeetingId}
-                currentUser={currentUser}
-                isHost={isHost}
-                token={localStorage.getItem('jwt') || ''}
-              />
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%'
+                }}>
+                  <MinimalistChat
+                    meetingId={actualMeetingId}
+                    currentUser={currentUser}
+                    isHost={isHost}
+                    token={localStorage.getItem('jwt') || ''}
+                    participants={participants}
+                    onUnreadCountChange={setUnreadMessageCount}
+                  />
+                </div>
             )}
               </div>
             </div>
           )}
         </div>
-        {/* Debug Component - Remove in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <ChatDebug
-            meetingId={actualMeetingId}
-            token={localStorage.getItem('jwt') || ''}
-          />
-        )}
       </>
     );
   });

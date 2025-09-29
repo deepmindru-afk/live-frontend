@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { enhancedMakeGraphQLRequest } from '../../../../lib/mock-graphql-service';
-import { JOIN_MEETING, LEAVE_MEETING } from '../../../../apollo/meeting/mutations';
-import { GET_MEETING_BY_ID, GET_CHAT_HISTORY } from '../../../../apollo/meeting/queries';
-import { useWebSocketChat } from '../../../../hooks/useWebSocketChat';
-import { useHandRaise } from '../../../../hooks/useHandRaise';
-import { HandRaiseButton } from '../../../../components/HandRaiseButton';
-import { RaisedHandsList } from '../../../../components/RaisedHandsList';
+import { enhancedMakeGraphQLRequest } from '../../../lib/mock-graphql-service';
+import { JOIN_MEETING, LEAVE_MEETING } from '../../../apollo/meeting/mutations';
+import { GET_MEETING_BY_ID, GET_CHAT_HISTORY } from '../../../apollo/meeting/queries';
+import { useWebSocketChat } from '../../../hooks/useWebSocketChat';
+import { useHandRaise } from '../../../hooks/useHandRaise';
+import { HandRaiseButton } from '../../../components/HandRaiseButton';
+import { RaisedHandsList } from '../../../components/RaisedHandsList';
 import Swal from 'sweetalert2';
 
 interface Participant {
@@ -69,11 +69,11 @@ const MeetingPage: React.FC = memo(() => {
   const {
     socket,
     isConnected: isSocketConnected,
-    messages: chatMessages,
+    messages: webSocketMessages,
     participants: chatParticipants,
     sendMessage: sendChatMessage,
     error: socketError
-  } = useWebSocketChat(meetingId as string, {
+  } = useWebSocketChat(meetingId ? meetingId as string : '', {
     onMessage: (message) => {
       console.log('New chat message:', message);
     },
@@ -94,7 +94,7 @@ const MeetingPage: React.FC = memo(() => {
   } = useHandRaise({
     socket,
     isConnected: isSocketConnected,
-    meetingId: meetingId as string,
+    meetingId: meetingId ? meetingId as string : '',
     participantId: currentParticipantId || '',
     isHost,
     onHandRaised: (info) => {
@@ -1756,8 +1756,6 @@ const MeetingPage: React.FC = memo(() => {
       </div>
     </>
   );
-};
-
 });
 
 MeetingPage.displayName = 'MeetingPage';
