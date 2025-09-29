@@ -46,6 +46,9 @@ export const GET_PARTICIPANTS_BY_MEETING = gql`
       micState
       cameraState
       socketId
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       user {
         _id
         email

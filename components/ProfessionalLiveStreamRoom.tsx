@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from '
 import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
+import { useWebSocketChat } from '../hooks/useWebSocketChat';
 import Swal from 'sweetalert2';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
@@ -134,6 +135,85 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [transferHost] = useMutation(TRANSFER_HOST);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
 
+  // WebSocket connection for real-time features
+  const { socket, isConnected: wsConnected } = useWebSocketChat({
+    meetingId: actualMeetingId,
+    token: currentUser?.token || '',
+    onMessage: (message) => {
+      console.log('📨 Chat message received:', message);
+    },
+    onParticipantJoined: (participant) => {
+      console.log('👋 Participant joined:', participant);
+    },
+    onParticipantLeft: (participant) => {
+      console.log('👋 Participant left:', participant);
+    },
+    onError: (error) => {
+      console.error('❌ WebSocket error:', error);
+    }
+  });
+
+  // Hand raise event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleHandRaised = (data: any) => {
+      console.log('✋ Hand raised by:', data);
+      // Update participants list to show raised hand
+      setParticipants(prev => prev.map(p => 
+        p._id === data.participantId 
+          ? { ...p, hasHandRaised: true, handRaisedAt: data.raisedAt }
+          : p
+      ));
+    };
+
+    const handleHandLowered = (data: any) => {
+      console.log('✋ Hand lowered by:', data);
+      // Update participants list to hide raised hand
+      setParticipants(prev => prev.map(p => 
+        p._id === data.participantId 
+          ? { ...p, hasHandRaised: false, handLoweredAt: data.loweredAt }
+          : p
+      ));
+    };
+
+    const handleHandRaiseSuccess = (data: any) => {
+      console.log('✅ Hand raise success:', data);
+      if (data.success) {
+        setHandRaised(data.hasHandRaised || false);
+      }
+    };
+
+    const handleHandRaiseError = (data: any) => {
+      console.error('❌ Hand raise error:', data);
+      // Only show error for actual errors, not for "already raised" which is handled by toggle
+      if (data.message && !data.message.includes('already raised')) {
+        Swal.fire('Error', data.message || 'Failed to raise hand', 'error');
+      } else {
+        // If hand is already raised, just toggle the state
+        setHandRaised(false);
+        console.log('🔄 Hand was already raised, toggling to lowered');
+      }
+    };
+
+    // Add event listeners
+    socket.on('HAND_RAISED', handleHandRaised);
+    socket.on('HAND_LOWERED', handleHandLowered);
+    socket.on('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
+    socket.on('HAND_RAISE_ERROR', handleHandRaiseError);
+    socket.on('HAND_LOWER_SUCCESS', handleHandRaiseSuccess);
+    socket.on('HAND_LOWER_ERROR', handleHandRaiseError);
+
+    return () => {
+      socket.off('HAND_RAISED', handleHandRaised);
+      socket.off('HAND_LOWERED', handleHandLowered);
+      socket.off('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
+      socket.off('HAND_RAISE_ERROR', handleHandRaiseError);
+      socket.off('HAND_LOWER_SUCCESS', handleHandRaiseSuccess);
+      socket.off('HAND_LOWER_ERROR', handleHandRaiseError);
+    };
+  }, [socket]);
+
   // Authentication and initialization
   useEffect(() => {
     const checkAuth = async () => {
@@ -143,9 +223,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         if (authStatus) {
           const user = await getCurrentUser();
+          console.log('🔍 USER AUTH DEBUG:', { user, userId: user?._id || user?.id });
           if (user && typeof user === 'object') {
             setCurrentUser(user);
             setActualUserId(user._id || user.id || '');
+            console.log('✅ User ID set:', user._id || user.id);
+          } else {
+            console.error('❌ No user data found');
           }
         }
         
@@ -313,14 +397,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             const hasChanged = JSON.stringify(prevParticipant) !== JSON.stringify(participant);
             if (hasChanged) {
               setLastUpdateTime(now);
+              // Update hand raise state from participant data
+              setHandRaised(participant.hasHandRaised || false);
+              console.log('✋ Hand raise state updated from participant data:', participant.hasHandRaised);
               return participant;
             }
             return prevParticipant;
-          });
-          
-          setHandRaised(prevHandRaised => {
-            const newHandRaised = participant.hasHandRaised || false;
-            return prevHandRaised !== newHandRaised ? newHandRaised : prevHandRaised;
           });
         }
       } catch (error) {
@@ -462,27 +544,172 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   const handleRaiseHand = async () => {
     try {
-      if (!handRaised) {
-        await raiseHand({
-          variables: {
-            input: {
-              meetingId: actualMeetingId
+      console.log('🔍 HAND RAISE DEBUGGING:', {
+        meetingId: actualMeetingId,
+        actualUserId,
+        participantsCount: participants.length,
+        participants: participants.map(p => ({
+          _id: p._id,
+          userId: p.user?._id,
+          displayName: p.displayName,
+          hasHandRaised: p.hasHandRaised
+        })),
+        currentParticipant: currentParticipant ? {
+          _id: currentParticipant._id,
+          userId: currentParticipant.user?._id,
+          displayName: currentParticipant.displayName,
+          hasHandRaised: currentParticipant.hasHandRaised
+        } : null
+      });
+
+      // Check if we have participants data
+      if (!participants || participants.length === 0) {
+        console.error('❌ No participants data available');
+        console.log('🔍 Participants loading state:', { participantsLoading, participantsError });
+        await Swal.fire('Error', 'Unable to raise hand: No participants found. Please wait for the meeting to load and try again.', 'error');
+        return;
       }
-    }
-  });
-        setHandRaised(true);
+
+      // Check if we have a valid user ID
+      if (!actualUserId) {
+        console.error('❌ No user ID available');
+        console.log('🔍 User auth state:', { isAuth, authComplete, currentUser });
+        await Swal.fire('Error', 'Unable to raise hand: User not authenticated. Please refresh the page and try again.', 'error');
+        return;
+      }
+
+      // Find the participant that belongs to the current user
+      let participantId = null;
+      let userParticipant = null;
+
+      // Strategy 1: Use currentParticipant if it belongs to the current user
+      if (currentParticipant && currentParticipant.user?._id === actualUserId) {
+        participantId = currentParticipant._id;
+        userParticipant = currentParticipant;
+        console.log('✅ Using currentParticipant:', participantId);
       } else {
-        await lowerHand({
-          variables: {
-            input: {
-            meetingId: actualMeetingId
+        // Strategy 2: Find participant by user ID in participants list (exact match)
+        userParticipant = participants.find(p => p.user?._id === actualUserId);
+        if (userParticipant) {
+          participantId = userParticipant._id;
+          console.log('✅ Found participant in participants list (exact match):', participantId);
+        } else {
+          // Strategy 3: Try string comparison
+          userParticipant = participants.find(p => p.user?._id?.toString() === actualUserId?.toString());
+          if (userParticipant) {
+            participantId = userParticipant._id;
+            console.log('✅ Found participant with string comparison:', participantId);
+          } else {
+            // Strategy 4: Try to find by user ID field (in case of different structure)
+            userParticipant = participants.find(p => p.userId === actualUserId);
+            if (userParticipant) {
+              participantId = userParticipant._id;
+              console.log('✅ Found participant by userId field:', participantId);
+            }
           }
-          }
+        }
+      }
+
+      if (!participantId || !userParticipant) {
+        console.error('❌ No participant found for current user:', {
+          actualUserId,
+          participants: participants.map(p => ({
+            _id: p._id,
+            userId: p.user?._id,
+            displayName: p.displayName,
+            isCurrentUser: p.user?._id === actualUserId
+          })),
+          currentParticipant: currentParticipant ? {
+            _id: currentParticipant._id,
+            userId: currentParticipant.user?._id,
+            displayName: currentParticipant.displayName
+          } : null
         });
+        
+        // Check if user needs to join the meeting first
+        if (participants.length > 0 && !currentParticipant) {
+          await Swal.fire('Error', 'Unable to raise hand: You are not a participant in this meeting. Please join the meeting first.', 'error');
+        } else {
+          await Swal.fire('Error', 'Unable to raise hand: Could not find your participant record. Please refresh the page and try again.', 'error');
+        }
+        return;
+      }
+
+      console.log('✅ Using participant:', {
+        participantId,
+        displayName: userParticipant.displayName,
+        userId: userParticipant.user?._id,
+        currentHandState: userParticipant.hasHandRaised
+      });
+
+      // Check the actual hand state from the participant data
+      const isHandCurrentlyRaised = userParticipant.hasHandRaised || handRaised;
+      console.log('🔍 Current hand state:', { 
+        fromParticipant: userParticipant.hasHandRaised, 
+        fromState: handRaised, 
+        finalState: isHandCurrentlyRaised 
+      });
+
+      // Execute the hand raise/lower action via WebSocket
+      if (!isHandCurrentlyRaised) {
+        // Use WebSocket for hand raise
+        if (socket) {
+          socket.emit('RAISE_HAND', {
+            meetingId: actualMeetingId,
+            participantId: participantId,
+            reason: 'Raised hand in meeting'
+          });
+          console.log('✅ Hand raise request sent via WebSocket');
+        } else {
+          // Fallback to GraphQL if WebSocket not available
+          await raiseHand({
+            variables: {
+              input: {
+                participantId: participantId,
+                reason: 'Raised hand in meeting'
+              }
+            }
+          });
+          console.log('✅ Hand raised via GraphQL fallback');
+        }
+        setHandRaised(true);
+        console.log('✅ Hand raised successfully!');
+      } else {
+        // Use WebSocket for hand lower
+        if (socket) {
+          socket.emit('LOWER_HAND', {
+            meetingId: actualMeetingId,
+            participantId: participantId,
+            reason: 'Lowered hand in meeting'
+          });
+          console.log('✅ Hand lower request sent via WebSocket');
+        } else {
+          // Fallback to GraphQL if WebSocket not available
+          await lowerHand({
+            variables: {
+              input: {
+                participantId: participantId
+              }
+            }
+          });
+          console.log('✅ Hand lowered via GraphQL fallback');
+        }
         setHandRaised(false);
+        console.log('✅ Hand lowered successfully!');
       }
     } catch (error) {
       console.error('❌ Error toggling hand raise:', error);
+      
+      // Handle "already raised" error by toggling state
+      if (error.message && error.message.includes('already raised')) {
+        console.log('🔄 Hand was already raised, toggling to lowered');
+        setHandRaised(false);
+        return;
+      }
+      
+      // Only show error for actual errors
+      const errorMessage = error.message || 'Failed to toggle hand raise. Please try again.';
+      await Swal.fire('Error', errorMessage, 'error');
     }
   };
 
@@ -1178,6 +1405,36 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           >
               📺
           </button>
+          
+          {/* Hand Raise Button */}
+          <button
+              onClick={() => {
+                console.log('🖱️ Hand raise button clicked', {
+                  handRaised,
+                  currentParticipant,
+                  actualUserId,
+                  participantsCount: participants.length
+                });
+                handleRaiseHand();
+              }}
+            style={{
+                width: '40px',
+                height: '40px',
+              borderRadius: '50%',
+              border: 'none',
+                backgroundColor: handRaised ? '#ffc107' : '#6c757d',
+              color: handRaised ? '#000' : 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '18px'
+            }}
+            title={handRaised ? 'Lower Hand' : 'Raise Hand'}
+          >
+              {handRaised ? '✋' : '✋'}
+          </button>
+          
           <button
               onClick={handleLeaveMeeting}
             style={{

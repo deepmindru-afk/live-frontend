@@ -4,6 +4,10 @@ import { useRouter } from 'next/router';
 import { enhancedMakeGraphQLRequest } from '../../../../lib/mock-graphql-service';
 import { JOIN_MEETING, LEAVE_MEETING } from '../../../../apollo/meeting/mutations';
 import { GET_MEETING_BY_ID, GET_CHAT_HISTORY } from '../../../../apollo/meeting/queries';
+import { useWebSocketChat } from '../../../../hooks/useWebSocketChat';
+import { useHandRaise } from '../../../../hooks/useHandRaise';
+import { HandRaiseButton } from '../../../../components/HandRaiseButton';
+import { RaisedHandsList } from '../../../../components/RaisedHandsList';
 import Swal from 'sweetalert2';
 
 interface Participant {
@@ -55,10 +59,86 @@ const MeetingPage: React.FC = memo(() => {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [showHostTransferModal, setShowHostTransferModal] = useState(false);
   const [currentParticipantId, setCurrentParticipantId] = useState<string | null>(null);
+  const [showHandRaisePanel, setShowHandRaisePanel] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<any>(null);
+
+  // WebSocket connection for chat and hand raise
+  const {
+    socket,
+    isConnected: isSocketConnected,
+    messages: chatMessages,
+    participants: chatParticipants,
+    sendMessage: sendChatMessage,
+    error: socketError
+  } = useWebSocketChat(meetingId as string, {
+    onMessage: (message) => {
+      console.log('New chat message:', message);
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error);
+    }
+  });
+
+  // Hand raise functionality
+  const {
+    raisedHands,
+    myHandRaised,
+    isLoading: isHandRaiseLoading,
+    raiseHand,
+    lowerHand,
+    hostLowerHand,
+    lowerAllHands
+  } = useHandRaise({
+    socket,
+    isConnected: isSocketConnected,
+    meetingId: meetingId as string,
+    participantId: currentParticipantId || '',
+    isHost,
+    onHandRaised: (info) => {
+      console.log('Hand raised:', info);
+      Swal.fire({
+        title: 'Hand Raised',
+        text: `${info.displayName} raised their hand`,
+        icon: 'info',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    },
+    onHandLowered: (info) => {
+      console.log('Hand lowered:', info);
+    },
+    onHandLoweredByHost: (info) => {
+      console.log('Hand lowered by host:', info);
+      Swal.fire({
+        title: 'Hand Lowered',
+        text: `${info.displayName} lowered your hand`,
+        icon: 'info',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    },
+    onAllHandsLowered: (info) => {
+      console.log('All hands lowered:', info);
+      Swal.fire({
+        title: 'All Hands Lowered',
+        text: `${info.hostDisplayName} lowered all hands`,
+        icon: 'info',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    },
+    onError: (error) => {
+      console.error('Hand raise error:', error);
+      Swal.fire({
+        title: 'Error',
+        text: error,
+        icon: 'error'
+      });
+    }
+  });
 
   useEffect(() => {
     if (meetingId) {
@@ -820,6 +900,76 @@ const MeetingPage: React.FC = memo(() => {
             >
               💬
             </button>
+
+            {/* Hand Raise Button */}
+            <button
+              onClick={() => {
+                if (myHandRaised) {
+                  lowerHand();
+                } else {
+                  raiseHand();
+                }
+              }}
+              disabled={isHandRaiseLoading || !isSocketConnected}
+              style={{
+                width: '50px',
+                height: '50px',
+                backgroundColor: myHandRaised ? '#e74c3c' : '#34495e',
+                border: 'none',
+                borderRadius: '50%',
+                color: 'white',
+                fontSize: '20px',
+                cursor: isHandRaiseLoading || !isSocketConnected ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isHandRaiseLoading || !isSocketConnected ? 0.5 : 1
+              }}
+            >
+              {isHandRaiseLoading ? '⏳' : '✋'}
+            </button>
+
+            {/* Hand Raise Panel Toggle (for hosts) */}
+            {isHost && (
+              <button
+                onClick={() => setShowHandRaisePanel(!showHandRaisePanel)}
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  backgroundColor: showHandRaisePanel ? '#f39c12' : '#34495e',
+                  border: 'none',
+                  borderRadius: '50%',
+                  color: 'white',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}
+              >
+                ✋
+                {raisedHands.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-5px',
+                    right: '-5px',
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '20px',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}>
+                    {raisedHands.length}
+                  </div>
+                )}
+              </button>
+            )}
             
             <button
               onClick={() => {}}
@@ -981,6 +1131,20 @@ const MeetingPage: React.FC = memo(() => {
                         📷
                       </div>
                     )}
+                    {raisedHands.some(hand => hand.participantId === participant._id) && (
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        backgroundColor: '#f39c12',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '8px'
+                      }}>
+                        ✋
+                      </div>
+                    )}
                   </div>
 
                   {/* Three-dot menu for host/admin */}
@@ -1121,6 +1285,130 @@ const MeetingPage: React.FC = memo(() => {
                 전송
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Hand Raise Panel (for hosts) */}
+        {showHandRaisePanel && isHost && (
+          <div style={{
+            width: '300px',
+            backgroundColor: '#2c3e50',
+            display: 'flex',
+            flexDirection: 'column',
+            borderLeft: '1px solid #34495e'
+          }}>
+            <div style={{
+              padding: '15px',
+              borderBottom: '1px solid #34495e',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>Raised Hands ({raisedHands.length})</span>
+              <button
+                onClick={() => setShowHandRaisePanel(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#95a5a6',
+                  fontSize: '18px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div style={{
+              flex: 1,
+              padding: '10px',
+              overflowY: 'auto',
+              maxHeight: '400px'
+            }}>
+              {raisedHands.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  color: '#95a5a6',
+                  fontSize: '14px',
+                  marginTop: '50px'
+                }}>
+                  No hands raised
+                </div>
+              ) : (
+                raisedHands.map((hand) => (
+                  <div key={hand.participantId} style={{
+                    padding: '12px',
+                    backgroundColor: '#34495e',
+                    borderRadius: '6px',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#fff' }}>
+                        ✋ {hand.displayName}
+                      </div>
+                      {hand.reason && (
+                        <div style={{ fontSize: '12px', color: '#95a5a6', marginTop: '4px' }}>
+                          "{hand.reason}"
+                        </div>
+                      )}
+                      <div style={{ fontSize: '11px', color: '#95a5a6', marginTop: '4px' }}>
+                        {new Date(hand.raisedAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => hostLowerHand(hand.participantId)}
+                      disabled={isHandRaiseLoading}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: isHandRaiseLoading ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        opacity: isHandRaiseLoading ? 0.5 : 1
+                      }}
+                    >
+                      Lower
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {raisedHands.length > 0 && (
+              <div style={{
+                padding: '10px',
+                borderTop: '1px solid #34495e'
+              }}>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to lower all hands?')) {
+                      lowerAllHands();
+                    }
+                  }}
+                  disabled={isHandRaiseLoading}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: isHandRaiseLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    opacity: isHandRaiseLoading ? 0.5 : 1
+                  }}
+                >
+                  Lower All Hands
+                </button>
+              </div>
+            )}
           </div>
         )}
 
