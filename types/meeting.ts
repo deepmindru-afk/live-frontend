@@ -145,13 +145,11 @@ export interface TransferHostInput {
 }
 
 export interface RaiseHandInput {
-  meetingId: string;
   participantId: string;
   reason?: string;
 }
 
 export interface LowerHandInput {
-  meetingId: string;
   participantId: string;
 }
 

@@ -489,13 +489,11 @@ export interface RejectParticipantInput {
 
 export interface RaiseHandInput {
   participantId: string;
-  meetingId: string;
   reason: string;
 }
 
 export interface LowerHandInput {
   participantId: string;
-  meetingId: string;
 }
 
 export interface HostLowerHandInput {

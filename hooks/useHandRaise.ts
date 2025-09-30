@@ -68,12 +68,22 @@ export const useHandRaise = ({
 
   // Raise hand (participant action)
   const raiseHand = useCallback((reason?: string) => {
+    console.log('✋ raiseHand called:', { 
+      socket: !!socket, 
+      isConnected, 
+      participantId, 
+      meetingId, 
+      reason 
+    });
+    
     if (!socket || !isConnected) {
+      console.error('✋ WebSocket not connected:', { socket: !!socket, isConnected });
       onError?.('Not connected to server');
       return;
     }
 
     if (!participantId) {
+      console.error('✋ No participant ID:', { participantId });
       onError?.('No participant ID available');
       return;
     }
@@ -297,3 +307,4 @@ export const useHandRaise = ({
     lowerAllHands,
   };
 };
+

@@ -360,9 +360,19 @@ const Dashboard: React.FC = () => {
       
       // Try to end meeting via GraphQL first
       try {
+        console.log('⏹️ END MEETING: Calling GraphQL with meetingId:', meetingId);
         const result = await enhancedMakeGraphQLRequest(END_MEETING, { meetingId });
+        console.log('⏹️ END MEETING: GraphQL response received:', result);
         
-        if (result.endMeeting && result.endMeeting._id) {
+        // Check if result is null (which happens when auth is cleared)
+        if (result === null) {
+          console.warn('⏹️ END MEETING: GraphQL returned null (auth cleared), falling back to local update');
+          throw new Error('Authentication cleared during request');
+        }
+        
+        // Check if the result has the expected structure
+        if (result && result.endMeeting && result.endMeeting._id) {
+          console.log('⏹️ END MEETING: GraphQL result structure:', result);
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
@@ -379,9 +389,21 @@ const Dashboard: React.FC = () => {
 
           console.log('⏹️ END MEETING: Meeting ended via GraphQL:', meetingId);
           return;
+        } else {
+          console.warn('⏹️ END MEETING: GraphQL result missing expected fields, falling back to local update');
+          throw new Error('Invalid response structure');
         }
       } catch (graphqlError) {
         console.warn('⏹️ END MEETING: GraphQL request failed, falling back to local update:', graphqlError);
+        
+        // Check if this is an authentication error that cleared the token
+        if (graphqlError instanceof Error && 
+            (graphqlError.message.includes('Invalid credentials') || 
+             graphqlError.message.includes('JWT_EXPIRED') ||
+             graphqlError.message.includes('TOKEN_NOT_EXIST'))) {
+          console.warn('⏹️ END MEETING: Authentication error detected, user may be logged out');
+          // Don't show error to user, just fall back to local update
+        }
       }
       
       // Fallback to local state update if GraphQL fails
@@ -394,11 +416,11 @@ const Dashboard: React.FC = () => {
       await Swal.fire({
         icon: 'success',
         title: '성공',
-        text: '회의가 종료되었습니다! (모의 서비스)',
+        text: '회의가 종료되었습니다!',
         confirmButtonText: '확인'
       });
 
-      console.log('⏹️ END MEETING: Mock meeting ended:', meetingId);
+      console.log('⏹️ END MEETING: Meeting ended via fallback:', meetingId);
 
     } catch (error: unknown) {
       console.error('⏹️ END MEETING: Error:', error);

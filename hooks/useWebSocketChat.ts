@@ -128,6 +128,14 @@ export const useWebSocketChat = ({
       setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
     });
 
+    newSocket.on('KICKED', (data) => {
+      console.log('👢 User was kicked from meeting:', data);
+      // Redirect to dashboard when kicked
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    });
+
     newSocket.on('USER_JOINED_CHAT', (participant: ChatParticipant) => {
       console.log('👤 User joined chat:', participant);
       setParticipants(prev => {

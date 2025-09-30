@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
 import { useWebSocketChat } from '../hooks/useWebSocketChat';
+import { useHandRaise } from '../hooks/useHandRaise';
 import Swal from 'sweetalert2';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
@@ -73,6 +74,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [raisedHandsCount, setRaisedHandsCount] = useState(0);
+  const [raisedHands, setRaisedHands] = useState<{[participantId: string]: boolean}>({});
   const [isAuth, setIsAuth] = useState(false);
   const [authComplete, setAuthComplete] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -91,10 +93,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     pollInterval: 2000,
     fetchPolicy: 'cache-and-network',
     notifyOnNetworkStatusChange: false,
-    errorPolicy: 'ignore'
+    errorPolicy: 'all'
   });
 
-  const { data: participantsData, loading: participantsLoading, error: participantsError } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
+  const { data: participantsData, loading: participantsLoading, error: participantsError, refetch: refetchParticipants } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
     pollInterval: 1500,
@@ -112,7 +114,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     notifyOnNetworkStatusChange: false
   });
 
-  const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
+  const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError, refetch: refetchCurrentParticipant } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
     pollInterval: 1000,
@@ -132,7 +134,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [raiseHand] = useMutation(RAISE_HAND);
   const [lowerHand] = useMutation(LOWER_HAND);
   const [transferHost] = useMutation(TRANSFER_HOST);
-  const [transferHostAndLeave] = useMutation(TRANSFER_HOST_AND_LEAVE);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
 
   // WebSocket connection for real-time features
@@ -148,13 +149,64 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onParticipantLeft: (participant) => {
       console.log('👋 Participant left:', participant);
     },
-    onHandRaised: (participant) => {
-      console.log('✋ Hand raised:', participant);
-      setRaisedHandsCount(prev => prev + 1);
+    onError: (error) => {
+      console.error('🔌 WebSocket error:', error);
     },
-    onHandLowered: (participant) => {
-      console.log('✋ Hand lowered:', participant);
-      setRaisedHandsCount(prev => Math.max(0, prev - 1));
+    // Hand raise events are handled through participants data changes
+  });
+
+  // Debug WebSocket connection
+  useEffect(() => {
+    console.log('🔌 WebSocket Debug:', {
+      socket: !!socket,
+      isConnected: wsConnected,
+      token: currentUser?.token ? 'present' : 'missing',
+      currentUser: currentUser ? 'present' : 'missing',
+      meetingId: actualMeetingId
+    });
+  }, [socket, wsConnected, currentUser, actualMeetingId]);
+
+  // Hand raise functionality
+  const { raisedHands: wsRaisedHands, myHandRaised: wsMyHandRaised, raiseHand: wsRaiseHand, lowerHand: wsLowerHand } = useHandRaise({
+    socket,
+    isConnected: wsConnected,
+    meetingId: actualMeetingId,
+    participantId: currentParticipant?._id || '',
+    isHost: currentParticipant?.role === 'HOST',
+    onHandRaised: (info) => {
+      console.log('✋ Hand raised:', info);
+      setRaisedHands(prev => ({
+        ...prev,
+        [info.participantId]: true
+      }));
+    },
+    onHandLowered: (info) => {
+      console.log('✋ Hand lowered:', info);
+      setRaisedHands(prev => {
+        const newState = { ...prev };
+        delete newState[info.participantId];
+        return newState;
+      });
+    },
+    onHandLoweredByHost: (info) => {
+      console.log('✋ Hand lowered by host:', info);
+      setRaisedHands(prev => {
+        const newState = { ...prev };
+        delete newState[info.participantId];
+        return newState;
+      });
+    },
+    onAllHandsLowered: (info) => {
+      console.log('✋ All hands lowered:', info);
+      setRaisedHands({});
+    },
+    onError: (error) => {
+      console.error('✋ Hand raise error:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Hand Raise Error',
+        text: error
+      });
     }
   });
 
@@ -197,41 +249,69 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Update meeting data
   useEffect(() => {
-    if (meetingData?.getMeetingById) {
-      const meeting = meetingData.getMeetingById;
+    if (meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData && meetingData.getMeetingById) {
+      const meeting = meetingData.getMeetingById as any;
       setMeetingStatus(meeting.status || 'CREATED');
       setIsLive(meeting.status === 'LIVE');
     }
   }, [meetingData]);
 
+  // Auto-redirect when meeting ends
+  useEffect(() => {
+    if (meetingStatus === 'ENDED') {
+      // Auto-redirect all participants to dashboard when meeting ends
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    }
+  }, [meetingStatus]);
+
+  // Handle GraphQL errors
+  useEffect(() => {
+    if (meetingError) {
+      console.error('GraphQL Meeting Error:', meetingError);
+      // If there's a GraphQL error, it might be because the meeting ended
+      // Check if the error is related to null title field
+      if (meetingError.message.includes('Cannot return null for non-nullable field MeetingWithHost.title')) {
+        console.log('Meeting ended - title field is null, redirecting to dashboard');
+        setMeetingStatus('ENDED');
+        setIsLive(false);
+        // Auto-redirect to dashboard after a short delay
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1000);
+      }
+    }
+  }, [meetingError]);
+
   // Update participants data
   useEffect(() => {
-    if (participantsData?.getParticipantsByMeeting) {
-      const participantsList = participantsData.getParticipantsByMeeting;
+    if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
+      const participantsList = participantsData.getParticipantsByMeeting as any[];
       const previousParticipants = participants;
       
       setParticipants(participantsList);
       
-      const raisedCount = participantsList.filter(p => p.hasHandRaised).length;
+      const raisedCount = participantsList.filter((p: any) => p.hasHandRaised).length;
       setRaisedHandsCount(raisedCount);
 
       // Check for new participants (joined)
       if (previousParticipants.length > 0) {
-        const newParticipants = participantsList.filter(newP => 
-          !previousParticipants.find(oldP => oldP._id === newP._id)
+        const newParticipants = participantsList.filter((newP: any) => 
+          !previousParticipants.find((oldP: any) => oldP._id === newP._id)
         );
         
-        newParticipants.forEach(participant => {
+        newParticipants.forEach((participant: any) => {
           console.log('🎉 New participant joined meeting:', participant);
           // This will be handled by the chat component
         });
 
         // Check for left participants
-        const leftParticipants = previousParticipants.filter(oldP => 
-          !participantsList.find(newP => newP._id === oldP._id)
+        const leftParticipants = previousParticipants.filter((oldP: any) => 
+          !participantsList.find((newP: any) => newP._id === oldP._id)
         );
         
-        leftParticipants.forEach(participant => {
+        leftParticipants.forEach((participant: any) => {
           console.log('👋 Participant left meeting:', participant);
           // This will be handled by the chat component
         });
@@ -241,15 +321,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Update waiting participants data
   useEffect(() => {
-    if (waitingData?.getWaitingParticipants) {
-      setWaitingParticipants(waitingData.getWaitingParticipants);
+    if (waitingData && typeof waitingData === 'object' && 'getWaitingParticipants' in waitingData && waitingData.getWaitingParticipants) {
+      setWaitingParticipants(waitingData.getWaitingParticipants as any[]);
     }
   }, [waitingData]);
 
   // Update current participant data
   useEffect(() => {
-    if (currentParticipantData?.getParticipantByUserAndMeeting) {
-      setCurrentParticipant(currentParticipantData.getParticipantByUserAndMeeting);
+    if (currentParticipantData && typeof currentParticipantData === 'object' && 'getParticipantByUserAndMeeting' in currentParticipantData && currentParticipantData.getParticipantByUserAndMeeting) {
+      setCurrentParticipant(currentParticipantData.getParticipantByUserAndMeeting as any);
     }
   }, [currentParticipantData]);
 
@@ -285,17 +365,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       });
       setMeetingStatus('ENDED');
       setIsLive(false);
-      Swal.fire({
-        icon: 'success',
-        title: 'Meeting Ended',
-        text: 'The meeting has been ended successfully! All participants have been disconnected.',
-        timer: 2000,
-        showConfirmButton: false
-      });
       
+      // Auto-redirect to dashboard immediately without showing success message
+      // This ensures all participants are redirected automatically
       setTimeout(() => {
         window.location.href = '/';
-      }, 2000);
+      }, 500);
     } catch (error) {
       console.error('Error ending meeting:', error);
       Swal.fire({
@@ -307,68 +382,53 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleLeaveMeeting = async () => {
-    if (isHost) {
-      // Host has options to end meeting or transfer host
-    const result = await Swal.fire({
-        title: 'Exit Meeting',
-        text: 'As the host, you can end the meeting for everyone or transfer host role:',
-        icon: 'question',
-      showCancelButton: true,
-        showDenyButton: true,
-        confirmButtonText: 'End Meeting for All',
-        denyButtonText: 'Transfer Host & Leave',
-        cancelButtonText: 'Cancel',
-      confirmButtonColor: '#dc3545',
-        denyButtonColor: '#6c757d',
-        cancelButtonColor: '#007bff'
-    });
-
-    if (result.isConfirmed) {
-        await handleEndMeeting();
-      } else if (result.isDenied) {
+    // Only show host options if user is actually a host based on participant data
+    if (currentParticipant?.role === 'HOST') {
         await handleForceExit();
-      }
     } else {
-      // Participant just leaves the meeting
+      // All other users (participants) get simple leave dialog
+      await handleParticipantLeave();
+    }
+  };
+
+  const handleParticipantLeave = async () => {
+    try {
       const result = await Swal.fire({
         title: 'Leave Meeting',
-        text: 'Are you sure you want to leave this meeting?',
+        text: 'Do you want to leave the meeting?',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Leave',
+        confirmButtonText: 'Yes',
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc3545',
         cancelButtonColor: '#6c757d'
       });
 
             if (result.isConfirmed) {
-        await handleParticipantLeave();
-      }
-    }
-  };
+        // Check if we have current participant data
+        if (!currentParticipant?._id) {
+          console.error('No current participant found');
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Unable to leave meeting. Please refresh and try again.'
+          });
+          return;
+        }
 
-  const handleParticipantLeave = async () => {
-    try {
       await leaveMeeting({
         variables: { 
           input: { 
-            meetingId: actualMeetingId,
-            reason: 'Participant leaving meeting'
+              participantId: currentParticipant._id
           }
         }
       });
       
-      Swal.fire({
-        icon: 'success',
-        title: 'Left Meeting',
-        text: 'You have successfully left the meeting.',
-        timer: 2000,
-        showConfirmButton: false
-      });
-      
+        // Auto-redirect immediately after leaving
       setTimeout(() => {
         window.location.href = '/';
-      }, 2000);
+        }, 500);
+      }
               } catch (error) {
       console.error('Error leaving meeting:', error);
       Swal.fire({
@@ -379,39 +439,83 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
-  const handleForceExit = async () => {
+  const handleTransferHost = async () => {
     try {
-      if (isHost && participants.length > 1) {
         const nonHostParticipants = participants.filter(p => p.role !== 'HOST');
-        if (nonHostParticipants.length > 0) {
-          const newHost = nonHostParticipants[0];
-          
-          const transferResult = await Swal.fire({
+      
+      if (nonHostParticipants.length === 0) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'No Participants',
+          text: 'There are no other participants to transfer host role to.',
+          confirmButtonText: 'OK'
+        });
+        return;
+      }
+
+      // Create participant selection options
+      const participantOptions = nonHostParticipants.map((participant, index) => ({
+        value: participant._id,
+        text: `${participant.displayName || participant.user?.displayName || 'Participant'} (${participant.user?.email || 'participant@demo.com'})`
+      }));
+
+      const { value: selectedParticipantId } = await Swal.fire({
           title: 'Transfer Host Role',
-            html: `You are the host. Before leaving, you must transfer host role to another participant.<br><br>
-                   <strong>Selected new host:</strong> ${newHost.displayName || newHost.user?.displayName || 'Participant'}<br>
-                   <strong>Email:</strong> ${newHost.user?.email || 'participant@demo.com'}`,
-            icon: 'info',
+        text: 'Select the participant who will become the new host:',
+        icon: 'question',
+        input: 'select',
+        inputOptions: participantOptions.reduce((acc, option) => {
+          acc[option.value] = option.text;
+          return acc;
+        }, {} as Record<string, string>),
+        inputPlaceholder: 'Choose a participant...',
           showCancelButton: true,
-            confirmButtonText: 'Transfer & Leave',
+        confirmButtonText: 'Transfer Host',
           cancelButtonText: 'Cancel',
             confirmButtonColor: '#28a745',
-            cancelButtonColor: '#6c757d'
+        cancelButtonColor: '#6c757d',
+        inputValidator: (value) => {
+          if (!value) {
+            return 'You need to select a participant!';
+          }
+          return null;
+        }
+      });
+
+      if (selectedParticipantId) {
+        const selectedParticipant = nonHostParticipants.find(p => p._id === selectedParticipantId);
+        
+        if (selectedParticipant) {
+          // First transfer the host role
+          await transferHost({
+              variables: {
+              input: {
+                  meetingId: actualMeetingId,
+                newHostParticipantId: selectedParticipantId,
+                reason: 'Host transferring role'
+              }
+            }
           });
 
-          if (transferResult.isConfirmed) {
-            await transferHostAndLeave({
-              variables: {
-                  meetingId: actualMeetingId,
-                newHostParticipantId: newHost._id,
-                reason: 'Host leaving meeting'
+          // Refetch data to update host status
+          await Promise.all([
+            refetchCurrentParticipant(),
+            refetchParticipants()
+          ]);
+
+          // Then leave the meeting
+          await leaveMeeting({
+            variables: { 
+              input: { 
+                participantId: currentParticipant._id
+              }
               }
             });
             
             Swal.fire({
               icon: 'success',
               title: 'Host Transferred',
-              text: `Host role has been transferred to ${newHost.displayName || 'the selected participant'}.`,
+            text: `Host role has been transferred to ${selectedParticipant.displayName || selectedParticipant.user?.displayName || 'the selected participant'}.`,
               timer: 2000,
               showConfirmButton: false
             });
@@ -420,11 +524,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               window.location.href = '/';
             }, 2000);
           }
-        } else {
+      }
+    } catch (error) {
+      console.error('Error during host transfer:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to transfer host role. Please try again.'
+      });
+    }
+  };
+
+  const handleForceExit = async () => {
+    try {
+      if (isHost && participants.length > 1) {
+        // Show options for host
+        const result = await Swal.fire({
+          title: 'Exit Meeting',
+          text: 'As the host, you can end the meeting for everyone or transfer host role:',
+          icon: 'question',
+          showCancelButton: true,
+          showDenyButton: true,
+          confirmButtonText: 'End Meeting for All',
+          denyButtonText: 'Transfer Host & Leave',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#dc3545',
+          denyButtonColor: '#6c757d',
+          cancelButtonColor: '#007bff'
+        });
+
+        if (result.isConfirmed) {
           await handleEndMeeting();
+        } else if (result.isDenied) {
+          await handleTransferHost();
         }
-      } else {
-        await handleParticipantLeave();
+      } else if (isHost) {
+        // Host with no other participants - just end meeting
+        await handleEndMeeting();
       }
     } catch (error) {
       console.error('Error during force exit:', error);
@@ -458,26 +594,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               return;
             }
           
-      if (handRaised) {
-        await lowerHand({
-            variables: {
-              input: {
-              participantId: currentParticipant._id,
-              meetingId: actualMeetingId 
-              }
-            }
-          });
+      if (wsMyHandRaised) {
+        // Use WebSocket-based hand lower
+        wsLowerHand('Lowered by user');
         setHandRaised(false);
       } else {
-        await raiseHand({
-          variables: { 
-            input: { 
-              participantId: currentParticipant._id,
-              meetingId: actualMeetingId,
-              reason: 'Student needs help'
-            } 
-          }
-        });
+        // Use WebSocket-based hand raise
+        wsRaiseHand('Student needs help');
         setHandRaised(true);
       }
     } catch (error) {
@@ -492,9 +615,151 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   const handleKickParticipant = async (participantId: string) => {
     try {
-      await removeParticipant({
-        variables: { meetingId: actualMeetingId, participantId }
+      console.log('=== KICK PARTICIPANT DEBUG ===');
+      console.log('Attempting to kick participant:', participantId);
+      console.log('Current user isHost:', isHost);
+      console.log('Current participant:', currentParticipant);
+      console.log('Current participant role:', currentParticipant?.role);
+      console.log('Current participant ID:', currentParticipant?._id);
+      console.log('Current user data:', currentUser);
+      console.log('Current user ID:', currentUser?.id);
+      console.log('Current user _id:', currentUser?._id);
+      console.log('Meeting ID:', actualMeetingId);
+      console.log('All participants:', participants);
+      console.log('Participants with HOST role:', participants.filter(p => p.role === 'HOST'));
+      console.log('Expected currentHostId from DB: 68d9e0cfc34987bba949048a');
+      console.log('===============================');
+      
+      // Refresh current participant data to ensure we have the latest role
+      console.log('🔄 Refreshing current participant data...');
+      const refreshResult = await refetchCurrentParticipant();
+      console.log('🔄 Refresh result:', refreshResult);
+      
+      // Get the updated participant data
+      const updatedParticipant = (refreshResult.data as any)?.getParticipantByUserAndMeeting;
+      console.log('🔄 Updated participant data:', updatedParticipant);
+      
+      // Double-check if user is actually a host after refresh
+      const updatedIsHost = updatedParticipant?.role === 'HOST';
+      console.log('🔄 Updated isHost status:', updatedIsHost);
+      console.log('🔄 Updated participant role:', updatedParticipant?.role);
+      
+      if (!updatedIsHost) {
+        console.log('❌ User is not recognized as host after refresh, cannot kick participant');
+        Swal.fire({
+          icon: 'error',
+          title: 'Permission Denied',
+          text: 'Only the meeting host can remove participants.'
+        });
+        return;
+      }
+      
+      console.log('✅ User is recognized as host, proceeding with kick...');
+      console.log('🔄 About to call removeParticipant with participantId:', participantId);
+      
+      // Check if current user ID matches the currentHostId from database
+      const currentUserId = currentUser?.id || currentUser?._id;
+      const expectedCurrentHostId = meeting?.currentHostId;
+      console.log('🔍 Current user ID from frontend:', currentUserId);
+      console.log('🔍 Expected currentHostId from DB:', expectedCurrentHostId);
+      console.log('🔍 IDs match:', currentUserId === expectedCurrentHostId);
+      console.log('🔍 Meeting data:', meeting);
+      console.log('🔍 Meeting hostId (original):', meeting?.hostId);
+      console.log('🔍 Meeting currentHostId (transferred):', meeting?.currentHostId);
+      console.log('🔍 Is current user the original host?', currentUserId === meeting?.hostId);
+      console.log('🔍 Is current user the current host?', currentUserId === meeting?.currentHostId);
+      console.log('🔍 Expected original hostId from DB: 68d9e0ffc34987bba94904e2');
+      console.log('🔍 Expected currentHostId from DB: 68d9e0cfc34987bba949048a');
+      console.log('🔍 Frontend user ID matches original?', currentUserId === '68d9e0ffc34987bba94904e2');
+      console.log('🔍 Frontend user ID matches current?', currentUserId === '68d9e0cfc34987bba949048a');
+      
+      // Check if user is either the original host or the current host
+      const isOriginalHost = currentUserId === meeting?.hostId;
+      const isCurrentHost = currentUserId === meeting?.currentHostId;
+      
+      if (!isOriginalHost && !isCurrentHost) {
+        console.log('❌ User is neither original host nor current host!');
+        console.log('❌ Frontend user ID:', currentUserId);
+        console.log('❌ Original hostId:', meeting?.hostId);
+        console.log('❌ Current hostId:', meeting?.currentHostId);
+        Swal.fire({
+          icon: 'error',
+          title: 'Permission Error',
+          text: 'Only the meeting host can remove participants.'
+        });
+        return;
+      }
+      
+      if (isOriginalHost) {
+        console.log('✅ User is the original host, can kick participants');
+      }
+      if (isCurrentHost) {
+        console.log('✅ User is the current host (transferred), can kick participants');
+        console.log('⚠️  WARNING: Backend may still reject this request');
+        console.log('⚠️  Backend checks against hostId, not currentHostId');
+        console.log('⚠️  This is a backend permission logic issue');
+      }
+      
+      // Check if the participant we're trying to kick is actually in the participants list
+      const targetParticipant = participants.find(p => p._id === participantId);
+      console.log('🎯 Target participant to kick:', targetParticipant);
+      
+      if (!targetParticipant) {
+        console.log('❌ Target participant not found in participants list');
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Participant not found in the meeting.'
+        });
+        return;
+      }
+      
+      // Add a small delay to ensure backend has processed the host transfer
+      console.log('⏳ Waiting 2 seconds for backend to process host transfer...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log('🚀 Calling removeParticipant mutation...');
+      console.log('🚀 Variables:', { 
+        participantId: participantId
       });
+      console.log('🚀 Current user context:', {
+        id: currentUser?.id,
+        _id: currentUser?._id,
+        displayName: currentUser?.displayName,
+        email: currentUser?.email
+      });
+      console.log('🚀 JWT Token context (if available):', {
+        token: localStorage.getItem('token'),
+        tokenPreview: localStorage.getItem('token')?.substring(0, 50) + '...'
+      });
+      console.log('🚀 Meeting context:', {
+        meetingId: actualMeetingId,
+        hostId: meeting?.hostId,
+        currentHostId: meeting?.currentHostId
+      });
+      
+      const result = await removeParticipant({
+        variables: { 
+          participantId: participantId
+        }
+      });
+      
+      console.log('🚀 Mutation result:', result);
+      console.log('🚀 Mutation success:', (result.data as any)?.removeParticipant?.success);
+      console.log('🚀 Mutation message:', (result.data as any)?.removeParticipant?.message);
+      
+      if ((result.data as any)?.removeParticipant?.success) {
+        // Emit KICKED event to notify the removed participant
+        const removedParticipant = (result.data as any)?.removeParticipant?.removedParticipant;
+        if (removedParticipant?.userId && socket) {
+          console.log('📤 Emitting KICKED event for removed participant:', removedParticipant);
+          socket.emit('KICKED', {
+            userId: removedParticipant.userId,
+            meetingId: removedParticipant.meetingId,
+            reason: 'Removed by host'
+          });
+        }
+        
       Swal.fire({
         icon: 'success',
         title: 'Participant Removed',
@@ -502,19 +767,55 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         timer: 2000,
         showConfirmButton: false
       });
+      } else {
+        throw new Error((result.data as any)?.removeParticipant?.message || 'Unknown error');
+      }
     } catch (error) {
       console.error('Error removing participant:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Check if this is a permission error for transferred host
+      const currentUserId = currentUser?.id || currentUser?._id;
+      const isCurrentHost = currentUserId === meeting?.currentHostId;
+      const isOriginalHost = currentUserId === meeting?.hostId;
+      
+      if (isCurrentHost && !isOriginalHost) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Backend Permission Issue',
+          html: `
+            <p>As a transferred host, you should be able to kick participants, but the backend is rejecting the request.</p>
+            <p><strong>Issue:</strong> Backend checks against original hostId, not currentHostId</p>
+            <p><strong>Your ID:</strong> ${currentUserId}</p>
+            <p><strong>Original Host ID:</strong> ${meeting?.hostId}</p>
+            <p><strong>Current Host ID:</strong> ${meeting?.currentHostId}</p>
+            <p>This needs to be fixed in the backend permission logic.</p>
+          `,
+          confirmButtonText: 'Understood'
+        });
+      } else {
+        // Show more specific error message
+        const errorMessage = (error as any)?.message || 'Unknown error occurred';
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Failed to remove participant. Please try again.'
+          text: `Failed to remove participant: ${errorMessage}`
       });
+      }
     }
   };
 
   // Get meeting data
-  const meeting = meetingData?.getMeetingById;
-  const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
+  const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
+  const isHost = currentParticipant?.role === 'HOST';
+
+  // Enhance participants with real-time hand raise status
+  const participantsWithHandRaise = useMemo(() => {
+    return participants.map(participant => ({
+      ...participant,
+      hasHandRaised: raisedHands[participant._id] || false
+    }));
+  }, [participants, raisedHands]);
 
   // Loading state
   if (loading || !authComplete) {
@@ -639,7 +940,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         </div>
           <div>
               <div style={{ fontSize: '18px', fontWeight: '600', color: '#333' }}>
-              {meeting?.title || 'Demo Meeting'}
+              {meeting?.title || 'Meeting'}
       </div>
               <div style={{ fontSize: '14px', color: '#666' }}>
                 ID: {meeting?.inviteCode || actualMeetingId}
@@ -712,7 +1013,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             gap: '12px',
             overflowX: 'auto'
           }}>
-            {participants.map((participant) => (
+            {participantsWithHandRaise.map((participant) => (
               <div
                 key={participant._id}
                 onClick={() => setSelectedParticipant(participant)}
@@ -795,7 +1096,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             position: 'relative',
             padding: '40px'
           }}>
-            {raisedHandsCount > 0 && (
+            {Object.keys(raisedHands).length > 0 && (
           <div style={{
                 position: 'absolute',
                 top: '20px',
@@ -811,7 +1112,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 gap: '8px',
                 color: '#856404'
               }}>
-                ✋ {raisedHandsCount} hand{raisedHandsCount > 1 ? 's' : ''} raised
+                ✋ {Object.keys(raisedHands).length} hand{Object.keys(raisedHands).length > 1 ? 's' : ''} raised
               </div>
             )}
             
@@ -945,11 +1246,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: '44px',
                   height: '44px',
               borderRadius: '50%',
-                  backgroundColor: handRaised ? '#ffc107' : '#f8f9fa',
+                  backgroundColor: wsMyHandRaised ? '#ffc107' : '#f8f9fa',
                   border: '1px solid #e9ecef',
               cursor: 'pointer',
                   fontSize: '18px',
-                  color: handRaised ? '#000' : '#666',
+                  color: wsMyHandRaised ? '#000' : '#666',
               display: 'flex',
               alignItems: 'center',
                   justifyContent: 'center'
@@ -1116,7 +1417,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             <div style={{ flex: 1, overflow: 'auto' }}>
             {activeTab === 'participants' && (
                 <div style={{ padding: '16px' }}>
-                  {participants.map((participant) => (
+                  {participantsWithHandRaise.map((participant) => (
                     <div key={participant._id} style={{
                       display: 'flex',
                       alignItems: 'center',

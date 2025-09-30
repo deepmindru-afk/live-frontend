@@ -61,25 +61,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     },
     onParticipantJoined: (participant) => {
       console.log('👋 Participant joined chat:', participant);
-      const joinMsg: Message = {
-        _id: `join-${Date.now()}`,
-        text: `${participant.displayName || 'A participant'} joined the chat`,
-        displayName: 'System',
-        createdAt: new Date().toISOString(),
-        type: 'join'
-      };
-      setMessages(prev => [...prev, joinMsg]);
+      // Don't show chat join messages - only meeting join messages
     },
     onParticipantLeft: (participant) => {
       console.log('👋 Participant left chat:', participant);
-      const leaveMsg: Message = {
-        _id: `leave-${Date.now()}`,
-        text: `${participant.displayName || 'A participant'} left the chat`,
-        displayName: 'System',
-        createdAt: new Date().toISOString(),
-        type: 'leave'
-      };
-      setMessages(prev => [...prev, leaveMsg]);
+      // Don't show chat leave messages - only meeting leave messages
     }
   });
 
@@ -117,28 +103,48 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     setIsConnected(wsConnected);
   }, [wsConnected]);
 
+  // Track previous participants to detect join/leave events
+  const [previousParticipants, setPreviousParticipants] = useState<any[]>([]);
+
   // Add participant join/leave messages when participants change
   useEffect(() => {
-    if (participants.length > 0) {
-      const participantNames = participants.map(p => p.displayName || 'Participant');
-      const joinMsg: Message = {
-        _id: `participants-${Date.now()}`,
-        text: `${participants.length} participant${participants.length > 1 ? 's' : ''} in the meeting: ${participantNames.join(', ')}`,
-        displayName: 'System',
-        createdAt: new Date().toISOString(),
-        type: 'system'
-      };
+    if (participants.length > 0 && previousParticipants.length > 0) {
+      // Check for new participants (joined meeting)
+      const newParticipants = participants.filter(newP => 
+        !previousParticipants.find(oldP => oldP._id === newP._id)
+      );
       
-      // Only add if this is a new participant list (avoid duplicates)
-      setMessages(prev => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg?.text.includes('participant') && lastMsg?.displayName === 'System') {
-          return [...prev.slice(0, -1), joinMsg];
-        }
-        return [...prev, joinMsg];
+      newParticipants.forEach(participant => {
+        const joinMsg: Message = {
+          _id: `meeting-join-${participant._id}-${Date.now()}`,
+          text: `${participant.displayName || 'A participant'} joined the meeting`,
+          displayName: 'System',
+          createdAt: new Date().toISOString(),
+          type: 'join'
+        };
+        setMessages(prev => [...prev, joinMsg]);
+      });
+
+      // Check for left participants (left meeting)
+      const leftParticipants = previousParticipants.filter(oldP => 
+        !participants.find(newP => newP._id === oldP._id)
+      );
+      
+      leftParticipants.forEach(participant => {
+        const leaveMsg: Message = {
+          _id: `meeting-leave-${participant._id}-${Date.now()}`,
+          text: `${participant.displayName || 'A participant'} left the meeting`,
+          displayName: 'System',
+          createdAt: new Date().toISOString(),
+          type: 'leave'
+        };
+        setMessages(prev => [...prev, leaveMsg]);
       });
     }
-  }, [participants.length]);
+    
+    // Update previous participants for next comparison
+    setPreviousParticipants(participants);
+  }, [participants]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

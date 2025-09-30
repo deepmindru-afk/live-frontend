@@ -83,13 +83,11 @@ export const typeDefs = gql`
 
   input RaiseHandInput {
     participantId: ID!
-    meetingId: ID!
     reason: String!
   }
 
   input LowerHandInput {
     participantId: ID!
-    meetingId: ID!
   }
 
   input HostLowerHandInput {
