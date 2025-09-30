@@ -33,6 +33,9 @@ export const GET_PARTICIPANTS = gql`
       micState
       cameraState
       socketId
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       user {
         _id
         email

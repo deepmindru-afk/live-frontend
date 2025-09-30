@@ -4,6 +4,7 @@ import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
 import { useWebSocketChat } from '../hooks/useWebSocketChat';
 import { useHandRaise } from '../hooks/useHandRaise';
+import { useWebSocketHandRaise } from '../hooks/useWebSocketHandRaise';
 import Swal from 'sweetalert2';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
@@ -72,8 +73,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
-  const [raisedHandsCount, setRaisedHandsCount] = useState(0);
-  const [raisedHands, setRaisedHands] = useState<{[participantId: string]: boolean}>({});
+  const [handRaiseQueue, setHandRaiseQueue] = useState<any[]>([]);
+  const [currentHandRaiseMessage, setCurrentHandRaiseMessage] = useState<string | null>(null);
   const [isAuth, setIsAuth] = useState(false);
   const [authComplete, setAuthComplete] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -136,9 +137,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
 
   // WebSocket connection for real-time features
-  const { socket, isConnected: wsConnected } = useWebSocketChat({
+  const webSocketToken = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
+  console.log('🔌 WebSocket token debug:', {
+    currentUserToken: currentUser?.token ? 'present' : 'missing',
+    jwtToken: localStorage.getItem('jwt') ? 'present' : 'missing',
+    tokenToken: localStorage.getItem('token') ? 'present' : 'missing',
+    finalToken: webSocketToken ? 'present' : 'missing',
+    tokenLength: webSocketToken?.length || 0,
+    tokenPreview: webSocketToken ? webSocketToken.substring(0, 20) + '...' : 'none'
+  });
+  
+  const { socket, isConnected: wsConnected, joinMeetingRoom, joinHostMeetingRoom } = useWebSocketChat({
     meetingId: actualMeetingId,
-    token: currentUser?.token || '',
+    token: webSocketToken,
     onMessage: (message) => {
       console.log('📨 Chat message received:', message);
     },
@@ -154,6 +165,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     // Hand raise events are handled through participants data changes
   });
 
+  // Join meeting room for hand raise events when WebSocket is connected
+  useEffect(() => {
+    if (wsConnected && actualMeetingId && currentParticipant?._id) {
+      try {
+        if (currentParticipant.role === 'HOST') {
+          console.log('📤 Host joining meeting room for hand raise events');
+          joinHostMeetingRoom(actualMeetingId);
+        } else {
+          console.log('📤 Participant joining meeting room for hand raise events');
+          joinMeetingRoom(actualMeetingId, currentParticipant._id);
+        }
+      } catch (error) {
+        console.error('❌ Error joining meeting room:', error);
+      }
+    } else {
+      console.log('🔌 Not joining meeting room:', {
+        wsConnected,
+        actualMeetingId,
+        currentParticipantId: currentParticipant?._id,
+        currentParticipantRole: currentParticipant?.role
+      });
+    }
+  }, [wsConnected, actualMeetingId, currentParticipant, joinMeetingRoom, joinHostMeetingRoom]);
+
   // Debug WebSocket connection
   useEffect(() => {
     console.log('🔌 WebSocket Debug:', {
@@ -167,47 +202,69 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     });
   }, [socket, wsConnected, currentUser, actualMeetingId]);
 
-  // Hand raise functionality
-  const { raisedHands: wsRaisedHands, myHandRaised: wsMyHandRaised, raiseHand: wsRaiseHand, lowerHand: wsLowerHand, resetHandState } = useHandRaise({
-    socket,
+  // WebSocket-based hand raise functionality (real-time, no DB)
+  const { 
+    raisedHands: wsRaisedHands, 
+    myHandRaised: wsMyHandRaised, 
+    raiseHand: wsRaiseHand, 
+    lowerHand: wsLowerHand 
+  } = useWebSocketHandRaise({
+    meetingId: actualMeetingId || '',
+    userId: currentParticipant?._id || '',
+    displayName: currentParticipant?.displayName || '',
+    socket: socket || undefined,
     isConnected: wsConnected,
-    meetingId: actualMeetingId,
-    participantId: currentParticipant?._id || '',
-    isHost: currentParticipant?.role === 'HOST',
     onHandRaised: (info) => {
       console.log('✋ Hand raised:', info);
-      setRaisedHands(prev => ({
-        ...prev,
-        [info.participantId]: true
-      }));
+      setHandRaiseQueue(prev => {
+        // Remove any existing entry for this user
+        const filtered = prev.filter((hand: any) => hand.participantId !== info.userId);
+        // Add to the end (most recent)
+        return [...filtered, {
+          participantId: info.userId,
+          displayName: info.displayName,
+          raisedAt: info.raisedAt
+        }];
+      });
+      
+      // Show notification for host
+      if (isHost) {
+        setCurrentHandRaiseMessage(`${info.displayName} raised their hand`);
+        setTimeout(() => setCurrentHandRaiseMessage(null), 3000);
+      }
     },
     onHandLowered: (info) => {
       console.log('✋ Hand lowered:', info);
-      setRaisedHands(prev => {
-        const newState = { ...prev };
-        delete newState[info.participantId];
-        return newState;
-      });
+      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
+      
+      // Clear current message if this was the last hand
+      if (isHost && handRaiseQueue.length <= 1) {
+        setCurrentHandRaiseMessage(null);
+      }
     },
-    onHandLoweredByHost: (info) => {
-      console.log('✋ Hand lowered by host:', info);
-      setRaisedHands(prev => {
-        const newState = { ...prev };
-        delete newState[info.participantId];
-        return newState;
-      });
-    },
-    onAllHandsLowered: (info) => {
-      console.log('✋ All hands lowered:', info);
-      setRaisedHands({});
+    onHandAutoLowered: (info) => {
+      console.log('✋ Hand auto-lowered:', info);
+      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
+      
+      // Show notification for auto-lower
+      if (info.userId === currentParticipant?._id) {
+        Swal.fire({
+          icon: 'info',
+          title: 'Hand Auto-Lowered',
+          text: 'Your hand was automatically lowered after 1 minute',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+      
+      // Clear current message if this was the last hand
+      if (isHost && handRaiseQueue.length <= 1) {
+        setCurrentHandRaiseMessage(null);
+      }
     },
     onError: (error) => {
       console.error('✋ Hand raise error:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Hand Raise Error',
-        text: error
-      });
+      // No alert - just log the error
     }
   });
 
@@ -308,9 +365,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       const previousParticipants = participants;
       
       setParticipants(participantsList);
-      
-      const raisedCount = participantsList.filter((p: any) => p.hasHandRaised).length;
-      setRaisedHandsCount(raisedCount);
 
       // Check for new participants (joined)
       if (previousParticipants.length > 0) {
@@ -607,44 +661,58 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleRaiseHand = async () => {
     try {
       if (!currentParticipant?._id) {
-        console.error('No current participant found');
+        console.error('❌ No current participant found');
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'No participant found. Please refresh the page.'
+        });
               return;
             }
           
-      console.log('✋ Hand raise toggle:', { 
-        wsMyHandRaised, 
-        localHandRaised: handRaised,
-        participantId: currentParticipant._id 
-      });
-      
-      // If there's a state mismatch, reset both states
-      if (wsMyHandRaised !== handRaised) {
-        console.log('✋ State mismatch detected, resetting...');
-        setHandRaised(wsMyHandRaised);
-        resetHandState();
+      if (!socket || !wsConnected) {
+        console.error('❌ WebSocket not connected');
+        Swal.fire({
+          icon: 'error',
+          title: 'Connection Error',
+          text: 'Not connected to server. Please check your connection.'
+        });
         return;
       }
       
-      if (wsMyHandRaised || handRaised) {
+      console.log('✋ Hand raise toggle:', { 
+        wsMyHandRaised,
+              participantId: currentParticipant._id,
+              meetingId: actualMeetingId,
+        socket: !!socket,
+        wsConnected
+      });
+      
+      // Use WebSocket state as the source of truth
+      if (wsMyHandRaised) {
         // Lower hand
         console.log('✋ Lowering hand...');
-        wsLowerHand('Lowered by user');
-        setHandRaised(false);
+        wsLowerHand();
       } else {
         // Raise hand
         console.log('✋ Raising hand...');
-        wsRaiseHand('Student needs help');
-        setHandRaised(true);
+        wsRaiseHand();
       }
     } catch (error) {
-      console.error('Error toggling hand raise:', error);
+      console.error('❌ Error toggling hand raise:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Failed to toggle hand raise. Please try again.'
+        text: `Failed to toggle hand raise: ${(error as Error).message || 'Unknown error'}`
       });
     }
   };
+
+  // Reset hand raise state when there are permission errors
+  const resetHandRaiseState = useCallback(() => {
+    console.log('✋ Resetting hand raise state due to permission error');
+    setHandRaised(false);
+  }, []);
 
   const handleKickParticipant = async (participantId: string) => {
     try {
@@ -838,17 +906,63 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
+  const handleHostLowerHand = async (participantId: string) => {
+    try {
+      if (!socket || !wsConnected) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Not connected to server'
+        });
+        return;
+      }
+
+      console.log('✋ Host lowering hand for participant:', participantId);
+      
+      socket.emit('HOST_LOWER_HAND', {
+        meetingId: actualMeetingId,
+        participantId,
+        reason: 'Lowered by host'
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Success',
+        text: 'Hand lowered successfully',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      console.error('Error lowering hand:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to lower hand'
+      });
+    }
+  };
+
   // Get meeting data
   const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
   const isHost = currentParticipant?.role === 'HOST';
 
   // Enhance participants with real-time hand raise status
   const participantsWithHandRaise = useMemo(() => {
-    return participants.map(participant => ({
-      ...participant,
-      hasHandRaised: raisedHands[participant._id] || false
-    }));
-  }, [participants, raisedHands]);
+    console.log('🔍 Updating participants with hand raise status:', {
+      participants: participants.length,
+      wsRaisedHands: wsRaisedHands.length,
+      wsRaisedHandsData: wsRaisedHands
+    });
+    
+    return participants.map(participant => {
+      const hasHandRaised = wsRaisedHands.some(hand => hand.userId === participant._id) || false;
+      console.log(`🔍 Participant ${participant.displayName} (${participant._id}): hasHandRaised = ${hasHandRaised}`);
+      return {
+        ...participant,
+        hasHandRaised
+      };
+    });
+  }, [participants, wsRaisedHands]);
 
   // Loading state
   if (loading || !authComplete) {
@@ -921,6 +1035,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+          
+          @keyframes slideDown {
+            from {
+              opacity: 0;
+              transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(-50%) translateY(0);
+            }
+          }
+          
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
           }
         
         @media (max-width: 768px) {
@@ -1035,6 +1166,40 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           display: 'flex',
           flexDirection: 'column'
       }}>
+          {/* Hand raise queue display */}
+          {wsRaisedHands.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '8px 24px',
+              gap: '8px',
+              backgroundColor: '#f8f9fa',
+              borderBottom: '1px solid #e9ecef',
+              overflowX: 'auto'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: '600', color: '#495057', marginRight: '8px' }}>
+                ✋ Queue:
+              </span>
+              {wsRaisedHands.map((hand, index) => (
+                <div key={hand.userId} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: index === 0 ? '#ffc107' : '#e9ecef',
+                  color: index === 0 ? '#000' : '#495057',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}>
+                  <span>{index + 1}.</span>
+                  <span>{hand.displayName}</span>
+                  {index === 0 && <span>👑</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Thumbnails Row */}
     <div style={{
             height: '100px',
@@ -1065,6 +1230,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   transition: 'all 0.2s ease'
                 }}
               >
+                {/* Hand raise indicator */}
+                {participant.hasHandRaised && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    right: '-8px',
+                    backgroundColor: '#ffc107',
+                    color: '#000',
+                    fontSize: '16px',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid white',
+                    zIndex: 10,
+                    animation: 'pulse 1.5s infinite'
+                  }}>
+                    ✋
+                  </div>
+                )}
+                
                 {participant.role === 'HOST' && (
         <div style={{
               position: 'absolute',
@@ -1129,7 +1317,70 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             position: 'relative',
             padding: '40px'
           }}>
-            {Object.keys(raisedHands).length > 0 && (
+            {/* Hand raise notification banner for host */}
+            {currentHandRaiseMessage && isHost && (
+              <div style={{
+                position: 'absolute',
+                top: '20px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                backgroundColor: '#f8f9fa',
+                color: '#333',
+                padding: '12px 20px',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '500',
+                zIndex: 1000,
+                animation: 'slideDown 0.3s ease-out',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: '1px solid #e9ecef',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                minWidth: '300px',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>✋</span>
+                  <span>{currentHandRaiseMessage}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setCurrentHandRaiseMessage(null)}
+                    style={{
+                      backgroundColor: '#007bff',
+                      color: 'white',
+                      border: 'none',
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    View
+                  </button>
+                  <button
+                    onClick={() => setCurrentHandRaiseMessage(null)}
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: '#666',
+                      border: 'none',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Hand raise count */}
+            {wsRaisedHands.length > 0 && (
           <div style={{
                 position: 'absolute',
                 top: '20px',
@@ -1145,7 +1396,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 gap: '8px',
                 color: '#856404'
               }}>
-                ✋ {Object.keys(raisedHands).length} hand{Object.keys(raisedHands).length > 1 ? 's' : ''} raised
+                ✋ {wsRaisedHands.length} hand{wsRaisedHands.length > 1 ? 's' : ''} raised
+              </div>
+            )}
+
+            {/* Debug status indicator */}
+            {process.env.NODE_ENV === 'development' && (
+              <div style={{
+                position: 'absolute',
+                bottom: '20px',
+                left: '20px',
+                backgroundColor: 'rgba(0,0,0,0.8)',
+                color: 'white',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                zIndex: 1000
+              }}>
+                <div>WS: {wsConnected ? '✅' : '❌'}</div>
+                <div>Socket: {socket ? '✅' : '❌'}</div>
+                <div>Hand: {wsMyHandRaised ? '✋' : '✊'}</div>
+                <div>Hands: {wsRaisedHands.length}</div>
               </div>
             )}
             
@@ -1279,16 +1551,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: '44px',
                   height: '44px',
               borderRadius: '50%',
-                  backgroundColor: (wsMyHandRaised || handRaised) ? '#ffc107' : '#f8f9fa',
+                  backgroundColor: wsMyHandRaised ? '#ffc107' : '#f8f9fa',
                   border: '1px solid #e9ecef',
               cursor: 'pointer',
                   fontSize: '18px',
-                  color: (wsMyHandRaised || handRaised) ? '#000' : '#666',
+                  color: wsMyHandRaised ? '#000' : '#666',
               display: 'flex',
               alignItems: 'center',
                   justifyContent: 'center'
             }}
-            title={`Hand ${(wsMyHandRaised || handRaised) ? 'raised' : 'lowered'} - Click to toggle`}
+            title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
           >
                 ✋
           </button>
@@ -1296,7 +1568,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 onClick={() => {
                   console.log('✋ Manual reset triggered');
                   setHandRaised(false);
-                  resetHandState();
                 }}
             style={{
                   width: '32px',
@@ -1316,6 +1587,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           >
                 ↻
           </button>
+          {process.env.NODE_ENV === 'development' && (
+            <button
+              onClick={() => {
+                console.log('🧪 Test hand raise event');
+                console.log('Current state:', {
+                  wsMyHandRaised,
+                  handRaised,
+                  wsRaisedHands: wsRaisedHands.length,
+                  socket: !!socket,
+                  wsConnected,
+                  participantId: currentParticipant?._id
+                });
+              }}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: '#17a2b8',
+                border: '1px solid #17a2b8',
+                cursor: 'pointer',
+                fontSize: '12px',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: '4px'
+              }}
+              title="Test hand raise (debug)"
+            >
+              🧪
+            </button>
+          )}
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 style={{
@@ -1480,40 +1783,98 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
-                      padding: '12px',
-                      backgroundColor: '#f8f9fa',
-                      borderRadius: '8px',
-                      marginBottom: '8px',
-                      border: '1px solid #e9ecef'
+                      padding: '12px 16px',
+                      backgroundColor: 'transparent',
+                      borderRadius: '0',
+                      marginBottom: '0',
+                      border: 'none',
+                      borderBottom: '1px solid #e9ecef'
                     }}>
                       <div style={{
-                        width: '36px',
-                        height: '36px',
+                        width: '40px',
+                        height: '40px',
                         borderRadius: '50%',
-                        backgroundColor: '#e9ecef',
+                        backgroundColor: '#ff9500',
                           display: 'flex',
                           alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '16px'
+                        fontSize: '16px',
+                        color: 'white',
+                        fontWeight: 'bold'
                       }}>
-                        {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+                        {participant.role === 'HOST' ? '←' : participant.displayName?.charAt(0)?.toUpperCase() || 'U'}
                           </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '2px', color: '#333' }}>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          fontWeight: '500', 
+                          marginBottom: '2px', 
+                          color: '#333',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
                           {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
+                          {participant.role === 'HOST' && (
+                            <span style={{ 
+                              fontSize: '12px', 
+                              color: '#666',
+                              fontWeight: '400'
+                            }}>
+                              (Host{participant._id === currentParticipant?._id ? ', me' : ''})
+                            </span>
+                          )}
                           </div>
                         <div style={{ fontSize: '12px', color: '#666' }}>
                           {participant.user?.email || participant.email || 'student@demo.com'}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '14px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
+                        {participant.hasHandRaised && (
+                          <span style={{ 
+                            fontSize: '16px', 
+                            color: '#ffc107',
+                            animation: 'pulse 1.5s infinite'
+                          }} title="Hand raised">
+                            ✋
+                          </span>
+                        )}
+                        <span style={{ 
+                          fontSize: '14px', 
+                          opacity: participant.micState === 'ON' ? 1 : 0.3,
+                          color: participant.micState === 'ON' ? '#28a745' : '#6c757d'
+                        }}>
                           {participant.micState === 'ON' ? '🎤' : '🔇'}
                         </span>
-                        <span style={{ fontSize: '14px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
+                        <span style={{ 
+                          fontSize: '14px', 
+                          opacity: participant.cameraState === 'ON' ? 1 : 0.3,
+                          color: participant.cameraState === 'ON' ? '#28a745' : '#6c757d'
+                        }}>
                           {participant.cameraState === 'ON' ? '📹' : '📷'}
                         </span>
                         {isHost && participant.role !== 'HOST' && (
+                          <>
+                            {participant.hasHandRaised && (
+                              <button
+                                onClick={() => handleHostLowerHand(participant._id)}
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '14px',
+                                  color: '#ffc107',
+                                  padding: '4px',
+                                  borderRadius: '4px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '2px'
+                                }}
+                                title="Lower hand"
+                              >
+                                ✋↓
+                              </button>
+                            )}
                           <button
                             onClick={() => handleKickParticipant(participant._id)}
                             style={{
@@ -1528,13 +1889,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           >
                             🗑️
                           </button>
-                        )}
-                        {participant.hasHandRaised && (
-                          <span style={{ fontSize: '14px', color: '#ffc107' }}>✋</span>
+                          </>
                         )}
                         </div>
                       </div>
                     ))}
+                  
+                  {/* Raised hand count display */}
+                  {wsRaisedHands.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '60px',
+                      left: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: '#fff3cd',
+                      border: '1px solid #ffeaa7',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      color: '#856404'
+                    }}>
+                      <span style={{ fontSize: '16px' }}>✋</span>
+                      <span>{wsRaisedHands.length}</span>
+                    </div>
+                  )}
                   </div>
                 )}
             {activeTab === 'chat' && (

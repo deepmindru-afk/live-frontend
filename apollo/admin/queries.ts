@@ -106,6 +106,9 @@ export const GET_MEETING_PARTICIPANTS = gql`
       role
       micState
       cameraState
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       joinedAt
       leftAt
       totalDurationSec

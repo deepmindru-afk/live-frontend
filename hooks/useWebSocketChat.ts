@@ -48,6 +48,7 @@ export const useWebSocketChat = ({
       meetingId, 
       token: token ? 'present' : 'missing', 
       tokenLength: token?.length || 0,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
       socket: !!socket,
       socketConnected: socket?.connected
     });
@@ -145,6 +146,13 @@ export const useWebSocketChat = ({
       // Now that authentication is complete, join the chat room
       console.log('📤 Joining chat room after successful authentication...');
       newSocket.emit('JOIN_CHAT_ROOM', { meetingId });
+      
+      // Also join the meeting room for hand raise events
+      console.log('📤 Joining meeting room for hand raise events...');
+      newSocket.emit('PARTICIPANT_JOIN_MEETING', { 
+        meetingId, 
+        participantId: data.participantId || 'unknown' 
+      });
     });
 
     newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
@@ -255,21 +263,66 @@ export const useWebSocketChat = ({
     }
   }, [socket, isConnected]);
 
+  const joinMeetingRoom = useCallback((meetingId: string, participantId: string) => {
+    try {
+      if (socket && isConnected) {
+        console.log('📤 Joining meeting room for hand raise events:', { meetingId, participantId });
+        socket.emit('PARTICIPANT_JOIN_MEETING', { meetingId, participantId });
+      } else {
+        console.error('❌ Cannot join meeting room: not connected to chat', {
+          socket: !!socket,
+          isConnected,
+          meetingId,
+          participantId
+        });
+        setError('Cannot join meeting room: WebSocket not connected');
+      }
+    } catch (error) {
+      console.error('❌ Error joining meeting room:', error);
+      setError(`Failed to join meeting room: ${(error as Error).message || 'Unknown error'}`);
+    }
+  }, [socket, isConnected]);
+
+  const joinHostMeetingRoom = useCallback((meetingId: string) => {
+    try {
+      if (socket && isConnected) {
+        console.log('📤 Host joining meeting room for hand raise events:', { meetingId });
+        socket.emit('HOST_JOIN_MEETING', { meetingId });
+      } else {
+        console.error('❌ Cannot join meeting room as host: not connected to chat', {
+          socket: !!socket,
+          isConnected,
+          meetingId
+        });
+        setError('Cannot join meeting room as host: WebSocket not connected');
+      }
+    } catch (error) {
+      console.error('❌ Error joining meeting room as host:', error);
+      setError(`Failed to join meeting room as host: ${(error as Error).message || 'Unknown error'}`);
+    }
+  }, [socket, isConnected]);
+
   // Connect on mount and when dependencies change
   useEffect(() => {
     console.log('🔌 useEffect triggered:', { 
       meetingId, 
       token: token ? 'present' : 'missing',
       tokenLength: token?.length || 0,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
       socket: !!socket,
       isConnected,
       willConnect: !!(meetingId && token)
     });
     
     if (meetingId && token) {
+      console.log('🔌 Connecting to WebSocket with token:', token.substring(0, 20) + '...');
       connect();
     } else {
-      console.log('🔌 Not connecting - missing requirements:', { meetingId: !!meetingId, token: !!token });
+      console.log('🔌 Not connecting - missing requirements:', { 
+        meetingId: !!meetingId, 
+        token: !!token,
+        tokenValue: token
+      });
     }
 
     return () => {
@@ -298,5 +351,7 @@ export const useWebSocketChat = ({
     ping,
     connect,
     disconnect,
+    joinMeetingRoom,
+    joinHostMeetingRoom,
   };
 };

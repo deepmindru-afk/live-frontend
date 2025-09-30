@@ -14,6 +14,9 @@ export const GET_PARTICIPANTS_BY_MEETING = gql`
       cameraState
       status
       socketId
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       totalDurationSec
       sessions {
         joinedAt
@@ -51,6 +54,9 @@ export const GET_PARTICIPANT_BY_ID = gql`
       cameraState
       status
       socketId
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       totalDurationSec
       sessions {
         joinedAt

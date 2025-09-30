@@ -32,6 +32,9 @@ export const LOAD_PARTICIPANTS_DATA = gql`
       micState
       cameraState
       socketId
+      hasHandRaised
+      handRaisedAt
+      handLoweredAt
       user {
         _id
         email
