@@ -68,11 +68,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingPaused, setRecordingPaused] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');
+  const [gridSize, setGridSize] = useState<'2x2' | '3x3' | '4x4'>('2x2');
+  const [isMobile, setIsMobile] = useState(false);
   const [handRaiseQueue, setHandRaiseQueue] = useState<any[]>([]);
   const [currentHandRaiseMessage, setCurrentHandRaiseMessage] = useState<string | null>(null);
   const [isAuth, setIsAuth] = useState(false);
@@ -320,6 +324,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
     initializeMeeting();
   }, [propMeetingId, userId, role]);
+
+  // Mobile detection and force speaker mode
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= 768;
+      const tablet = window.innerWidth <= 1024 && window.innerWidth > 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setViewMode('speaker');
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Update meeting data
   useEffect(() => {
@@ -656,6 +676,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleScreenShareToggle = async () => {
     setScreenSharing(!screenSharing);
     console.log('Screen share toggled:', !screenSharing);
+  };
+
+  const handleRecordingToggle = async () => {
+    if (!isRecording) {
+      setIsRecording(true);
+      setRecordingPaused(false);
+      console.log('Recording started');
+    } else {
+      setIsRecording(false);
+      setRecordingPaused(false);
+      console.log('Recording stopped');
+    }
+  };
+
+  const handleRecordingPause = async () => {
+    setRecordingPaused(!recordingPaused);
+    console.log('Recording paused/resumed:', !recordingPaused);
   };
 
   const handleRaiseHand = async () => {
@@ -1053,6 +1090,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             50% { transform: scale(1.1); }
             100% { transform: scale(1); }
           }
+
+          @keyframes speaking {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+          }
+
+          @keyframes recording {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+          }
         
         @media (max-width: 768px) {
           .mobile-hidden { display: none !important; }
@@ -1066,71 +1115,80 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         <div style={{
           display: 'flex',
           height: '100vh',
-        backgroundColor: '#ffffff',
-        color: '#333',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      position: 'relative'
-      }}>
+          backgroundColor: '#ffffff',
+          color: '#333333',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
       {/* Header */}
           <div style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
-          height: '64px',
+          height: isMobile ? '60px' : '70px',
           backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e9ecef',
+          borderBottom: '1px solid #e5e7eb',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-          padding: '0 24px',
+          padding: isMobile ? '0 16px' : '0 24px',
         zIndex: 1000,
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '16px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '6px',
-              backgroundColor: '#007bff',
+              width: isMobile ? '32px' : '40px',
+              height: isMobile ? '32px' : '40px',
+              borderRadius: '50%',
+              backgroundColor: '#6b7280',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
-              fontWeight: '600',
-              fontSize: '14px'
+              fontWeight: '700',
+              fontSize: isMobile ? '14px' : '18px'
             }}>
-              HRDe
-        </div>
+              N
+            </div>
           <div>
-              <div style={{ fontSize: '18px', fontWeight: '600', color: '#333' }}>
-              {meeting?.title || 'Meeting'}
-      </div>
-              <div style={{ fontSize: '14px', color: '#666' }}>
+              <div style={{ 
+                fontSize: isMobile ? '16px' : '20px', 
+                fontWeight: '600', 
+                color: '#111827',
+                lineHeight: 1.2
+              }}>
+              {isMobile ? (meeting?.title || 'Demo Meeting').substring(0, 20) + '...' : (meeting?.title || 'Demo Meeting')}
+            </div>
+              <div style={{ 
+                fontSize: isMobile ? '12px' : '14px', 
+                color: '#6b7280' 
+              }}>
                 ID: {meeting?.inviteCode || actualMeetingId}
             </div>
           </div>
         </div>
 
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: isMobile ? '8px' : '12px', alignItems: 'center' }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: meetingStatus === 'LIVE' ? '#d4edda' : '#f8d7da',
+              gap: isMobile ? '6px' : '8px',
+              padding: isMobile ? '4px 8px' : '6px 12px',
+              backgroundColor: '#f3f4f6',
               borderRadius: '20px',
-              fontSize: '14px',
+              fontSize: isMobile ? '12px' : '14px',
               fontWeight: '500',
-              color: meetingStatus === 'LIVE' ? '#155724' : '#721c24'
+              color: '#374151'
             }}>
               <div style={{
-                width: '8px',
-                height: '8px',
+                width: isMobile ? '6px' : '8px',
+                height: isMobile ? '6px' : '8px',
                 borderRadius: '50%',
-                backgroundColor: meetingStatus === 'LIVE' ? '#28a745' : '#dc3545'
+                backgroundColor: '#6b7280'
               }}></div>
-              {meetingStatus === 'LIVE' ? 'Live' : 'Stopped'}
+              Live
             </div>
           
           {isHost && (
@@ -1143,17 +1201,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   }
                 }}
               style={{
-                  backgroundColor: meetingStatus === 'LIVE' ? '#dc3545' : '#28a745',
+                  backgroundColor: '#10b981',
                 color: 'white',
                 border: 'none',
                   borderRadius: '6px',
-                padding: '8px 16px',
-                fontSize: '14px',
+                padding: isMobile ? '6px 12px' : '8px 16px',
+                fontSize: isMobile ? '12px' : '14px',
                   fontWeight: '500',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
           }}
         >
-                {meetingStatus === 'LIVE' ? 'End' : 'Start'}
+                {isMobile ? 'Start' : 'Start Meeting'}
             </button>
           )}
       </div>
@@ -1162,487 +1221,563 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         {/* Main Content */}
       <div style={{
         flex: 1,
-          paddingTop: '64px',
+          paddingTop: isMobile ? '60px' : '70px',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          backgroundColor: '#ffffff'
       }}>
-          {/* Hand raise queue display */}
-          {wsRaisedHands.length > 0 && (
+          {/* Participant Thumbnails Row - Only show in Main view */}
+          {viewMode === 'speaker' && (
             <div style={{
+              height: isMobile ? '80px' : '100px',
+              backgroundColor: '#ffffff',
+              borderBottom: '1px solid #e5e7eb',
               display: 'flex',
               alignItems: 'center',
-              padding: '8px 24px',
-              gap: '8px',
-              backgroundColor: '#f8f9fa',
-              borderBottom: '1px solid #e9ecef',
+              padding: isMobile ? '0 16px' : '0 24px',
+              gap: isMobile ? '8px' : '12px',
               overflowX: 'auto'
             }}>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#495057', marginRight: '8px' }}>
-                ✋ Queue:
-              </span>
-              {wsRaisedHands.map((hand, index) => (
-                <div key={hand.userId} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  backgroundColor: index === 0 ? '#ffc107' : '#e9ecef',
-                  color: index === 0 ? '#000' : '#495057',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  <span>{index + 1}.</span>
-                  <span>{hand.displayName}</span>
-                  {index === 0 && <span>👑</span>}
+              {participantsWithHandRaise.map((participant) => (
+                <div
+                  key={participant._id}
+                  onClick={() => setSelectedParticipant(participant)}
+                  style={{
+                    minWidth: isMobile ? '60px' : '80px',
+                    height: isMobile ? '60px' : '80px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px',
+                    border: participant.role === 'HOST' ? '2px solid #10b981' : 
+                            participant.hasHandRaised ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {/* Hand raise indicator */}
+                  {participant.hasHandRaised && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      right: '-8px',
+                      backgroundColor: '#f59e0b',
+                      color: '#000',
+                      fontSize: '12px',
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid white',
+                      zIndex: 10,
+                      fontWeight: 'bold'
+                    }}>
+                      1
+                    </div>
+                  )}
+                  
+                  {participant.role === 'HOST' && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      left: '4px',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      fontSize: '8px',
+                      fontWeight: '600',
+                      padding: '2px 4px',
+                      borderRadius: '4px'
+                    }}>
+                      HOST
+                    </div>
+                  )}
+                  
+                  <div style={{ fontSize: isMobile ? '18px' : '24px', marginBottom: '4px' }}>
+                    {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+                  </div>
+                  <div style={{ 
+                    fontSize: isMobile ? '8px' : '10px', 
+                    fontWeight: '500', 
+                    textAlign: 'center',
+                    lineHeight: 1.2
+                  }}>
+                    {isMobile ? 
+                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 6) + '...' :
+                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
+                    }
+                  </div>
+                  <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
+                    <span style={{ fontSize: isMobile ? '6px' : '8px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
+                      {participant.micState === 'ON' ? '🎤' : '🔇'}
+                    </span>
+                    <span style={{ fontSize: isMobile ? '6px' : '8px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
+                      {participant.cameraState === 'ON' ? '📹' : '📷'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Thumbnails Row */}
-    <div style={{
-            height: '100px',
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid #e9ecef',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 24px',
-            gap: '12px',
-            overflowX: 'auto'
-          }}>
-            {participantsWithHandRaise.map((participant) => (
-              <div
-                key={participant._id}
-                onClick={() => setSelectedParticipant(participant)}
-                style={{
-                  minWidth: '70px',
-                  height: '70px',
-                  backgroundColor: selectedParticipant?._id === participant._id ? '#e3f2fd' : '#f8f9fa',
-          borderRadius: '8px',
-                  border: participant.role === 'HOST' ? '2px solid #007bff' : '1px solid #e9ecef',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {/* Hand raise indicator */}
-                {participant.hasHandRaised && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    backgroundColor: '#ffc107',
-                    color: '#000',
-                    fontSize: '16px',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: '2px solid white',
-                    zIndex: 10,
-                    animation: 'pulse 1.5s infinite'
-                  }}>
-                    ✋
-                  </div>
-                )}
-                
-                {participant.role === 'HOST' && (
-        <div style={{
-              position: 'absolute',
-                    top: '-6px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: '#007bff',
-              color: 'white',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    padding: '2px 6px',
-                    borderRadius: '4px'
-                  }}>
-                    HOST
-        </div>
-          )}
-                {participant.hasHandRaised && (
-            <div style={{
-              position: 'absolute',
-                    top: '-6px',
-                    right: '-6px',
-              backgroundColor: '#ffc107',
-              color: '#000',
-                    fontSize: '12px',
-                    borderRadius: '50%',
-                    width: '18px',
-                    height: '18px',
-        display: 'flex',
-            alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 'bold'
-                  }}>
-                    ✋
-          </div>
-                )}
-                <div style={{ fontSize: '20px', marginBottom: '4px' }}>
-                  {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
-          </div>
-                <div style={{ fontSize: '10px', fontWeight: '500', textAlign: 'center' }}>
-                  {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
-                  </div>
-                <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
-                  <span style={{ fontSize: '8px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
-                    {participant.micState === 'ON' ? '🎤' : '🔇'}
-                  </span>
-                  <span style={{ fontSize: '8px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
-                    {participant.cameraState === 'ON' ? '📹' : '📷'}
-                  </span>
-          </div>
-              </div>
-            ))}
-        </div>
-
-          {/* Main Stage */}
-        <div style={{
+          {/* Main Video Area */}
+          <div style={{
             flex: 1,
-            backgroundColor: '#f8f9fa',
-          display: 'flex',
+            backgroundColor: '#f3f4f6',
+            display: 'flex',
             flexDirection: 'column',
-          alignItems: 'center',
+            alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            padding: '40px'
+            padding: isMobile ? '20px' : '40px'
           }}>
-            {/* Hand raise notification banner for host */}
-            {currentHandRaiseMessage && isHost && (
+            {/* View Mode Controls - Desktop Only */}
+            {!isMobile && (
               <div style={{
                 position: 'absolute',
                 top: '20px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                backgroundColor: '#f8f9fa',
-                color: '#333',
-                padding: '12px 20px',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: '500',
-                zIndex: 1000,
-                animation: 'slideDown 0.3s ease-out',
+                right: '20px',
+                zIndex: 100,
                 display: 'flex',
-                alignItems: 'center',
                 gap: '8px',
-                border: '1px solid #e9ecef',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                minWidth: '300px',
-                justifyContent: 'space-between'
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '8px',
+                borderRadius: '8px',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid #e5e7eb'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px' }}>✋</span>
-                  <span>{currentHandRaiseMessage}</span>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setViewMode('speaker')}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: viewMode === 'speaker' ? '#3b82f6' : 'transparent',
+                    color: viewMode === 'speaker' ? '#ffffff' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Main
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: viewMode === 'grid' ? '#3b82f6' : 'transparent',
+                    color: viewMode === 'grid' ? '#ffffff' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Grid
+                </button>
+              </div>
+            )}
+
+            {/* Grid Size Controls - Desktop Only */}
+            {!isMobile && viewMode === 'grid' && (
+              <div style={{
+                position: 'absolute',
+                top: '60px',
+                right: '20px',
+                zIndex: 100,
+                display: 'flex',
+                gap: '4px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '8px',
+                borderRadius: '8px',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid #e5e7eb'
+              }}>
+                {['2x2', '3x3', '4x4'].map((size) => (
                   <button
-                    onClick={() => setCurrentHandRaiseMessage(null)}
+                    key={size}
+                    onClick={() => setGridSize(size as any)}
                     style={{
-                      backgroundColor: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      padding: '4px 12px',
+                      padding: '6px 10px',
+                      backgroundColor: gridSize === size ? '#3b82f6' : 'transparent',
+                      color: gridSize === size ? '#ffffff' : '#374151',
+                      border: '1px solid #d1d5db',
                       borderRadius: '4px',
-                      fontSize: '12px',
                       cursor: 'pointer',
-                      fontWeight: '500'
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    View
+                    {size}
                   </button>
-                  <button
-                    onClick={() => setCurrentHandRaiseMessage(null)}
-                    style={{
-                      backgroundColor: 'transparent',
-                      color: '#666',
-                      border: 'none',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      fontSize: '16px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
+                ))}
               </div>
             )}
 
             {/* Hand raise count */}
             {wsRaisedHands.length > 0 && (
-          <div style={{
+              <div style={{
                 position: 'absolute',
                 top: '20px',
-                right: '20px',
-                backgroundColor: '#fff3cd',
-                border: '1px solid #ffeaa7',
+                left: '20px',
+                backgroundColor: '#fef3c7',
+                border: '2px solid #f59e0b',
                 borderRadius: '8px',
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: '500',
-            display: 'flex',
+                padding: '12px 20px',
+                fontSize: '16px',
+                fontWeight: '600',
+                display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                color: '#856404'
+                color: '#92400e',
+                zIndex: 1000,
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                animation: 'pulse 2s infinite'
               }}>
                 ✋ {wsRaisedHands.length} hand{wsRaisedHands.length > 1 ? 's' : ''} raised
               </div>
             )}
 
-            {/* Debug status indicator */}
-            {process.env.NODE_ENV === 'development' && (
+            {/* Main Video Display */}
+            {viewMode === 'speaker' ? (
               <div style={{
-                position: 'absolute',
-                bottom: '20px',
-                left: '20px',
-                backgroundColor: 'rgba(0,0,0,0.8)',
-                color: 'white',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontFamily: 'monospace',
-                zIndex: 1000
+                width: '100%',
+                height: '100%',
+                borderRadius: '16px',
+                backgroundColor: '#6b7280',
+                border: '2px solid #d1d5db',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '120px',
+                color: '#9ca3af',
+                position: 'relative',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}>
-                <div>WS: {wsConnected ? '✅' : '❌'}</div>
-                <div>Socket: {socket ? '✅' : '❌'}</div>
-                <div>Hand: {wsMyHandRaised ? '✋' : '✊'}</div>
-                <div>Hands: {wsRaisedHands.length}</div>
-              </div>
-            )}
-            
-            <div style={{
-              width: '280px',
-              height: '280px',
-              borderRadius: '16px',
-              backgroundColor: '#ffffff',
-              border: '2px solid #e9ecef',
+                {/* Host Video Label */}
+                <div style={{
+                  position: 'absolute',
+                  top: '20px',
+                  left: '20px',
+                  backgroundColor: '#000000',
+                  color: 'white',
+                  fontSize: '14px',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontWeight: '500',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-              fontSize: '60px',
-              color: '#666',
-              position: 'relative',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}>
-              {selectedParticipant ? (
-                selectedParticipant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'
-              ) : (
-                '👨‍🏫'
-              )}
-                      <div style={{
-                    position: 'absolute',
-                bottom: '12px',
-                right: '12px',
-                backgroundColor: '#28a745',
-                    color: 'white',
-                fontSize: '14px',
-                borderRadius: '6px',
-                padding: '4px 8px',
-                fontWeight: '500'
-              }}>
-                📹
+                  gap: '6px'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981'
+                  }}></div>
+                  Host Video
                 </div>
-            </div>
-            
-                    <div style={{
-              marginTop: '24px',
-                      textAlign: 'center'
-                    }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
+                
                 {selectedParticipant ? (
-                  selectedParticipant.displayName || 'Selected Participant'
+                  selectedParticipant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'
                 ) : (
-                  'Host'
+                  '👨‍🏫'
                 )}
-              </h3>
-              <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-                {selectedParticipant ? (
-                  selectedParticipant.user?.email || selectedParticipant.email || 'participant@demo.com'
-                ) : (
-                  'host@demo.com'
-                )}
-              </p>
+                
+                <div style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  right: '20px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  fontSize: '18px',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontWeight: '500'
+                }}>
+                  📹
+                </div>
               </div>
-        </div>
+            ) : (
+              /* Grid View - 2x2, 3x3, 4x4 */
+              <div style={{
+                flex: 1,
+                display: 'grid',
+                gridTemplateColumns: gridSize === '2x2' ? 'repeat(2, 1fr)'
+                  : gridSize === '3x3' ? 'repeat(3, 1fr)'
+                  : 'repeat(4, 1fr)',
+                gridTemplateRows: gridSize === '2x2' ? 'repeat(2, 1fr)'
+                  : gridSize === '3x3' ? 'repeat(3, 1fr)'
+                  : 'repeat(4, 1fr)',
+                gap: '12px',
+                width: '100%',
+                height: '100%'
+              }}>
+                {participantsWithHandRaise.map((participant, index) => (
+                  <div
+                    key={participant._id}
+                    style={{
+                      backgroundColor: '#6b7280',
+                      borderRadius: '12px',
+                      border: participant.role === 'HOST' ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {/* Speaking indicator */}
+                    {participant.micState === 'ON' && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '8px',
+                        left: '8px',
+                        width: '12px',
+                        height: '12px',
+                        backgroundColor: '#22c55e',
+                        borderRadius: '50%',
+                        animation: 'pulse 1s infinite'
+                      }}></div>
+                    )}
+
+                    {/* Hand raise indicator */}
+                    {participant.hasHandRaised && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        backgroundColor: '#f59e0b',
+                        color: '#000',
+                        fontSize: '12px',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid white',
+                        zIndex: 10,
+                        fontWeight: 'bold'
+                      }}>
+                        1
+                      </div>
+                    )}
+                    
+                    {/* Host indicator */}
+                    {participant.role === 'HOST' && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '8px',
+                        left: '8px',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        padding: '2px 6px',
+                        borderRadius: '4px'
+                      }}>
+                        HOST
+                      </div>
+                    )}
+
+                    {/* Participant avatar */}
+                    <div style={{
+                      fontSize: '60px',
+                      marginBottom: '8px',
+                      color: '#9ca3af'
+                    }}>
+                      {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+                    </div>
+
+                    {/* Participant name */}
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      color: '#ffffff',
+                      textAlign: 'center',
+                      marginBottom: '4px',
+                      padding: '0 8px'
+                    }}>
+                      {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
+                    </div>
+
+                    {/* Mic/Camera status */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '4px',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        color: 'white'
+                      }}>
+                        {participant.micState === 'ON' ? '🎤' : '🔇'}
+                      </div>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        color: 'white'
+                      }}>
+                        {participant.cameraState === 'ON' ? '📹' : '📷'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Bottom Control Bar */}
         <div style={{
             height: '80px',
             backgroundColor: '#ffffff',
-            borderTop: '1px solid #e9ecef',
+            borderTop: '1px solid #e5e7eb',
           display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             padding: '0 24px',
             boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#333' }}>
-                {participants.length} participants
-              </div>
-          <button
-              onClick={handleMicToggle}
-            style={{
-                  width: '44px',
-                  height: '44px',
-              borderRadius: '50%',
-                backgroundColor: micEnabled ? '#28a745' : '#dc3545',
-                  border: 'none',
-              cursor: 'pointer',
-                  fontSize: '18px',
-                  color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-                justifyContent: 'center'
-            }}
-          >
-                {micEnabled ? '🎤' : '🔇'}
-          </button>
-          <button
-              onClick={handleCameraToggle}
-            style={{
-                  width: '44px',
-                  height: '44px',
-              borderRadius: '50%',
-                backgroundColor: cameraEnabled ? '#28a745' : '#dc3545',
-                  border: 'none',
-              cursor: 'pointer',
-                  fontSize: '18px',
-                  color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-                justifyContent: 'center'
-            }}
-          >
-                {cameraEnabled ? '📹' : '📷'}
-          </button>
-          <button
-              onClick={handleScreenShareToggle}
-            style={{
-                  width: '44px',
-                  height: '44px',
-              borderRadius: '50%',
-                  backgroundColor: screenSharing ? '#007bff' : '#f8f9fa',
-                  border: '1px solid #e9ecef',
-              cursor: 'pointer',
-                  fontSize: '18px',
-                  color: screenSharing ? 'white' : '#666',
-              display: 'flex',
-              alignItems: 'center',
-                justifyContent: 'center'
-            }}
-          >
-              📺
-          </button>
-          <button
-                onClick={handleRaiseHand}
-            style={{
-                  width: '44px',
-                  height: '44px',
-              borderRadius: '50%',
-                  backgroundColor: wsMyHandRaised ? '#ffc107' : '#f8f9fa',
-                  border: '1px solid #e9ecef',
-              cursor: 'pointer',
-                  fontSize: '18px',
-                  color: wsMyHandRaised ? '#000' : '#666',
-              display: 'flex',
-              alignItems: 'center',
-                  justifyContent: 'center'
-            }}
-            title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
-          >
-                ✋
-          </button>
-          <button
-                onClick={() => {
-                  console.log('✋ Manual reset triggered');
-                  setHandRaised(false);
-                }}
-            style={{
-                  width: '32px',
-                  height: '32px',
-              borderRadius: '50%',
-                  backgroundColor: '#dc3545',
-                  border: '1px solid #dc3545',
-              cursor: 'pointer',
-                  fontSize: '12px',
-                  color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: '4px'
-            }}
-            title="Reset hand state"
-          >
-                ↻
-          </button>
-          {process.env.NODE_ENV === 'development' && (
-            <button
-              onClick={() => {
-                console.log('🧪 Test hand raise event');
-                console.log('Current state:', {
-                  wsMyHandRaised,
-                  handRaised,
-                  wsRaisedHands: wsRaisedHands.length,
-                  socket: !!socket,
-                  wsConnected,
-                  participantId: currentParticipant?._id
-                });
-              }}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: '#17a2b8',
-                border: '1px solid #17a2b8',
-                cursor: 'pointer',
-                fontSize: '12px',
-                color: 'white',
+              {/* Participant Count */}
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '8px',
+                backgroundColor: '#10b981',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginLeft: '4px'
-              }}
-              title="Test hand raise (debug)"
-            >
-              🧪
-            </button>
-          )}
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '16px'
+              }}>
+                {participants.length}
+              </div>
+              
+              {/* Mic Control */}
+              <button
+                onClick={handleMicToggle}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '8px',
+                  backgroundColor: micEnabled ? '#22c55e' : '#ef4444',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+              >
+                {micEnabled ? '🎤' : '🔇'}
+              </button>
+
+              {/* Camera Control */}
+              <button
+                onClick={handleCameraToggle}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '8px',
+                  backgroundColor: cameraEnabled ? '#22c55e' : '#ef4444',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
+              >
+                {cameraEnabled ? '📹' : '📷'}
+              </button>
+
+              {/* Screen Share Control */}
+              <button
+                onClick={handleScreenShareToggle}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '8px',
+                  backgroundColor: screenSharing ? '#3b82f6' : '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: screenSharing ? 'white' : '#6b7280',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                title={screenSharing ? 'Stop sharing' : 'Share screen'}
+              >
+                📺
+              </button>
+
+              {/* Chat Control */}
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 style={{
                   width: '44px',
                   height: '44px',
-                  borderRadius: '50%',
-                  backgroundColor: sidebarOpen ? '#007bff' : '#f8f9fa',
-                  border: '1px solid #e9ecef',
+                  borderRadius: '8px',
+                  backgroundColor: sidebarOpen ? '#3b82f6' : '#f3f4f6',
+                  border: '1px solid #d1d5db',
                   cursor: 'pointer',
                   fontSize: '18px',
-                  color: sidebarOpen ? 'white' : '#666',
+                  color: sidebarOpen ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  position: 'relative'
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 }}
+                title="Open/Close chat panel"
               >
-                👥
+                💬
                 {unreadMessageCount > 0 && (
                   <span style={{
                     position: 'absolute',
                     top: '-4px',
                     right: '-4px',
-                    backgroundColor: '#dc3545',
+                    backgroundColor: '#ef4444',
                     color: 'white',
                     borderRadius: '50%',
                     width: '16px',
@@ -1651,28 +1786,61 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     fontWeight: '600',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    border: '2px solid #ffffff'
                   }}>
                     {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
                   </span>
                 )}
               </button>
-                </div>
-            <button
-              onClick={handleLeaveMeeting}
-              style={{
-                backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '12px 24px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Leave
-          </button>
+
+              {/* Hand Raise Control */}
+              <button
+                onClick={handleRaiseHand}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '8px',
+                  backgroundColor: wsMyHandRaised ? '#f59e0b' : '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: wsMyHandRaised ? '#000' : '#6b7280',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  animation: wsMyHandRaised ? 'pulse 1.5s infinite' : 'none'
+                }}
+                title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
+              >
+                ✋
+              </button>
+
+              {/* Leave Button */}
+              <button
+                onClick={handleLeaveMeeting}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '8px',
+                  backgroundColor: '#ef4444',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+                title="Leave meeting"
+              >
+                📞
+              </button>
+            </div>
         </div>
       </div>
 
@@ -1681,11 +1849,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       <div style={{
           position: 'fixed',
           right: 0,
-            top: '164px',
-            width: '360px',
-            height: 'calc(100vh - 244px)',
+            top: '70px',
+            width: '400px',
+            height: 'calc(100vh - 150px)',
             backgroundColor: '#ffffff',
-            borderLeft: '1px solid #e9ecef',
+            borderLeft: '1px solid #e5e7eb',
             zIndex: 999,
         display: 'flex',
             flexDirection: 'column',
@@ -1693,24 +1861,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }}>
         <div style={{
             padding: '20px',
-              borderBottom: '1px solid #e9ecef',
+              borderBottom: '1px solid #e5e7eb',
           display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
         }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#333' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111827' }}>
                 Participants & Chat
               </h3>
           <button
               onClick={() => setSidebarOpen(false)}
             style={{
                   backgroundColor: 'transparent',
-                  color: '#666',
+                  color: '#6b7280',
               border: 'none',
                   fontSize: '20px',
               cursor: 'pointer',
                   padding: '4px',
-                  borderRadius: '4px'
+                  borderRadius: '4px',
+                  transition: 'all 0.2s ease'
             }}
           >
               ×
@@ -1719,7 +1888,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
                       <div style={{
                         display: 'flex',
-              borderBottom: '1px solid #e9ecef'
+              borderBottom: '1px solid #e5e7eb'
           }}>
           <button
               onClick={() => setActiveTab('participants')}
@@ -1727,15 +1896,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 flex: 1,
                   padding: '16px',
               border: 'none',
-                backgroundColor: activeTab === 'participants' ? '#007bff' : 'transparent',
-                  color: activeTab === 'participants' ? 'white' : '#666',
+                backgroundColor: activeTab === 'participants' ? '#3b82f6' : 'transparent',
+                  color: activeTab === 'participants' ? 'white' : '#6b7280',
                     cursor: 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
-                  borderBottom: activeTab === 'participants' ? '2px solid #007bff' : '2px solid transparent'
+                  borderBottom: activeTab === 'participants' ? '2px solid #3b82f6' : '2px solid transparent',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                Participants ({participants.length})
+                Active Students ({participants.length})
             </button>
               <button
                 onClick={() => setActiveTab('chat')}
@@ -1743,13 +1913,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   flex: 1,
                   padding: '16px',
                   border: 'none',
-                  backgroundColor: activeTab === 'chat' ? '#007bff' : 'transparent',
-                  color: activeTab === 'chat' ? 'white' : '#666',
+                  backgroundColor: activeTab === 'chat' ? '#3b82f6' : 'transparent',
+                  color: activeTab === 'chat' ? 'white' : '#6b7280',
                   cursor: 'pointer',
                   fontSize: '14px',
                   fontWeight: '500',
-                  borderBottom: activeTab === 'chat' ? '2px solid #007bff' : '2px solid transparent',
-                  position: 'relative'
+                  borderBottom: activeTab === 'chat' ? '2px solid #3b82f6' : '2px solid transparent',
+                  position: 'relative',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 Chat
@@ -1758,7 +1929,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     position: 'absolute',
                     top: '8px',
                     right: '8px',
-                    backgroundColor: '#dc3545',
+                    backgroundColor: '#ef4444',
                     color: 'white',
                     borderRadius: '50%',
                     width: '18px',
@@ -1785,31 +1956,48 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       gap: '12px',
                       padding: '12px 16px',
                       backgroundColor: 'transparent',
-                      borderRadius: '0',
-                      marginBottom: '0',
+                      borderRadius: '8px',
+                      marginBottom: '4px',
                       border: 'none',
-                      borderBottom: '1px solid #e9ecef'
+                      borderBottom: '1px solid #e5e7eb',
+                      transition: 'all 0.2s ease'
                     }}>
                       <div style={{
                         width: '40px',
                         height: '40px',
                         borderRadius: '50%',
-                        backgroundColor: '#ff9500',
+                        backgroundColor: participant.role === 'HOST' ? '#3b82f6' : '#f59e0b',
                           display: 'flex',
                           alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '16px',
                         color: 'white',
-                        fontWeight: 'bold'
+                        fontWeight: 'bold',
+                        position: 'relative'
                       }}>
-                        {participant.role === 'HOST' ? '←' : participant.displayName?.charAt(0)?.toUpperCase() || 'U'}
+                        {participant.role === 'HOST' ? 'H' : participant.displayName?.charAt(0)?.toUpperCase() || 'S'}
+                        
+                        {/* Speaking indicator */}
+                        {participant.micState === 'ON' && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '-2px',
+                            right: '-2px',
+                            width: '12px',
+                            height: '12px',
+                            backgroundColor: '#22c55e',
+                            borderRadius: '50%',
+                            border: '2px solid #ffffff',
+                            animation: 'pulse 1s infinite'
+                          }}></div>
+                        )}
                           </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ 
                           fontSize: '14px', 
                           fontWeight: '500', 
                           marginBottom: '2px', 
-                          color: '#333',
+                          color: '#111827',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '4px'
@@ -1817,15 +2005,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
                           {participant.role === 'HOST' && (
                             <span style={{ 
-                              fontSize: '12px', 
-                              color: '#666',
-                              fontWeight: '400'
+                              fontSize: '10px', 
+                              color: '#3b82f6',
+                              fontWeight: '600',
+                              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
                             }}>
-                              (Host{participant._id === currentParticipant?._id ? ', me' : ''})
+                              HOST
                             </span>
                           )}
                           </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
                           {participant.user?.email || participant.email || 'student@demo.com'}
                         </div>
                       </div>
@@ -1833,26 +2024,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         {participant.hasHandRaised && (
                           <span style={{ 
                             fontSize: '16px', 
-                            color: '#ffc107',
+                            color: '#f59e0b',
                             animation: 'pulse 1.5s infinite'
                           }} title="Hand raised">
                             ✋
                           </span>
                         )}
-                        <span style={{ 
-                          fontSize: '14px', 
-                          opacity: participant.micState === 'ON' ? 1 : 0.3,
-                          color: participant.micState === 'ON' ? '#28a745' : '#6c757d'
+                        <div style={{ 
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          color: 'white'
                         }}>
                           {participant.micState === 'ON' ? '🎤' : '🔇'}
-                        </span>
-                        <span style={{ 
-                          fontSize: '14px', 
-                          opacity: participant.cameraState === 'ON' ? 1 : 0.3,
-                          color: participant.cameraState === 'ON' ? '#28a745' : '#6c757d'
+                        </div>
+                        <div style={{ 
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          color: 'white'
                         }}>
                           {participant.cameraState === 'ON' ? '📹' : '📷'}
-                        </span>
+                        </div>
                         {isHost && participant.role !== 'HOST' && (
                           <>
                             {participant.hasHandRaised && (
@@ -1860,15 +2063,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                                 onClick={() => handleHostLowerHand(participant._id)}
                                 style={{
                                   backgroundColor: 'transparent',
-                                  border: 'none',
+                                  border: '1px solid #f59e0b',
                                   cursor: 'pointer',
-                                  fontSize: '14px',
-                                  color: '#ffc107',
-                                  padding: '4px',
+                                  fontSize: '12px',
+                                  color: '#f59e0b',
+                                  padding: '4px 8px',
                                   borderRadius: '4px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '2px'
+                                  gap: '2px',
+                                  transition: 'all 0.2s ease'
                                 }}
                                 title="Lower hand"
                               >
@@ -1879,13 +2083,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                             onClick={() => handleKickParticipant(participant._id)}
                             style={{
                               backgroundColor: 'transparent',
-                              border: 'none',
+                              border: '1px solid #ef4444',
                               cursor: 'pointer',
-                              fontSize: '14px',
-                              color: '#dc3545',
-                              padding: '4px',
-                              borderRadius: '4px'
+                              fontSize: '12px',
+                              color: '#ef4444',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              transition: 'all 0.2s ease'
                             }}
+                            title="Remove participant"
                           >
                             🗑️
                           </button>
@@ -1894,28 +2100,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         </div>
                       </div>
                     ))}
-                  
-                  {/* Raised hand count display */}
-                  {wsRaisedHands.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      bottom: '60px',
-                      left: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      backgroundColor: '#fff3cd',
-                      border: '1px solid #ffeaa7',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      color: '#856404'
-                    }}>
-                      <span style={{ fontSize: '16px' }}>✋</span>
-                      <span>{wsRaisedHands.length}</span>
-                    </div>
-                  )}
                   </div>
                 )}
             {activeTab === 'chat' && (
