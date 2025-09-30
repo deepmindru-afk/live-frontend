@@ -178,6 +178,34 @@ export const useWebSocketHandRaise = ({
       setMyHandRaised(!!myHand);
     };
 
+    const handleHandLoweredByHost = (data: HandRaiseInfo & { hostId: string; hostDisplayName: string; reason?: string }) => {
+      console.log('✋ Hand lowered by host event received:', data);
+      setIsLoading(false);
+      
+      setRaisedHands(prev => {
+        const newHands = prev.filter(hand => hand.userId !== data.userId);
+        return newHands;
+      });
+      
+      // Update my hand status if it's my hand
+      if (data.userId === userId) {
+        setMyHandRaised(false);
+      }
+      
+      onHandLowered?.(data);
+    };
+
+    const handleAllHandsLowered = (data: { hostId: string; hostDisplayName: string; reason?: string; loweredCount: number; loweredHands: HandRaiseInfo[] }) => {
+      console.log('✋ All hands lowered event received:', data);
+      setIsLoading(false);
+      
+      // Clear all raised hands
+      setRaisedHands([]);
+      setMyHandRaised(false);
+      
+      onHandLowered?.(data);
+    };
+
     const handleError = (error: { message: string }) => {
       console.error('✋ Hand raise error:', error);
       setIsLoading(false);
@@ -188,6 +216,8 @@ export const useWebSocketHandRaise = ({
     console.log('✋ Registering WebSocket event listeners');
     socket.on('HAND_RAISED', handleHandRaised);
     socket.on('HAND_LOWERED', handleHandLowered);
+    socket.on('HAND_LOWERED_BY_HOST', handleHandLoweredByHost);
+    socket.on('ALL_HANDS_LOWERED', handleAllHandsLowered);
     socket.on('HAND_AUTO_LOWERED', handleHandAutoLowered);
     socket.on('RAISED_HANDS_LIST', handleRaisedHandsList);
     socket.on('ERROR', handleError);
