@@ -18,7 +18,6 @@ import {
   RAISE_HAND,
   LOWER_HAND,
   TRANSFER_HOST,
-  TRANSFER_HOST_AND_LEAVE,
   REMOVE_PARTICIPANT,
 } from '../apollo/livestream/mutations';
 import ParticipantView from './ParticipantView';
@@ -161,13 +160,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       socket: !!socket,
       isConnected: wsConnected,
       token: currentUser?.token ? 'present' : 'missing',
+      tokenLength: currentUser?.token?.length || 0,
       currentUser: currentUser ? 'present' : 'missing',
-      meetingId: actualMeetingId
+      meetingId: actualMeetingId,
+      actualMeetingIdType: typeof actualMeetingId
     });
   }, [socket, wsConnected, currentUser, actualMeetingId]);
 
   // Hand raise functionality
-  const { raisedHands: wsRaisedHands, myHandRaised: wsMyHandRaised, raiseHand: wsRaiseHand, lowerHand: wsLowerHand } = useHandRaise({
+  const { raisedHands: wsRaisedHands, myHandRaised: wsMyHandRaised, raiseHand: wsRaiseHand, lowerHand: wsLowerHand, resetHandState } = useHandRaise({
     socket,
     isConnected: wsConnected,
     meetingId: actualMeetingId,
@@ -222,7 +223,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         if (authStatus) {
           const user = await getCurrentUser();
-            setCurrentUser(user);
+          // Add token to user object for WebSocket authentication
+          const token = localStorage.getItem('jwt') || localStorage.getItem('token') || '';
+          console.log('🔐 Token debug:', { 
+            jwt: localStorage.getItem('jwt'),
+            token: localStorage.getItem('token'),
+            authToken: localStorage.getItem('authToken'),
+            allKeys: Object.keys(localStorage),
+            tokenValue: token,
+            tokenLength: token?.length || 0
+          });
+          
+          const userWithToken = {
+            ...user,
+            token
+          };
+          console.log('🔐 User with token:', { user: userWithToken, token: token ? 'present' : 'missing' });
+          setCurrentUser(userWithToken);
           setActualUserId(user?.id || userId);
           } else {
           const mockUser = {
@@ -594,12 +611,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               return;
             }
           
-      if (wsMyHandRaised) {
-        // Use WebSocket-based hand lower
+      console.log('✋ Hand raise toggle:', { 
+        wsMyHandRaised, 
+        localHandRaised: handRaised,
+        participantId: currentParticipant._id 
+      });
+      
+      // If there's a state mismatch, reset both states
+      if (wsMyHandRaised !== handRaised) {
+        console.log('✋ State mismatch detected, resetting...');
+        setHandRaised(wsMyHandRaised);
+        resetHandState();
+        return;
+      }
+      
+      if (wsMyHandRaised || handRaised) {
+        // Lower hand
+        console.log('✋ Lowering hand...');
         wsLowerHand('Lowered by user');
         setHandRaised(false);
       } else {
-        // Use WebSocket-based hand raise
+        // Raise hand
+        console.log('✋ Raising hand...');
         wsRaiseHand('Student needs help');
         setHandRaised(true);
       }
@@ -1246,17 +1279,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: '44px',
                   height: '44px',
               borderRadius: '50%',
-                  backgroundColor: wsMyHandRaised ? '#ffc107' : '#f8f9fa',
+                  backgroundColor: (wsMyHandRaised || handRaised) ? '#ffc107' : '#f8f9fa',
                   border: '1px solid #e9ecef',
               cursor: 'pointer',
                   fontSize: '18px',
-                  color: wsMyHandRaised ? '#000' : '#666',
+                  color: (wsMyHandRaised || handRaised) ? '#000' : '#666',
               display: 'flex',
               alignItems: 'center',
                   justifyContent: 'center'
             }}
+            title={`Hand ${(wsMyHandRaised || handRaised) ? 'raised' : 'lowered'} - Click to toggle`}
           >
                 ✋
+          </button>
+          <button
+                onClick={() => {
+                  console.log('✋ Manual reset triggered');
+                  setHandRaised(false);
+                  resetHandState();
+                }}
+            style={{
+                  width: '32px',
+                  height: '32px',
+              borderRadius: '50%',
+                  backgroundColor: '#dc3545',
+                  border: '1px solid #dc3545',
+              cursor: 'pointer',
+                  fontSize: '12px',
+                  color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: '4px'
+            }}
+            title="Reset hand state"
+          >
+                ↻
           </button>
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}

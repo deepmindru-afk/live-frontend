@@ -44,7 +44,14 @@ export const useWebSocketChat = ({
   const maxReconnectAttempts = 5;
 
   const connect = useCallback(() => {
-    console.log('🔌 connect() called:', { meetingId, token: token ? 'present' : 'missing', socket: !!socket });
+    console.log('🔌 connect() called:', { 
+      meetingId, 
+      token: token ? 'present' : 'missing', 
+      tokenLength: token?.length || 0,
+      socket: !!socket,
+      socketConnected: socket?.connected
+    });
+    
     if (socket?.connected) {
       console.log('🔌 Already connected, skipping');
       return;
@@ -52,13 +59,23 @@ export const useWebSocketChat = ({
 
     // Don't connect if no token
     if (!token || token.trim() === '') {
-      console.warn('⚠️ No JWT token provided, skipping WebSocket connection');
+      console.warn('⚠️ No JWT token provided, skipping WebSocket connection', { 
+        token, 
+        meetingId,
+        tokenType: typeof token,
+        tokenLength: token?.length || 0
+      });
       setError('No authentication token provided');
       return;
     }
 
     try {
-      console.log('🔌 Creating new socket connection...');
+      console.log('🔌 Creating new socket connection...', {
+        url: 'http://localhost:3007/signaling',
+        token: token ? 'present' : 'missing',
+        tokenLength: token?.length || 0
+      });
+      
       const newSocket = io('http://localhost:3007/signaling', {
         auth: {
           token,
@@ -66,6 +83,12 @@ export const useWebSocketChat = ({
         transports: ['websocket', 'polling'],
         timeout: 20000,
         forceNew: true,
+      });
+      
+      console.log('🔌 Socket created:', { 
+        socketId: newSocket.id, 
+        connected: newSocket.connected,
+        transport: newSocket.io.engine?.transport?.name
       });
 
     newSocket.on('connect', () => {
@@ -96,6 +119,13 @@ export const useWebSocketChat = ({
 
     newSocket.on('connect_error', (error) => {
       console.error('❌ Chat WebSocket connection error:', error);
+      console.error('❌ Connection error details:', { 
+        message: error.message, 
+        description: (error as any).description, 
+        context: (error as any).context, 
+        type: (error as any).type,
+        token: token ? 'present' : 'missing'
+      });
       const errorMessage = `Failed to connect to chat server: ${error.message || 'Unknown error'}`;
       setError(errorMessage);
       onError?.(errorMessage);
@@ -166,7 +196,11 @@ export const useWebSocketChat = ({
       console.log('🏓 Pong received:', data);
     });
 
-    setSocket(newSocket);
+      console.log('🔌 Setting socket state:', { 
+        socketId: newSocket.id, 
+        connected: newSocket.connected 
+      });
+      setSocket(newSocket);
     } catch (error) {
       console.error('❌ Failed to create WebSocket connection:', error);
       setError('Failed to create WebSocket connection');
@@ -223,8 +257,19 @@ export const useWebSocketChat = ({
 
   // Connect on mount and when dependencies change
   useEffect(() => {
+    console.log('🔌 useEffect triggered:', { 
+      meetingId, 
+      token: token ? 'present' : 'missing',
+      tokenLength: token?.length || 0,
+      socket: !!socket,
+      isConnected,
+      willConnect: !!(meetingId && token)
+    });
+    
     if (meetingId && token) {
       connect();
+    } else {
+      console.log('🔌 Not connecting - missing requirements:', { meetingId: !!meetingId, token: !!token });
     }
 
     return () => {
