@@ -91,6 +91,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [thumbnailPanelOpen, setThumbnailPanelOpen] = useState(true);
+  
+  // Debug: Track recording state changes
+  useEffect(() => {
+    console.log('🎥 ============ RECORDING STATE CHANGED ============');
+    console.log('🎥 isRecording:', isRecording);
+    console.log('🎥 recordingPaused:', recordingPaused);
+    console.log('🎥 Current user role:', currentParticipant?.role);
+    console.log('🎥 Is host?:', isHost);
+    console.log('🎥 ============================================');
+  }, [isRecording, recordingPaused]);
   
   // GraphQL Queries
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
@@ -225,12 +236,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       setHandRaiseQueue(prev => {
         // Remove any existing entry for this user
         const filtered = prev.filter((hand: any) => hand.participantId !== info.userId);
-        // Add to the end (most recent)
-        return [...filtered, {
+        // Add to the beginning (most recent first - DESC order)
+        return [{
           participantId: info.userId,
           displayName: info.displayName,
           raisedAt: info.raisedAt
-        }];
+        }, ...filtered];
       });
       
       // Show notification for host
@@ -276,17 +287,56 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // WebSocket event listener for recording announcements
   useEffect(() => {
+    console.log('🎧 ============ SETTING UP LISTENERS ============');
+    console.log('🎧 Socket exists?:', !!socket);
+    console.log('🎧 WebSocket connected?:', wsConnected);
+    console.log('🎧 Meeting ID:', actualMeetingId);
+    console.log('🎧 Current participant:', currentParticipant);
+    console.log('🎧 Current user:', currentUser);
+    console.log('🎧 Is Host?:', isHost);
+    
     if (socket && wsConnected) {
+      console.log('🎧 ✅ Socket is ready! Registering listeners...');
+      
       const handleRecordingAnnouncement = (data: { message: string; type: string }) => {
-        console.log('🔊 Received recording announcement:', data);
+        console.log('🎯 ============ RAW EVENT RECEIVED ============');
+        console.log('🔊 ============ RECEIVED ANNOUNCEMENT ============');
+        console.log('🔊 Data received:', data);
+        console.log('🔊 Message:', data.message);
+        console.log('🔊 Type:', data.type);
         console.log('🔊 Current user:', currentUser?.displayName || currentUser?.email || 'Unknown');
         console.log('🔊 Participant role:', currentParticipant?.role || 'Unknown');
         console.log('🔊 Meeting ID:', actualMeetingId);
+        console.log('🔊 Is Host?:', isHost);
+        
+        // Update recording state for participants
+        if (!isHost) {
+          console.log('🔊 👥 I am a PARTICIPANT - updating recording state...');
+          if (data.type === 'start') {
+            console.log('🔊 Setting isRecording = true');
+            setIsRecording(true);
+            setRecordingPaused(false);
+          } else if (data.type === 'stop') {
+            console.log('🔊 Setting isRecording = false');
+            setIsRecording(false);
+            setRecordingPaused(false);
+          } else if (data.type === 'pause') {
+            console.log('🔊 Setting recordingPaused = true');
+            setRecordingPaused(true);
+          } else if (data.type === 'resume') {
+            console.log('🔊 Setting recordingPaused = false');
+            setRecordingPaused(false);
+          }
+        } else {
+          console.log('🔊 👨‍🏫 I am the HOST - state already updated locally');
+        }
         
         // Play the announcement on all participant devices
+        console.log('🔊 🔉 Playing voice announcement...');
         announceRecordingStatus(data.message);
         
         // Show visual notification
+        console.log('🔊 📢 Showing toast notification...');
         Swal.fire({
           icon: data.type === 'start' ? 'success' : 
                 data.type === 'stop' ? 'info' : 
@@ -300,21 +350,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           toast: true,
           position: 'top-end'
         });
+        console.log('🔊 ============ ANNOUNCEMENT HANDLED ============');
       };
 
       const handleTestBroadcast = (data: any) => {
-        console.log('🧪 TEST: Received test broadcast:', data);
+        console.log('🧪 ============ TEST BROADCAST RECEIVED ============');
+        console.log('🧪 Data:', data);
         announceRecordingStatus('WebSocket test received! Broadcasting works!');
       };
 
+      console.log('🎧 Registering RECORDING_ANNOUNCEMENT listener...');
       socket.on('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
+      console.log('🎧 Registering TEST_BROADCAST listener...');
       socket.on('TEST_BROADCAST', handleTestBroadcast);
+      
+      console.log('🎧 ✅ All listeners registered!');
 
       return () => {
+        console.log('🎧 Cleaning up recording announcement listeners...');
         socket.off('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
         socket.off('TEST_BROADCAST', handleTestBroadcast);
       };
+    } else {
+      console.log('🎧 ❌ Cannot register listeners!');
+      console.log('🎧 Socket:', socket ? 'EXISTS' : 'NULL');
+      console.log('🎧 Connected:', wsConnected);
     }
+    console.log('🎧 ============ LISTENER SETUP COMPLETE ============');
   }, [socket, wsConnected]);
 
   // Initialize meeting ID and authentication
@@ -863,26 +925,36 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Broadcast recording announcement to all participants
   const broadcastRecordingAnnouncement = (message: string, type: string) => {
+    console.log('📡 ============ BROADCAST START ============');
     const currentUserKey = `${currentUser?.id || currentUser?._id || 'unknown'}-${actualMeetingId}`;
+    console.log('📡 Message:', message);
+    console.log('📡 Type:', type);
+    console.log('📡 Current user key:', currentUserKey);
     
     // Try WebSocket first
     if (socket && wsConnected) {
-      console.log('📡 Broadcasting recording announcement via WebSocket:', { message, type });
+      console.log('📡 ✅ WebSocket available - emitting...');
       console.log('📡 From user:', currentUser?.displayName || currentUser?.email || 'Unknown');
       console.log('📡 User role:', currentParticipant?.role || 'Unknown');
       console.log('📡 Meeting ID:', actualMeetingId);
       console.log('📡 Socket connected:', wsConnected);
+      console.log('📡 Socket ID:', socket?.id);
       
-      socket.emit('RECORDING_ANNOUNCEMENT', {
+      const payload = {
         meetingId: actualMeetingId,
         message,
         type,
         timestamp: new Date().toISOString(),
         fromUser: currentUser?.displayName || currentUser?.email || 'Unknown'
-      });
+      };
+      console.log('📡 Payload:', JSON.stringify(payload, null, 2));
+      
+      socket.emit('RECORDING_ANNOUNCEMENT', payload);
+      console.log('📡 ✅ Emit completed!');
     } else {
-      console.warn('📡 WebSocket not available, using localStorage fallback');
-      console.warn('📡 Socket status:', !!socket, 'Connected:', wsConnected);
+      console.warn('📡 ❌ WebSocket NOT available!');
+      console.warn('📡 Socket exists:', !!socket);
+      console.warn('📡 Connected:', wsConnected);
     }
     
     // Always use localStorage as fallback for cross-tab communication
@@ -895,28 +967,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         meetingId: actualMeetingId
       };
       
-      console.log('🔄 Fallback: Broadcasting via localStorage:', announcementData);
+      console.log('🔄 localStorage fallback:', announcementData);
       localStorage.setItem('recording_announcement', JSON.stringify(announcementData));
+      console.log('🔄 ✅ localStorage set!');
       
       // Clear after a short delay to allow other tabs to receive it
       setTimeout(() => {
         localStorage.removeItem('recording_announcement');
+        console.log('🔄 localStorage cleared');
       }, 1000);
     } catch (error) {
-      console.error('🔄 Fallback: Error using localStorage:', error);
+      console.error('🔄 ❌ localStorage error:', error);
     }
+    console.log('📡 ============ BROADCAST END ============');
   };
 
   const handleRecordingToggle = async () => {
+    console.log('🎬 ============ RECORDING TOGGLE START ============');
+    console.log('🎬 Current isRecording state:', isRecording);
+    console.log('🎬 Current user role:', currentParticipant?.role);
+    console.log('🎬 Is host?:', isHost);
+    console.log('🎬 Socket exists?:', !!socket);
+    console.log('🎬 WebSocket connected?:', wsConnected);
+    console.log('🎬 Meeting ID:', actualMeetingId);
+    
     if (!isRecording) {
+      console.log('🎬 ➡️ STARTING RECORDING...');
       setIsRecording(true);
       setRecordingPaused(false);
-      console.log('Recording started');
+      console.log('🎬 State updated: isRecording=true, recordingPaused=false');
       
       // Broadcast to all participants
+      console.log('🎬 📡 Broadcasting START announcement...');
       broadcastRecordingAnnouncement('Recording in progress!', 'start');
       
       // Announce locally (for host)
+      console.log('🎬 🔊 Playing local announcement...');
       announceRecordingStatus('Recording in progress!');
       
       // Show success notification
@@ -930,14 +1016,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         position: 'top-end'
       });
     } else {
+      console.log('🎬 ⏹️ STOPPING RECORDING...');
       setIsRecording(false);
       setRecordingPaused(false);
-      console.log('Recording stopped');
+      console.log('🎬 State updated: isRecording=false, recordingPaused=false');
       
       // Broadcast to all participants
+      console.log('🎬 📡 Broadcasting STOP announcement...');
       broadcastRecordingAnnouncement('Recording stopped!', 'stop');
       
       // Announce locally (for host)
+      console.log('🎬 🔊 Playing local announcement...');
       announceRecordingStatus('Recording stopped!');
       
       // Show success notification
@@ -951,22 +1040,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         position: 'top-end'
       });
     }
+    console.log('🎬 ============ RECORDING TOGGLE END ============');
   };
 
   const handleRecordingPause = async () => {
+    console.log('⏸️ ============ RECORDING PAUSE/RESUME START ============');
+    console.log('⏸️ Current recordingPaused state:', recordingPaused);
+    console.log('⏸️ Current isRecording state:', isRecording);
+    console.log('⏸️ Current user role:', currentParticipant?.role);
+    console.log('⏸️ Is host?:', isHost);
+    
     const wasPaused = recordingPaused;
     setRecordingPaused(!recordingPaused);
-    console.log('Recording paused/resumed:', !recordingPaused);
+    console.log('⏸️ State updated: recordingPaused=', !recordingPaused);
     
     if (wasPaused) {
       // Recording was paused, now resuming
+      console.log('⏸️ ▶️ RESUMING RECORDING...');
       const message = 'Recording resumed!';
       const type = 'resume';
       
       // Broadcast to all participants
+      console.log('⏸️ 📡 Broadcasting RESUME announcement...');
       broadcastRecordingAnnouncement(message, type);
       
       // Announce locally (for host)
+      console.log('⏸️ 🔊 Playing local announcement...');
       announceRecordingStatus(message);
       
       Swal.fire({
@@ -980,13 +1079,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       });
     } else {
       // Recording was active, now pausing
+      console.log('⏸️ ⏸️ PAUSING RECORDING...');
       const message = 'Recording paused!';
       const type = 'pause';
       
       // Broadcast to all participants
+      console.log('⏸️ 📡 Broadcasting PAUSE announcement...');
       broadcastRecordingAnnouncement(message, type);
       
       // Announce locally (for host)
+      console.log('⏸️ 🔊 Playing local announcement...');
       announceRecordingStatus(message);
       
       Swal.fire({
@@ -999,6 +1101,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         position: 'top-end'
       });
     }
+    console.log('⏸️ ============ RECORDING PAUSE/RESUME END ============');
   };
 
   const handleRaiseHand = async () => {
@@ -1305,13 +1408,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       wsRaisedHandsData: wsRaisedHands
     });
     
-    return participants.map(participant => {
+    const enhancedParticipants = participants.map(participant => {
       const hasHandRaised = wsRaisedHands.some(hand => hand.userId === participant._id) || false;
       console.log(`🔍 Participant ${participant.displayName} (${participant._id}): hasHandRaised = ${hasHandRaised}`);
       return {
         ...participant,
         hasHandRaised
       };
+    });
+    
+    // Sort to put HOST first
+    return enhancedParticipants.sort((a, b) => {
+      if (a.role === 'HOST') return -1;
+      if (b.role === 'HOST') return 1;
+      return 0;
     });
   }, [participants, wsRaisedHands]);
 
@@ -1441,270 +1551,328 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         top: 0,
         left: 0,
         right: 0,
-          height: isMobile ? '60px' : '70px',
+          height: isMobile ? '56px' : '70px',
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #e5e7eb',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-          padding: isMobile ? '0 16px' : '0 24px',
+          padding: isMobile ? '0 12px' : '0 24px',
         zIndex: 1000,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          gap: isMobile ? '8px' : '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px', flex: 1, minWidth: 0 }}>
             <div style={{
-              width: isMobile ? '32px' : '40px',
-              height: isMobile ? '32px' : '40px',
-              borderRadius: '50%',
-              backgroundColor: '#6b7280',
+              width: isMobile ? '32px' : '44px',
+              height: isMobile ? '32px' : '44px',
+              borderRadius: '8px',
+              backgroundColor: '#f3f4f6',
+              border: '2px solid #e5e7eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'white',
-              fontWeight: '700',
-              fontSize: isMobile ? '14px' : '18px'
+              overflow: 'hidden',
+              flexShrink: 0
             }}>
-              N
+              <img 
+                src="/logoHRDe.png" 
+                alt="HRDe Logo" 
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  padding: '2px'
+                }}
+              />
             </div>
-          <div>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
               <div style={{ 
-                fontSize: isMobile ? '16px' : '20px', 
+                fontSize: isMobile ? '14px' : '20px', 
                 fontWeight: '600', 
                 color: '#111827',
-                lineHeight: 1.2
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}>
-              {isMobile ? (meeting?.title || 'Demo Meeting').substring(0, 20) + '...' : (meeting?.title || 'Demo Meeting')}
+              {isMobile ? (meeting?.title || 'Demo Meeting').substring(0, 15) : (meeting?.title || 'Demo Meeting')}
             </div>
               <div style={{ 
-                fontSize: isMobile ? '12px' : '14px', 
-                color: '#6b7280' 
+                fontSize: isMobile ? '11px' : '14px', 
+                color: '#6b7280',
+                whiteSpace: 'nowrap'
               }}>
-                ID: {meeting?.inviteCode || actualMeetingId}
+                {isMobile ? (meeting?.inviteCode || actualMeetingId).substring(0, 8) : `Code: ${meeting?.inviteCode || actualMeetingId}`}
             </div>
           </div>
         </div>
 
-          <div style={{ display: 'flex', gap: isMobile ? '8px' : '12px', alignItems: 'center' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: isMobile ? '6px' : '8px',
-              padding: isMobile ? '4px 8px' : '6px 12px',
-              backgroundColor: isLive ? '#dcfce7' : '#f3f4f6',
-              borderRadius: '20px',
-              fontSize: isMobile ? '12px' : '14px',
-              fontWeight: '500',
-              color: isLive ? '#166534' : '#374151',
-              border: isLive ? '1px solid #bbf7d0' : 'none',
-              transition: 'all 0.3s ease'
-            }}>
+          <div style={{ display: 'flex', gap: isMobile ? '4px' : '12px', alignItems: 'center' }}>
+            {/* Live Status Badge - Desktop Only */}
+            {!isMobile && (
               <div style={{
-                width: isMobile ? '6px' : '8px',
-                height: isMobile ? '6px' : '8px',
-                borderRadius: '50%',
-                backgroundColor: isLive ? '#22c55e' : '#6b7280',
-                animation: isLive ? 'pulse 2s infinite' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                backgroundColor: isLive ? '#dcfce7' : '#f3f4f6',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: isLive ? '#166534' : '#374151',
+                border: isLive ? '1px solid #bbf7d0' : 'none',
                 transition: 'all 0.3s ease'
-              }}></div>
-              {isLive ? 'Live' : 'Offline'}
-            </div>
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: isLive ? '#22c55e' : '#6b7280',
+                  animation: isLive ? 'pulse 2s infinite' : 'none',
+                  transition: 'all 0.3s ease'
+                }}></div>
+                {isLive ? 'Live' : 'Offline'}
+              </div>
+            )}
           
-          {isHost && (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {/* Recording Status Indicator */}
-              {isRecording && (
+            {/* Recording Status Indicator - Visible to ALL participants */}
+            {isRecording && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: isMobile ? '4px 8px' : '6px 12px',
+                backgroundColor: recordingPaused ? '#fbbf24' : '#ef4444',
+                borderRadius: '20px',
+                fontSize: isMobile ? '10px' : '12px',
+                fontWeight: '600',
+                color: 'white',
+                animation: recordingPaused ? 'none' : 'recording 1.5s infinite'
+              }}>
                 <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  backgroundColor: recordingPaused ? '#fbbf24' : '#ef4444',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'white',
-                  animation: recordingPaused ? 'none' : 'recording 1.5s infinite'
-                }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'white'
-                  }}></div>
-                  {recordingPaused ? 'Paused' : 'Recording'}
-                </div>
-              )}
+                  width: isMobile ? '5px' : '8px',
+                  height: isMobile ? '5px' : '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'white'
+                }}></div>
+                {isMobile ? (recordingPaused ? 'Pause' : 'REC') : (recordingPaused ? 'Paused' : 'Recording')}
+              </div>
+            )}
 
-              {/* Speech Status Indicator */}
-              {isSpeaking && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  backgroundColor: '#8b5cf6',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'white',
-                  animation: 'pulse 1s infinite'
-                }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'white',
-                    animation: 'pulse 0.5s infinite'
-                  }}></div>
-                  🔊 Announcing...
-                </div>
-              )}
+            {/* Recording Controls - ONLY for HOST */}
+            {isHost && (
+              <>
+                {/* Desktop Controls */}
+                {!isMobile && (
+                  <>
+                    {!isRecording ? (
+                      <button
+                        onClick={handleRecordingToggle}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 14px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                          <circle cx="7" cy="7" r="7"/>
+                        </svg>
+                        Record
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={handleRecordingPause}
+                          style={{
+                            backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '8px 14px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                          }}
+                        >
+                          {recordingPaused ? (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                              <path d="M4 2 L12 7 L4 12 Z"/>
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                              <rect x="2" y="2" width="4" height="10" rx="1"/>
+                              <rect x="8" y="2" width="4" height="10" rx="1"/>
+                            </svg>
+                          )}
+                          {recordingPaused ? 'Resume' : 'Pause'}
+                        </button>
+                        <button
+                          onClick={handleRecordingToggle}
+                          style={{
+                            backgroundColor: '#6b7280',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '8px 14px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                            <rect x="2" y="2" width="10" height="10" rx="1"/>
+                          </svg>
+                          Stop
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
 
-              {/* Test Speech Button - Remove this in production */}
-              <button
-                onClick={() => {
-                  const message = 'Test announcement! Speech synthesis is working!';
-                  console.log('🧪 TEST: Starting broadcast test...');
-                  console.log('🧪 TEST: Socket exists:', !!socket);
-                  console.log('🧪 TEST: WebSocket connected:', wsConnected);
-                  console.log('🧪 TEST: Meeting ID:', actualMeetingId);
-                  
-                  // Test WebSocket emit first
-                  if (socket && wsConnected) {
-                    console.log('🧪 TEST: Emitting test event...');
-                    socket.emit('TEST_BROADCAST', {
-                      meetingId: actualMeetingId,
-                      message: 'WebSocket test message',
-                      timestamp: new Date().toISOString()
-                    });
-                  }
-                  
-                  broadcastRecordingAnnouncement(message, 'test');
-                  announceRecordingStatus(message);
-                }}
-                style={{
-                  padding: '4px 8px',
-                  backgroundColor: '#6b7280',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '10px',
-                  cursor: 'pointer',
-                  opacity: 0.7
-                }}
-                title="Test speech synthesis for all participants"
-              >
-                🔊 Test All
-              </button>
-              
-              {/* Recording Controls */}
-              {!isRecording ? (
-                <button
-                  onClick={handleRecordingToggle}
-                  style={{
-                    backgroundColor: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: isMobile ? '8px 12px' : '10px 16px',
-                    fontSize: isMobile ? '12px' : '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
-                  }}
-                >
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'white'
-                  }}></div>
-                  {isMobile ? 'Record' : 'Start Recording'}
-                </button>
-              ) : (
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    onClick={handleRecordingPause}
-                    style={{
-                      backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: isMobile ? '8px 12px' : '10px 16px',
-                      fontSize: isMobile ? '12px' : '14px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                    }}
-                  >
-                    {recordingPaused ? (
-                      <>
-                        <div style={{
-                          width: '0',
-                          height: '0',
-                          borderLeft: '6px solid white',
-                          borderTop: '4px solid transparent',
-                          borderBottom: '4px solid transparent'
-                        }}></div>
-                        {isMobile ? 'Resume' : 'Resume'}
-                      </>
+                {/* Mobile Controls - Icon Only */}
+                {isMobile && (
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {!isRecording ? (
+                      <button
+                        onClick={handleRecordingToggle}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ef4444',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                          <circle cx="7" cy="7" r="6"/>
+                        </svg>
+                      </button>
                     ) : (
                       <>
-                        <div style={{
-                          width: '8px',
-                          height: '8px',
-                          backgroundColor: 'white',
-                          borderRadius: '2px'
-                        }}></div>
-                        {isMobile ? 'Pause' : 'Pause'}
+                        <button
+                          onClick={handleRecordingPause}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {recordingPaused ? (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                              <path d="M4 2 L11 7 L4 12 Z"/>
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                              <rect x="2" y="2" width="3.5" height="10" rx="0.5"/>
+                              <rect x="8.5" y="2" width="3.5" height="10" rx="0.5"/>
+                            </svg>
+                          )}
+                        </button>
+                        <button
+                          onClick={handleRecordingToggle}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: '#6b7280',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
+                            <rect x="2" y="2" width="8" height="8" rx="1"/>
+                          </svg>
+                        </button>
                       </>
                     )}
-                  </button>
-                  <button
-                    onClick={handleRecordingToggle}
-                    style={{
-                      backgroundColor: '#6b7280',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: isMobile ? '8px 12px' : '10px 16px',
-                      fontSize: isMobile ? '12px' : '14px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                    }}
-                  >
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      backgroundColor: 'white',
-                      borderRadius: '2px'
-                    }}></div>
-                    {isMobile ? 'Stop' : 'Stop'}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-      </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* Toggle Thumbnail Panel Arrow - Mobile Only */}
+            {isMobile && viewMode === 'speaker' && (
+              <button
+                onClick={() => setThumbnailPanelOpen(!thumbnailPanelOpen)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <svg 
+                  width="24" 
+                  height="24" 
+                  viewBox="0 0 24 24" 
+                  fill="none"
+                  stroke="#374151"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: thumbnailPanelOpen ? 'rotate(90deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.2s ease'
+                  }}
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            )}
+        </div>
       </div>
 
         {/* Main Content */}
       <div style={{
         flex: 1,
-          paddingTop: isMobile ? '60px' : '70px',
+          paddingTop: isMobile ? '70px' : '70px',
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: '#ffffff'
@@ -1712,101 +1880,131 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           {/* Participant Thumbnails Row - Only show in Main view */}
           {viewMode === 'speaker' && (
             <div style={{
-              height: isMobile ? '80px' : '100px',
+              height: thumbnailPanelOpen ? (isMobile ? '120px' : '120px') : (isMobile ? '0px' : '0px'),
               backgroundColor: '#ffffff',
-              borderBottom: '1px solid #e5e7eb',
+              borderBottom: thumbnailPanelOpen ? '1px solid #e5e7eb' : 'none',
               display: 'flex',
               alignItems: 'center',
-              padding: isMobile ? '0 16px' : '0 24px',
-              gap: isMobile ? '8px' : '12px',
-              overflowX: 'auto'
+              padding: thumbnailPanelOpen ? (isMobile ? '0 12px' : '0 24px') : '0',
+              gap: isMobile ? '10px' : '14px',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              marginTop: '0',
+              transition: 'all 0.3s ease-in-out',
+              position: 'relative'
             }}>
-              {participantsWithHandRaise.map((participant) => (
+              {thumbnailPanelOpen && participantsWithHandRaise.map((participant) => (
                 <div
                   key={participant._id}
                   onClick={() => setSelectedParticipant(participant)}
                   style={{
-                    minWidth: isMobile ? '60px' : '80px',
-                    height: isMobile ? '60px' : '80px',
+                    minWidth: isMobile ? '95px' : '95px',
+                    height: isMobile ? '95px' : '95px',
                     backgroundColor: '#f9fafb',
-                    borderRadius: '8px',
-                    border: participant.role === 'HOST' ? '2px solid #10b981' : 
-                            participant.hasHandRaised ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                    borderRadius: isMobile ? '12px' : '10px',
+                    border: participant.role === 'HOST' ? '2px solid #10b981' : '1px solid #e5e7eb',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     position: 'relative',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.3s ease'
                   }}
                 >
-                  {/* Hand raise indicator */}
-                  {participant.hasHandRaised && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '-8px',
-                      right: '-8px',
-                      backgroundColor: '#f59e0b',
-                      color: '#000',
-                      fontSize: '12px',
-                      width: '20px',
-                      height: '20px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      border: '2px solid white',
-                      zIndex: 10,
-                      fontWeight: 'bold'
-                    }}>
-                      1
-                    </div>
-                  )}
                   
                   {participant.role === 'HOST' && (
                     <div style={{
                       position: 'absolute',
-                      bottom: '4px',
+                      top: '4px',
                       left: '4px',
                       backgroundColor: '#3b82f6',
                       color: 'white',
-                      fontSize: '8px',
+                      fontSize: isMobile ? '8px' : '9px',
                       fontWeight: '600',
-                      padding: '2px 4px',
-                      borderRadius: '4px'
+                      padding: '2px 5px',
+                      borderRadius: '4px',
+                      zIndex: 5
                     }}>
                       HOST
                     </div>
                   )}
                   
-                  <div style={{ fontSize: isMobile ? '18px' : '24px', marginBottom: '4px' }}>
+                  {/* Hand Raise Indicator - Visible for ALL */}
+                  {participant.hasHandRaised && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      fontSize: isMobile ? '20px' : '22px',
+                      zIndex: 5,
+                      animation: 'pulse 1.5s infinite'
+                    }}>
+                      ✋
+                    </div>
+                  )}
+                  
+                  <div style={{ fontSize: isMobile ? '32px' : '30px', marginBottom: '6px' }}>
                     {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
                   </div>
                   <div style={{ 
-                    fontSize: isMobile ? '8px' : '10px', 
+                    fontSize: isMobile ? '12px' : '12px', 
                     fontWeight: '500', 
                     textAlign: 'center',
-                    lineHeight: 1.2
+                    lineHeight: 1.2,
+                    maxWidth: '90%'
                   }}>
                     {isMobile ? 
-                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 6) + '...' :
+                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 10) :
                       (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
                     }
                   </div>
-                  <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
-                    <span style={{ fontSize: isMobile ? '6px' : '8px', opacity: participant.micState === 'ON' ? 1 : 0.3 }}>
-                      {participant.micState === 'ON' ? '🎤' : '🔇'}
-                    </span>
-                    <span style={{ fontSize: isMobile ? '6px' : '8px', opacity: participant.cameraState === 'ON' ? 1 : 0.3 }}>
-                      {participant.cameraState === 'ON' ? '📹' : '📷'}
-                    </span>
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '5px' }}>
+                    <div style={{
+                      width: isMobile ? '20px' : '20px',
+                      height: isMobile ? '20px' : '20px',
+                      borderRadius: '4px',
+                      backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {participant.micState === 'ON' ? (
+                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                        </svg>
+                      ) : (
+                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                          <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                        </svg>
+                      )}
+                    </div>
+                    <div style={{
+                      width: isMobile ? '20px' : '20px',
+                      height: isMobile ? '20px' : '20px',
+                      borderRadius: '4px',
+                      backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {participant.cameraState === 'ON' ? (
+                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                          <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                        </svg>
+                      ) : (
+                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                          <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                        </svg>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-
+          
           {/* Main Video Area */}
           <div style={{
             flex: 1,
@@ -1816,8 +2014,51 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            padding: isMobile ? '20px' : '40px'
+            padding: isMobile ? '20px' : '40px',
+            paddingTop: isMobile ? '20px' : '40px',
+            marginTop: '0'
           }}>
+            {/* Toggle Thumbnail Panel Button - Desktop Only */}
+            {!isMobile && viewMode === 'speaker' && (
+              <button
+                onClick={() => setThumbnailPanelOpen(!thumbnailPanelOpen)}
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '32px',
+                  height: '32px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  zIndex: 50,
+                  transition: 'all 0.2s ease',
+                  padding: 0
+                }}
+              >
+                <svg 
+                  width="24" 
+                  height="24" 
+                  viewBox="0 0 24 24" 
+                  fill="none"
+                  stroke="#374151"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transform: thumbnailPanelOpen ? 'rotate(90deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.2s ease'
+                  }}
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            )}
+            
             {/* View Controls Toggle Button - Desktop Only */}
             {!isMobile && (
               <div 
@@ -1845,7 +2086,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '20px',
                     color: viewControlsOpen ? 'white' : '#374151',
                     transition: 'all 0.3s ease',
                     backdropFilter: 'blur(20px)',
@@ -1853,7 +2093,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   }}
                   title="Toggle view controls"
                 >
-                  {viewMode === 'speaker' ? '🎯' : '⊞'}
+                  {viewMode === 'speaker' ? (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M4 4h7v7H4V4zm0 9h7v7H4v-7zm9-9h7v7h-7V4zm0 9h7v7h-7v-7z"/>
+                    </svg>
+                  )}
                 </button>
 
                 {/* Collapsible View Controls Panel */}
@@ -1906,8 +2155,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                             boxShadow: viewMode === 'speaker' ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
                           }}
                         >
-                          <span style={{ fontSize: '14px' }}>🎯</span>
-                          Main
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                          </svg>
+                          Speaker
                         </button>
                         <button
                           onClick={() => {
@@ -1932,7 +2184,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                             boxShadow: viewMode === 'grid' ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
                           }}
                         >
-                          <span style={{ fontSize: '14px' }}>⊞</span>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 4h7v7H4V4zm0 9h7v7H4v-7zm9-9h7v7h-7V4zm0 9h7v7h-7v-7z"/>
+                          </svg>
                           Grid
                         </button>
                       </div>
@@ -1986,8 +2240,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
-            {/* Hand raise count */}
-            {wsRaisedHands.length > 0 && (
+            {/* Hand raise count - Host Only */}
+            {isHost && wsRaisedHands.length > 0 && (
               <div style={{
                 position: 'absolute',
                 top: '20px',
@@ -2117,28 +2371,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       }}></div>
                     )}
 
-                    {/* Hand raise indicator */}
-                    {participant.hasHandRaised && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '8px',
-                        right: '8px',
-                        backgroundColor: '#f59e0b',
-                        color: '#000',
-                        fontSize: '12px',
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '2px solid white',
-                        zIndex: 10,
-                        fontWeight: 'bold'
-                      }}>
-                        1
-                      </div>
-                    )}
                     
                     {/* Host indicator */}
                     {participant.role === 'HOST' && (
@@ -2185,30 +2417,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       alignItems: 'center'
                     }}>
                       <div style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '4px',
                         backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '10px',
-                        color: 'white'
+                        justifyContent: 'center'
                       }}>
-                        {participant.micState === 'ON' ? '🎤' : '🔇'}
+                        {participant.micState === 'ON' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                          </svg>
+                        )}
                       </div>
                       <div style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '4px',
                         backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '10px',
-                        color: 'white'
+                        justifyContent: 'center'
                       }}>
-                        {participant.cameraState === 'ON' ? '📹' : '📷'}
+                        {participant.cameraState === 'ON' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                          </svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                            <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                          </svg>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2219,16 +2464,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
           {/* Bottom Control Bar */}
         <div style={{
-            height: '80px',
+            height: isMobile ? '70px' : '80px',
             backgroundColor: '#ffffff',
             borderTop: '1px solid #e5e7eb',
           display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '0 24px',
+            padding: isMobile ? '0 12px' : '0 24px',
             boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '16px' }}>
               {/* Participant Count */}
               <div style={{
                 width: '44px',
@@ -2249,93 +2494,110 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               <button
                 onClick={handleMicToggle}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: micEnabled ? '#22c55e' : '#ef4444',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
                 title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
-                {micEnabled ? '🎤' : '🔇'}
+                {micEnabled ? (
+                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                  </svg>
+                ) : (
+                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                    <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                  </svg>
+                )}
               </button>
 
               {/* Camera Control */}
               <button
                 onClick={handleCameraToggle}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: cameraEnabled ? '#22c55e' : '#ef4444',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
                 title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
-                {cameraEnabled ? '📹' : '📷'}
+                {cameraEnabled ? (
+                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                  </svg>
+                ) : (
+                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                    <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                  </svg>
+                )}
               </button>
 
               {/* Screen Share Control */}
               <button
                 onClick={handleScreenShareToggle}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: screenSharing ? '#3b82f6' : '#f3f4f6',
-                  border: '1px solid #d1d5db',
+                  border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
                   color: screenSharing ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
                 title={screenSharing ? 'Stop sharing' : 'Share screen'}
               >
-                📺
+                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/>
+                </svg>
               </button>
 
               {/* Chat Control */}
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: sidebarOpen ? '#3b82f6' : '#f3f4f6',
-                  border: '1px solid #d1d5db',
+                  border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
                   color: sidebarOpen ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
                 title="Open/Close chat panel"
               >
-                💬
+                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                </svg>
                 {unreadMessageCount > 0 && (
                   <span style={{
                     position: 'absolute',
@@ -2344,9 +2606,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     backgroundColor: '#ef4444',
                     color: 'white',
                     borderRadius: '50%',
-                    width: '16px',
-                    height: '16px',
-                    fontSize: '9px',
+                    width: '18px',
+                    height: '18px',
+                    fontSize: '10px',
                     fontWeight: '600',
                     display: 'flex',
                     alignItems: 'center',
@@ -2362,47 +2624,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               <button
                 onClick={handleRaiseHand}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: wsMyHandRaised ? '#f59e0b' : '#f3f4f6',
-                  border: '1px solid #d1d5db',
+                  border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
-                  color: wsMyHandRaised ? '#000' : '#6b7280',
+                  color: wsMyHandRaised ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                   animation: wsMyHandRaised ? 'pulse 1.5s infinite' : 'none'
                 }}
                 title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
               >
-                ✋
+                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>
+                </svg>
               </button>
 
               {/* Leave Button */}
               <button
                 onClick={handleLeaveMeeting}
                 style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '8px',
+                  width: isMobile ? '40px' : '48px',
+                  height: isMobile ? '40px' : '48px',
+                  borderRadius: '50%',
                   backgroundColor: '#ef4444',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '18px',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
                 title="Leave meeting"
               >
-                📞
+                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                  <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                </svg>
               </button>
             </div>
         </div>
@@ -2413,9 +2677,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       <div style={{
           position: 'fixed',
           right: 0,
-            top: '70px',
-            width: '400px',
-            height: 'calc(100vh - 150px)',
+            top: isMobile ? '56px' : '70px',
+            width: isMobile ? '100%' : '400px',
+            height: isMobile ? 'calc(100vh - 136px)' : 'calc(100vh - 150px)',
             backgroundColor: '#ffffff',
             borderLeft: '1px solid #e5e7eb',
             zIndex: 999,
@@ -2566,7 +2830,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           alignItems: 'center',
                           gap: '4px'
                         }}>
-                          {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
+                          {participant.user?.companyName || participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
                           {participant.role === 'HOST' && (
                             <span style={{ 
                               fontSize: '10px', 
@@ -2580,85 +2844,112 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                             </span>
                           )}
                           </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          {participant.user?.email || participant.email || 'student@demo.com'}
-                        </div>
+                        {participant.user?.companyName && (
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            {participant.displayName || participant.user?.displayName}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {participant.hasHandRaised && (
-                          <span style={{ 
-                            fontSize: '16px', 
-                            color: '#f59e0b',
-                            animation: 'pulse 1.5s infinite'
-                          }} title="Hand raised">
-                            ✋
-                          </span>
-                        )}
+                        {/* Mic Status */}
                         <div style={{ 
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
                           backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '10px',
-                          color: 'white'
-                        }}>
-                          {participant.micState === 'ON' ? '🎤' : '🔇'}
+                          cursor: isHost && participant.role !== 'HOST' ? 'pointer' : 'default',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title={isHost && participant.role !== 'HOST' ? 'Force mute' : (participant.micState === 'ON' ? 'Mic On' : 'Mic Off')}
+                        >
+                          {participant.micState === 'ON' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                            </svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                              <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                            </svg>
+                          )}
                         </div>
+
+                        {/* Camera Status */}
                         <div style={{ 
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
                           backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '10px',
-                          color: 'white'
-                        }}>
-                          {participant.cameraState === 'ON' ? '📹' : '📷'}
+                          cursor: isHost && participant.role !== 'HOST' ? 'pointer' : 'default',
+                          transition: 'all 0.2s ease'
+                        }}
+                        title={isHost && participant.role !== 'HOST' ? 'Force camera off' : (participant.cameraState === 'ON' ? 'Camera On' : 'Camera Off')}
+                        >
+                          {participant.cameraState === 'ON' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                              <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                            </svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                              <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                            </svg>
+                          )}
                         </div>
+
                         {isHost && participant.role !== 'HOST' && (
                           <>
                             {participant.hasHandRaised && (
                               <button
                                 onClick={() => handleHostLowerHand(participant._id)}
                                 style={{
-                                  backgroundColor: 'transparent',
-                                  border: '1px solid #f59e0b',
+                                  width: '32px',
+                                  height: '32px',
+                                  backgroundColor: '#f59e0b',
+                                  border: 'none',
                                   cursor: 'pointer',
-                                  fontSize: '12px',
-                                  color: '#f59e0b',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
+                                  color: 'white',
+                                  borderRadius: '6px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '2px',
+                                  justifyContent: 'center',
                                   transition: 'all 0.2s ease'
                                 }}
                                 title="Lower hand"
                               >
-                                ✋↓
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                                  <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>
+                                  <path d="M12 24L12 16" stroke="white" stroke-width="2"/>
+                                  <path d="M8 20L12 24L16 20" stroke="white" stroke-width="2" fill="none"/>
+                                </svg>
                               </button>
                             )}
-                          <button
-                            onClick={() => handleKickParticipant(participant._id)}
-                            style={{
-                              backgroundColor: 'transparent',
-                              border: '1px solid #ef4444',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              color: '#ef4444',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              transition: 'all 0.2s ease'
-                            }}
-                            title="Remove participant"
-                          >
-                            🗑️
-                          </button>
+                            <button
+                              onClick={() => handleKickParticipant(participant._id)}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                backgroundColor: '#ef4444',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'white',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title="Remove participant"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                              </svg>
+                            </button>
                           </>
                         )}
                         </div>
