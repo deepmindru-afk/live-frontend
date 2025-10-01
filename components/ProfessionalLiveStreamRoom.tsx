@@ -89,6 +89,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   // GraphQL Queries
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
@@ -272,6 +274,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   });
 
+  // WebSocket event listener for recording announcements
+  useEffect(() => {
+    if (socket && wsConnected) {
+      const handleRecordingAnnouncement = (data: { message: string; type: string }) => {
+        console.log('🔊 Received recording announcement:', data);
+        console.log('🔊 Current user:', currentUser?.displayName || currentUser?.email || 'Unknown');
+        console.log('🔊 Participant role:', currentParticipant?.role || 'Unknown');
+        console.log('🔊 Meeting ID:', actualMeetingId);
+        
+        // Play the announcement on all participant devices
+        announceRecordingStatus(data.message);
+        
+        // Show visual notification
+        Swal.fire({
+          icon: data.type === 'start' ? 'success' : 
+                data.type === 'stop' ? 'info' : 
+                data.type === 'pause' ? 'warning' : 'success',
+          title: data.type === 'start' ? 'Recording Started' :
+                 data.type === 'stop' ? 'Recording Stopped' :
+                 data.type === 'pause' ? 'Recording Paused' : 'Recording Resumed',
+          text: data.message,
+          timer: 2000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+      };
+
+      const handleTestBroadcast = (data: any) => {
+        console.log('🧪 TEST: Received test broadcast:', data);
+        announceRecordingStatus('WebSocket test received! Broadcasting works!');
+      };
+
+      socket.on('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
+      socket.on('TEST_BROADCAST', handleTestBroadcast);
+
+      return () => {
+        socket.off('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
+        socket.off('TEST_BROADCAST', handleTestBroadcast);
+      };
+    }
+  }, [socket, wsConnected]);
+
   // Initialize meeting ID and authentication
   useEffect(() => {
     const initializeMeeting = async () => {
@@ -340,6 +385,67 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Initialize speech synthesis voices
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      // Load voices if not already loaded
+      if (speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.addEventListener('voiceschanged', () => {
+          console.log('🔊 Speech synthesis voices loaded:', speechSynthesis.getVoices().length);
+        });
+      }
+    }
+  }, []);
+
+  // Fallback: Listen for localStorage changes (cross-tab communication)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'recording_announcement' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          console.log('🔄 Fallback: Received announcement via localStorage:', data);
+          
+          // Only play if this announcement is from a different tab/user
+          const currentUserKey = `${currentUser?.id || currentUser?._id || 'unknown'}-${actualMeetingId}`;
+          if (data.fromUser !== currentUserKey) {
+            announceRecordingStatus(data.message);
+            
+            // Show visual notification
+            Swal.fire({
+              icon: 'info',
+              title: 'Recording Status',
+              text: data.message,
+              timer: 2000,
+              showConfirmButton: false,
+              toast: true,
+              position: 'top-end'
+            });
+          }
+        } catch (error) {
+          console.error('🔄 Fallback: Error parsing localStorage announcement:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [currentUser, actualMeetingId]);
+
+  // Close view controls when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (viewControlsOpen) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('[data-view-controls]')) {
+          setViewControlsOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [viewControlsOpen]);
 
   // Update meeting data
   useEffect(() => {
@@ -678,21 +784,221 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     console.log('Screen share toggled:', !screenSharing);
   };
 
+  // Speech synthesis function for recording announcements
+  const announceRecordingStatus = (message: string) => {
+    if ('speechSynthesis' in window) {
+      try {
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.volume = 0.8;
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        
+        // Try to use a female voice for better clarity
+        const voices = speechSynthesis.getVoices();
+        console.log('🔊 Available voices:', voices.map(v => v.name));
+        
+        const femaleVoice = voices.find(voice => 
+          voice.name.includes('Female') || 
+          voice.name.includes('Samantha') || 
+          voice.name.includes('Karen') ||
+          voice.name.includes('Susan') ||
+          voice.name.includes('Victoria') ||
+          voice.name.includes('Zira') ||
+          voice.name.includes('Hazel')
+        );
+        
+        if (femaleVoice) {
+          utterance.voice = femaleVoice;
+          console.log('🔊 Using female voice:', femaleVoice.name);
+        } else {
+          console.log('🔊 Using default voice');
+        }
+        
+        // Add unique identifier and event listeners
+        const utteranceId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`🔊 Creating utterance ${utteranceId}:`, message);
+        
+        utterance.onstart = () => {
+          console.log(`🔊 Speech started [${utteranceId}]:`, message);
+          setIsSpeaking(true);
+        };
+        utterance.onend = () => {
+          console.log(`🔊 Speech ended [${utteranceId}]:`, message);
+          setIsSpeaking(false);
+        };
+        utterance.onerror = (event) => {
+          console.error(`🔊 Speech error [${utteranceId}]:`, event.error);
+          setIsSpeaking(false);
+        };
+        
+        // Add a small delay to prevent conflicts between multiple utterances
+        setTimeout(() => {
+          speechSynthesis.speak(utterance);
+        }, Math.random() * 100); // Random delay 0-100ms
+      } catch (error) {
+        console.error('🔊 Speech synthesis error:', error);
+        // Fallback: show a more prominent notification
+        Swal.fire({
+          icon: 'info',
+          title: 'Recording Status',
+          text: message,
+          timer: 3000,
+          showConfirmButton: false,
+          position: 'center'
+        });
+      }
+    } else {
+      console.warn('🔊 Speech synthesis not supported');
+      // Fallback notification
+      Swal.fire({
+        icon: 'info',
+        title: 'Recording Status',
+        text: message,
+        timer: 3000,
+        showConfirmButton: false,
+        position: 'center'
+      });
+    }
+  };
+
+  // Broadcast recording announcement to all participants
+  const broadcastRecordingAnnouncement = (message: string, type: string) => {
+    const currentUserKey = `${currentUser?.id || currentUser?._id || 'unknown'}-${actualMeetingId}`;
+    
+    // Try WebSocket first
+    if (socket && wsConnected) {
+      console.log('📡 Broadcasting recording announcement via WebSocket:', { message, type });
+      console.log('📡 From user:', currentUser?.displayName || currentUser?.email || 'Unknown');
+      console.log('📡 User role:', currentParticipant?.role || 'Unknown');
+      console.log('📡 Meeting ID:', actualMeetingId);
+      console.log('📡 Socket connected:', wsConnected);
+      
+      socket.emit('RECORDING_ANNOUNCEMENT', {
+        meetingId: actualMeetingId,
+        message,
+        type,
+        timestamp: new Date().toISOString(),
+        fromUser: currentUser?.displayName || currentUser?.email || 'Unknown'
+      });
+    } else {
+      console.warn('📡 WebSocket not available, using localStorage fallback');
+      console.warn('📡 Socket status:', !!socket, 'Connected:', wsConnected);
+    }
+    
+    // Always use localStorage as fallback for cross-tab communication
+    try {
+      const announcementData = {
+        message,
+        type,
+        timestamp: new Date().toISOString(),
+        fromUser: currentUserKey,
+        meetingId: actualMeetingId
+      };
+      
+      console.log('🔄 Fallback: Broadcasting via localStorage:', announcementData);
+      localStorage.setItem('recording_announcement', JSON.stringify(announcementData));
+      
+      // Clear after a short delay to allow other tabs to receive it
+      setTimeout(() => {
+        localStorage.removeItem('recording_announcement');
+      }, 1000);
+    } catch (error) {
+      console.error('🔄 Fallback: Error using localStorage:', error);
+    }
+  };
+
   const handleRecordingToggle = async () => {
     if (!isRecording) {
       setIsRecording(true);
       setRecordingPaused(false);
       console.log('Recording started');
+      
+      // Broadcast to all participants
+      broadcastRecordingAnnouncement('Recording in progress!', 'start');
+      
+      // Announce locally (for host)
+      announceRecordingStatus('Recording in progress!');
+      
+      // Show success notification
+      Swal.fire({
+        icon: 'success',
+        title: 'Recording Started',
+        text: 'Recording is now in progress!',
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+      });
     } else {
       setIsRecording(false);
       setRecordingPaused(false);
       console.log('Recording stopped');
+      
+      // Broadcast to all participants
+      broadcastRecordingAnnouncement('Recording stopped!', 'stop');
+      
+      // Announce locally (for host)
+      announceRecordingStatus('Recording stopped!');
+      
+      // Show success notification
+      Swal.fire({
+        icon: 'info',
+        title: 'Recording Stopped',
+        text: 'Recording has been stopped and saved!',
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+      });
     }
   };
 
   const handleRecordingPause = async () => {
+    const wasPaused = recordingPaused;
     setRecordingPaused(!recordingPaused);
     console.log('Recording paused/resumed:', !recordingPaused);
+    
+    if (wasPaused) {
+      // Recording was paused, now resuming
+      const message = 'Recording resumed!';
+      const type = 'resume';
+      
+      // Broadcast to all participants
+      broadcastRecordingAnnouncement(message, type);
+      
+      // Announce locally (for host)
+      announceRecordingStatus(message);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Recording Resumed',
+        text: 'Recording has been resumed!',
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+      });
+    } else {
+      // Recording was active, now pausing
+      const message = 'Recording paused!';
+      const type = 'pause';
+      
+      // Broadcast to all participants
+      broadcastRecordingAnnouncement(message, type);
+      
+      // Announce locally (for host)
+      announceRecordingStatus(message);
+      
+      Swal.fire({
+        icon: 'warning',
+        title: 'Recording Paused',
+        text: 'Recording has been paused!',
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+      });
+    }
   };
 
   const handleRaiseHand = async () => {
@@ -983,6 +1289,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
   const isHost = currentParticipant?.role === 'HOST';
 
+  // Auto-start meeting for host
+  useEffect(() => {
+    if (isHost && meeting?.status === 'CREATED' && !isLive) {
+      console.log('🚀 Auto-starting meeting for host...');
+      handleStartMeeting();
+    }
+  }, [isHost, meeting?.status, isLive]);
+
   // Enhance participants with real-time hand raise status
   const participantsWithHandRaise = useMemo(() => {
     console.log('🔍 Updating participants with hand raise status:', {
@@ -1176,44 +1490,213 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               alignItems: 'center',
               gap: isMobile ? '6px' : '8px',
               padding: isMobile ? '4px 8px' : '6px 12px',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: isLive ? '#dcfce7' : '#f3f4f6',
               borderRadius: '20px',
               fontSize: isMobile ? '12px' : '14px',
               fontWeight: '500',
-              color: '#374151'
+              color: isLive ? '#166534' : '#374151',
+              border: isLive ? '1px solid #bbf7d0' : 'none',
+              transition: 'all 0.3s ease'
             }}>
               <div style={{
                 width: isMobile ? '6px' : '8px',
                 height: isMobile ? '6px' : '8px',
                 borderRadius: '50%',
-                backgroundColor: '#6b7280'
+                backgroundColor: isLive ? '#22c55e' : '#6b7280',
+                animation: isLive ? 'pulse 2s infinite' : 'none',
+                transition: 'all 0.3s ease'
               }}></div>
-              Live
+              {isLive ? 'Live' : 'Offline'}
             </div>
           
           {isHost && (
-            <button
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* Recording Status Indicator */}
+              {isRecording && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  backgroundColor: recordingPaused ? '#fbbf24' : '#ef4444',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'white',
+                  animation: recordingPaused ? 'none' : 'recording 1.5s infinite'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white'
+                  }}></div>
+                  {recordingPaused ? 'Paused' : 'Recording'}
+                </div>
+              )}
+
+              {/* Speech Status Indicator */}
+              {isSpeaking && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  backgroundColor: '#8b5cf6',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'white',
+                  animation: 'pulse 1s infinite'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    animation: 'pulse 0.5s infinite'
+                  }}></div>
+                  🔊 Announcing...
+                </div>
+              )}
+
+              {/* Test Speech Button - Remove this in production */}
+              <button
                 onClick={() => {
-                  if (meetingStatus === 'CREATED' || meetingStatus === 'PAUSED') {
-                    handleStartMeeting();
-                  } else if (meetingStatus === 'LIVE') {
-                    handleEndMeeting();
+                  const message = 'Test announcement! Speech synthesis is working!';
+                  console.log('🧪 TEST: Starting broadcast test...');
+                  console.log('🧪 TEST: Socket exists:', !!socket);
+                  console.log('🧪 TEST: WebSocket connected:', wsConnected);
+                  console.log('🧪 TEST: Meeting ID:', actualMeetingId);
+                  
+                  // Test WebSocket emit first
+                  if (socket && wsConnected) {
+                    console.log('🧪 TEST: Emitting test event...');
+                    socket.emit('TEST_BROADCAST', {
+                      meetingId: actualMeetingId,
+                      message: 'WebSocket test message',
+                      timestamp: new Date().toISOString()
+                    });
                   }
+                  
+                  broadcastRecordingAnnouncement(message, 'test');
+                  announceRecordingStatus(message);
                 }}
-              style={{
-                  backgroundColor: '#10b981',
-                color: 'white',
-                border: 'none',
+                style={{
+                  padding: '4px 8px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
                   borderRadius: '6px',
-                padding: isMobile ? '6px 12px' : '8px 16px',
-                fontSize: isMobile ? '12px' : '14px',
-                  fontWeight: '500',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-          }}
-        >
-                {isMobile ? 'Start' : 'Start Meeting'}
-            </button>
+                  fontSize: '10px',
+                  cursor: 'pointer',
+                  opacity: 0.7
+                }}
+                title="Test speech synthesis for all participants"
+              >
+                🔊 Test All
+              </button>
+              
+              {/* Recording Controls */}
+              {!isRecording ? (
+                <button
+                  onClick={handleRecordingToggle}
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: isMobile ? '8px 12px' : '10px 16px',
+                    fontSize: isMobile ? '12px' : '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                  }}
+                >
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white'
+                  }}></div>
+                  {isMobile ? 'Record' : 'Start Recording'}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={handleRecordingPause}
+                    style={{
+                      backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: isMobile ? '8px 12px' : '10px 16px',
+                      fontSize: isMobile ? '12px' : '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    {recordingPaused ? (
+                      <>
+                        <div style={{
+                          width: '0',
+                          height: '0',
+                          borderLeft: '6px solid white',
+                          borderTop: '4px solid transparent',
+                          borderBottom: '4px solid transparent'
+                        }}></div>
+                        {isMobile ? 'Resume' : 'Resume'}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{
+                          width: '8px',
+                          height: '8px',
+                          backgroundColor: 'white',
+                          borderRadius: '2px'
+                        }}></div>
+                        {isMobile ? 'Pause' : 'Pause'}
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleRecordingToggle}
+                    style={{
+                      backgroundColor: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: isMobile ? '8px 12px' : '10px 16px',
+                      fontSize: isMobile ? '12px' : '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    <div style={{
+                      width: '8px',
+                      height: '8px',
+                      backgroundColor: 'white',
+                      borderRadius: '2px'
+                    }}></div>
+                    {isMobile ? 'Stop' : 'Stop'}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
       </div>
       </div>
@@ -1335,90 +1818,171 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             position: 'relative',
             padding: isMobile ? '20px' : '40px'
           }}>
-            {/* View Mode Controls - Desktop Only */}
+            {/* View Controls Toggle Button - Desktop Only */}
             {!isMobile && (
-              <div style={{
+              <div 
+                data-view-controls
+                style={{
                 position: 'absolute',
-                top: '20px',
-                right: '20px',
+                top: '24px',
+                right: '24px',
                 zIndex: 100,
                 display: 'flex',
-                gap: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                padding: '8px',
-                borderRadius: '8px',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid #e5e7eb'
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: '8px'
               }}>
+                {/* Toggle Button */}
                 <button
-                  onClick={() => setViewMode('speaker')}
+                  onClick={() => setViewControlsOpen(!viewControlsOpen)}
                   style={{
-                    padding: '8px 12px',
-                    backgroundColor: viewMode === 'speaker' ? '#3b82f6' : 'transparent',
-                    color: viewMode === 'speaker' ? '#ffffff' : '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    backgroundColor: viewControlsOpen ? '#3b82f6' : 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid rgba(229, 231, 235, 0.8)',
                     cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    color: viewControlsOpen ? 'white' : '#374151',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(20px)',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
                   }}
+                  title="Toggle view controls"
                 >
-                  Main
+                  {viewMode === 'speaker' ? '🎯' : '⊞'}
                 </button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  style={{
-                    padding: '8px 12px',
-                    backgroundColor: viewMode === 'grid' ? '#3b82f6' : 'transparent',
-                    color: viewMode === 'grid' ? '#ffffff' : '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  Grid
-                </button>
-              </div>
-            )}
 
-            {/* Grid Size Controls - Desktop Only */}
-            {!isMobile && viewMode === 'grid' && (
-              <div style={{
-                position: 'absolute',
-                top: '60px',
-                right: '20px',
-                zIndex: 100,
-                display: 'flex',
-                gap: '4px',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                padding: '8px',
-                borderRadius: '8px',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid #e5e7eb'
-              }}>
-                {['2x2', '3x3', '4x4'].map((size) => (
-                  <button
-                    key={size}
-                    onClick={() => setGridSize(size as any)}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: gridSize === size ? '#3b82f6' : 'transparent',
-                      color: gridSize === size ? '#ffffff' : '#374151',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    {size}
-                  </button>
-                ))}
+                {/* Collapsible View Controls Panel */}
+                {viewControlsOpen && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    padding: '16px',
+                    borderRadius: '16px',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(229, 231, 235, 0.8)',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+                    minWidth: '200px',
+                    animation: 'slideDown 0.3s ease'
+                  }}>
+                    {/* View Mode Toggle */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        fontWeight: '600', 
+                        color: '#6b7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        View Mode
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => {
+                            setViewMode('speaker');
+                            setViewControlsOpen(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            backgroundColor: viewMode === 'speaker' ? '#3b82f6' : 'transparent',
+                            color: viewMode === 'speaker' ? '#ffffff' : '#374151',
+                            border: viewMode === 'speaker' ? 'none' : '1px solid #d1d5db',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            transition: 'all 0.3s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: viewMode === 'speaker' ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
+                          }}
+                        >
+                          <span style={{ fontSize: '14px' }}>🎯</span>
+                          Main
+                        </button>
+                        <button
+                          onClick={() => {
+                            setViewMode('grid');
+                            setViewControlsOpen(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            backgroundColor: viewMode === 'grid' ? '#3b82f6' : 'transparent',
+                            color: viewMode === 'grid' ? '#ffffff' : '#374151',
+                            border: viewMode === 'grid' ? 'none' : '1px solid #d1d5db',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            transition: 'all 0.3s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: viewMode === 'grid' ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
+                          }}
+                        >
+                          <span style={{ fontSize: '14px' }}>⊞</span>
+                          Grid
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Grid Size Controls - Only show when Grid is selected */}
+                    {viewMode === 'grid' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          fontWeight: '600', 
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Grid Layout
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {['2x2', '3x3', '4x4'].map((size) => (
+                            <button
+                              key={size}
+                              onClick={() => {
+                                setGridSize(size as any);
+                                setViewControlsOpen(false);
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '8px 12px',
+                                backgroundColor: gridSize === size ? '#10b981' : 'transparent',
+                                color: gridSize === size ? '#ffffff' : '#374151',
+                                border: gridSize === size ? 'none' : '1px solid #d1d5db',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.3s ease',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: gridSize === size ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none'
+                              }}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
