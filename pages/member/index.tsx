@@ -6,7 +6,7 @@ import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert } from '.
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
-import { GET_PARTICIPANTS_BY_MEETING } from '../../apollo/livestream/queries';
+import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING } from '../../apollo/livestream/queries';
 
 import { UPDATE_PROFILE, UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE } from '../../apollo/member/mutations';
 import Swal from 'sweetalert2';
@@ -248,7 +248,7 @@ const MemberDashboard: React.FC = () => {
         
         // Check if user is already a participant in this meeting
         try {
-          const participantResult = await makeGraphQLRequest(GET_PARTICIPANTS_BY_MEETING, {
+          const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
             meetingId: meetingId
           });
           
@@ -266,6 +266,10 @@ const MemberDashboard: React.FC = () => {
               console.log('🚪 User is already admitted, redirecting to prejoin');
               router.push(`/prejoin/${meetingId}`);
               return;
+            } else if (participantStatus === 'LEFT') {
+              // User was previously in meeting but left, allow rejoin
+              console.log('🚪 User was previously LEFT, allowing rejoin');
+              // Continue with normal join process below
             }
           }
         } catch (participantError) {

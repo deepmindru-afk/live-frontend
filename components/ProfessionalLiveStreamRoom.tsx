@@ -214,9 +214,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     },
     onParticipantJoined: (participant) => {
       console.log('👋 Participant joined:', participant);
+      // Trigger a refresh of participant data
+      if (refetchParticipants) {
+        console.log('🔄 Refreshing participant data due to new participant');
+        refetchParticipants();
+      }
     },
     onParticipantLeft: (participant) => {
       console.log('👋 Participant left:', participant);
+      // Trigger a refresh of participant data
+      if (refetchParticipants) {
+        console.log('🔄 Refreshing participant data due to participant leaving');
+        refetchParticipants();
+      }
     },
     onError: (error) => {
       console.error('🔌 WebSocket error:', error);
@@ -239,6 +249,47 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       actualMeetingIdType: typeof actualMeetingId
     });
   }, [socket, wsConnected, currentUser, actualMeetingId]);
+
+  // Add WebSocket listeners for real-time participant updates
+  useEffect(() => {
+    if (socket && actualMeetingId) {
+      console.log('🎧 Adding real-time participant update listeners');
+
+      // Listen for participant admission events
+      socket.on('PARTICIPANT_ADMITTED', (data) => {
+        console.log('✅ PARTICIPANT_ADMITTED event received:', data);
+        if (refetchParticipants) {
+          console.log('🔄 Refreshing participant data due to participant admission');
+          refetchParticipants();
+        }
+      });
+
+      // Listen for meeting status changes
+      socket.on('MEETING_STATUS_CHANGED', (data) => {
+        console.log('🔄 MEETING_STATUS_CHANGED event received:', data);
+        if (refetchParticipants) {
+          console.log('🔄 Refreshing participant data due to meeting status change');
+          refetchParticipants();
+        }
+      });
+
+      // Listen for participant left waiting room
+      socket.on('PARTICIPANT_LEFT_WAITING', (data) => {
+        console.log('🚪 PARTICIPANT_LEFT_WAITING event received:', data);
+        if (refetchParticipants) {
+          console.log('🔄 Refreshing participant data due to participant leaving waiting room');
+          refetchParticipants();
+        }
+      });
+
+      return () => {
+        console.log('🧹 Cleaning up real-time participant update listeners');
+        socket.off('PARTICIPANT_ADMITTED');
+        socket.off('MEETING_STATUS_CHANGED');
+        socket.off('PARTICIPANT_LEFT_WAITING');
+      };
+    }
+  }, [socket, actualMeetingId, refetchParticipants]);
 
   // WebSocket-based hand raise functionality (real-time, no DB)
   const { 

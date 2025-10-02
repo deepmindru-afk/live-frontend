@@ -401,8 +401,66 @@ const PrejoinPage = () => {
   useEffect(() => {
     if (meetingId) {
       fetchMeetingInfo();
+      // FIXED: Check if user is already a participant and redirect accordingly
+      checkExistingParticipantStatus();
     }
   }, [meetingId]);
+
+  const checkExistingParticipantStatus = async () => {
+    try {
+      console.log('🔍 PREJOIN: Checking existing participant status...');
+      
+      // Get current user info
+      const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
+      if (!isAuthenticated()) {
+        console.log('🔍 PREJOIN: User not authenticated, skipping participant check');
+        return;
+      }
+
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        console.log('🔍 PREJOIN: No current user found, skipping participant check');
+        return;
+      }
+
+      // Check if user is already a participant in this meeting
+      const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
+        meetingId: meetingId as string
+      });
+
+      if (participantResult.getParticipantByUserAndMeeting) {
+        const participant = participantResult.getParticipantByUserAndMeeting;
+        const participantStatus = participant.status;
+        
+        console.log('🔍 PREJOIN: Found existing participant:', {
+          status: participantStatus,
+          meetingId: meetingId,
+          userId: currentUser._id
+        });
+
+        // If participant is already ADMITTED and meeting is LIVE, redirect to live room
+        if (participantStatus === 'ADMITTED') {
+          // Check meeting status
+          const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
+            meetingId: meetingId as string
+          });
+
+          if (meetingResult.getMeetingById && meetingResult.getMeetingById.status === 'LIVE') {
+            console.log('🚀 PREJOIN: User is already ADMITTED and meeting is LIVE, redirecting to live room');
+            router.push(`/livestream/${meetingId}`);
+            return;
+          }
+        } else if (participantStatus === 'WAITING') {
+          console.log('🚀 PREJOIN: User is already in WAITING status, redirecting to waiting room');
+          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult?.getMeetingById?.inviteCode || ''}`);
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('🔍 PREJOIN: Error checking existing participant status:', error);
+      // Continue with normal flow if check fails
+    }
+  };
 
   const handleJoinMeeting = async () => {
     if (!meetingId) return;
@@ -465,6 +523,7 @@ const PrejoinPage = () => {
         } else if (participantStatus === 'ADMITTED') {
           // Participant admitted directly, go to live room
           console.log('🚀 PREJOIN: Participant admitted directly (status: ADMITTED), going to live room');
+          console.log('🔍 PREJOIN: Meeting status:', backendStatus, 'Participant status:', participantStatus);
           router.push(`/livestream/${meetingId}`);
         } else if (!participantStatus) {
           // If status is undefined, fallback to backend meeting status logic

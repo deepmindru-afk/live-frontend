@@ -157,15 +157,15 @@ export const useWebSocketChat = ({
       console.log('📤 Joining meeting with new presence system...');
       newSocket.emit('JOIN_MEETING', { meetingId });
       
-      // Start heartbeat system
-      const heartbeatInterval = setInterval(() => {
-        if (newSocket.connected) {
-          console.log('💓 Sending heartbeat...');
-          newSocket.emit('HEARTBEAT', { meetingId });
-        } else {
-          clearInterval(heartbeatInterval);
-        }
-      }, 10000); // Every 10 seconds
+          // Start heartbeat system - HYBRID APPROACH: Every 5 seconds for best balance
+          const heartbeatInterval = setInterval(() => {
+            if (newSocket.connected) {
+              console.log('💓 Sending heartbeat...');
+              newSocket.emit('HEARTBEAT', { meetingId });
+            } else {
+              clearInterval(heartbeatInterval);
+            }
+          }, 5000); // Every 5 seconds - HYBRID: Fast detection + Smart DB updates
       
       // Store interval for cleanup
       (newSocket as any).heartbeatInterval = heartbeatInterval;

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
+import { io } from 'socket.io-client';
 import Swal from 'sweetalert2';
 
 interface MeetingInfo {
@@ -40,11 +41,16 @@ const WaitingRoomPage: React.FC = () => {
     // Don't clear redirect flags on mount - this was causing infinite loops
     // The flags will be cleared when user successfully joins the live room
     
-    // Cleanup function to clear any intervals
+    // Cleanup function to clear any intervals and emit LEAVE_WAITING_ROOM
     return () => {
       // Cleanup will be handled by the monitoring function
+      // Emit LEAVE_WAITING_ROOM when component unmounts (user navigates away)
+      if (participantId && meetingId) {
+        console.log('🚪 WAITING ROOM: Component unmounting, emitting LEAVE_WAITING_ROOM');
+        // We can't use socket here since it's in cleanup, but the presence system will handle it
+      }
     };
-  }, [router.query]);
+  }, [router.query, participantId]);
 
   const checkMeetingStatus = async (meetingId: string) => {
     try {
@@ -128,8 +134,8 @@ const WaitingRoomPage: React.FC = () => {
         // Meeting is created/scheduled, show waiting room
         setIsWaitingForMeeting(true);
         
-        // Start monitoring meeting status
-        startMeetingStatusMonitoring(meetingId);
+        // Start real-time WebSocket monitoring
+        startWebSocketMonitoring(meetingId);
         }
       } else {
         throw new Error('Meeting not found');
@@ -139,74 +145,152 @@ const WaitingRoomPage: React.FC = () => {
     }
   };
 
-  // Monitor meeting status and participant approval
-  const startMeetingStatusMonitoring = (meetingId: string) => {
-    const interval = setInterval(async () => {
+  // REAL-TIME WebSocket-based monitoring instead of polling
+  const startWebSocketMonitoring = (meetingId: string) => {
+    console.log('🔌 WAITING: Starting WebSocket monitoring for real-time updates');
+    
+    // Import WebSocket functionality
+    const setupWebSocket = async () => {
       try {
-        // Check meeting status
-        const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
-          meetingId: meetingId
-        });
+        const { getAuthToken } = await import('../../lib/simple-auth-handlers');
+        const token = getAuthToken();
         
-        if (result.getMeetingById) {
-          console.log('🔄 WAITING: Monitoring meeting status:', result.getMeetingById.status);
+        if (!token) {
+          console.error('❌ WAITING: No WebSocket token available, using polling fallback');
+          return startPollingFallback(meetingId);
+        }
+
+        // Create WebSocket connection for waiting room updates
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
+        console.log('🔌 WAITING: WebSocket connecting to:', `${backendUrl}/signaling`);
+        
+        const socket = io(`${backendUrl}/signaling`, {
+          auth: { token },
+          transports: ['websocket'],
+          upgrade: true,
+        });
+
+        socket.on('connect', () => {
+          console.log('✅ WAITING: WebSocket connected for real-time updates');
           
-          const currentStatus = result.getMeetingById.status === 'CREATED' ? 'SCHEDULED' : 
-                               result.getMeetingById.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                               result.getMeetingById.status === 'LIVE' ? 'STARTED' :
-                               result.getMeetingById.status === 'STARTED' ? 'STARTED' :
-                               result.getMeetingById.status === 'ACTIVE' ? 'ACTIVE' :
-                               result.getMeetingById.status === 'ENDED' ? 'ENDED' : 'SCHEDULED';
+          // Join waiting room for this meeting
+          socket.emit('JOIN_WAITING_ROOM', { 
+            meetingId, 
+            participantId 
+          });
+        });
+
+        socket.on('WAITING_ROOM_JOINED', (data) => {
+          console.log('🚪 WAITING: Successfully joined waiting room via WebSocket:', data);
+        });
+
+        // Listen for meeting status changes
+        socket.on('MEETING_STATUS_CHANGED', (data) => {
+          console.log('🔄 WAITING: Meeting status changed via WebSocket:', data);
           
-          console.log('🔄 WAITING: Mapped status:', currentStatus, 'from backend status:', result.getMeetingById.status);
-          
-          // Update meeting info
-          setMeetingInfo(prev => prev ? { ...prev, status: currentStatus } : null);
-          
-          // If meeting is LIVE or started/active, redirect to live room
-          if (result.getMeetingById.status === 'LIVE' || currentStatus === 'STARTED' || currentStatus === 'ACTIVE') {
-            clearInterval(interval);
-            console.log('🚀 WAITING: Meeting started (backend status:', result.getMeetingById.status, 'mapped status:', currentStatus, '), redirecting to live room');
+          if (data.status === 'LIVE' || data.status === 'STARTED' || data.status === 'ACTIVE') {
+            console.log('🚀 WAITING: Meeting started via WebSocket, redirecting to live room');
             
-            // Prevent infinite redirect loop using localStorage with timestamp
+            // Prevent infinite redirect loop
             const redirectKey = `redirected_to_live_${meetingId}`;
             const lastRedirectTime = localStorage.getItem(redirectKey);
             const now = Date.now();
             const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
             
-            console.log('🔍 WAITING: Redirect check:', {
-              meetingId,
-              participantId,
-              redirectKey,
-              lastRedirectTime,
-              timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
-              cooldownPeriod: REDIRECT_COOLDOWN,
-              backendStatus: result.getMeetingById.status,
-              mappedStatus: currentStatus
-            });
-            
             if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
               localStorage.setItem(redirectKey, now.toString());
-              console.log('🚀 WAITING: Redirecting to live room (cooldown period passed)');
+              socket.disconnect();
               router.push(`/livestream/${meetingId}`);
-            } else {
-              console.log('⚠️ WAITING: Redirect cooldown active, staying in waiting room to prevent loop');
             }
           }
+        });
+
+        // Listen for participant approval
+        socket.on('PARTICIPANT_APPROVED', (data) => {
+          console.log('✅ WAITING: Participant approved via WebSocket:', data);
           
-          // Check if participant is approved (if we have participantId)
-          if (participantId) {
-            // TODO: Add participant approval check query
-            // For now, we'll assume all participants are approved when meeting starts
+          if (data.participantId === participantId) {
+            console.log('🚀 WAITING: You have been approved, redirecting to live room');
+            socket.disconnect();
+            router.push(`/livestream/${meetingId}`);
           }
-        }
+        });
+
+        // Listen for waiting room updates
+        socket.on('WAITING_ROOM_UPDATE', (data) => {
+          console.log('🔄 WAITING: Waiting room update via WebSocket:', data);
+          
+          if (data.type === 'PARTICIPANT_APPROVED' && data.participantId === participantId) {
+            console.log('🚀 WAITING: You have been approved via update, redirecting to live room');
+            socket.disconnect();
+            router.push(`/livestream/${meetingId}`);
+          }
+        });
+
+        // Listen for participant admitted to meeting
+        socket.on('PARTICIPANT_ADMITTED_TO_MEETING', (data) => {
+          console.log('✅ WAITING: Participant admitted to meeting via WebSocket:', data);
+          
+          if (data.participantId === participantId) {
+            console.log('🚀 WAITING: You have been admitted to the meeting, redirecting to live room');
+            socket.disconnect();
+            router.push(`/livestream/${meetingId}`);
+          }
+        });
+
+        // Listen for all participants admitted (when meeting starts)
+        socket.on('ALL_PARTICIPANTS_ADMITTED', (data) => {
+          console.log('🎉 WAITING: All participants admitted - meeting started via WebSocket:', data);
+          console.log('🚀 WAITING: Meeting has started, redirecting all participants to live room');
+          socket.disconnect();
+          router.push(`/livestream/${meetingId}`);
+        });
+
+        socket.on('disconnect', () => {
+          console.log('🔌 WAITING: WebSocket disconnected');
+        });
+
+        socket.on('error', (error) => {
+          console.error('❌ WAITING: WebSocket error:', error);
+        });
+
+        // Return socket for cleanup
+        return socket;
       } catch (error) {
-        console.error('Error monitoring meeting status:', error);
+        console.error('❌ WAITING: Error setting up WebSocket:', error);
+        // Fallback to polling if WebSocket fails
+        return startPollingFallback(meetingId);
       }
-    }, 2000); // Check every 2 seconds for faster response
-    
-    // Store interval ID for cleanup
-    return () => clearInterval(interval);
+    };
+
+    // Fallback polling method (keep existing logic as backup)
+    const startPollingFallback = (meetingId: string) => {
+      console.log('🔄 WAITING: Using polling fallback for monitoring');
+      
+      const interval = setInterval(async () => {
+        try {
+          const result = await enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+            meetingId: meetingId
+          });
+          
+          if (result.getMeetingById) {
+            console.log('🔄 WAITING: Polling - Meeting status:', result.getMeetingById.status);
+            
+            if (result.getMeetingById.status === 'LIVE' || result.getMeetingById.status === 'STARTED' || result.getMeetingById.status === 'ACTIVE') {
+              clearInterval(interval);
+              console.log('🚀 WAITING: Meeting started via polling, redirecting to live room');
+              router.push(`/livestream/${meetingId}`);
+            }
+          }
+        } catch (error) {
+          console.error('Error in polling fallback:', error);
+        }
+      }, 2000);
+
+      return () => clearInterval(interval);
+    };
+
+    return setupWebSocket();
   };
 
   const handleJoinMeeting = async (e: React.FormEvent) => {
@@ -256,6 +340,57 @@ const WaitingRoomPage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInviteCode(e.target.value);
     if (error) setError('');
+  };
+
+  const handleLeaveWaitingRoom = async () => {
+    try {
+      const { code, meetingId } = router.query;
+      if (participantId && meetingId) {
+        console.log('🚪 WAITING ROOM: User leaving waiting room');
+        
+        // Emit LEAVE_WAITING_ROOM WebSocket event
+        try {
+          const { getAuthToken } = await import('../../lib/simple-auth-handlers');
+          const token = getAuthToken();
+          
+          if (token) {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
+            const socket = io(`${backendUrl}/signaling`, {
+              auth: { token },
+              transports: ['websocket'],
+            });
+
+            socket.on('connect', () => {
+              console.log('🚪 WAITING ROOM: Connected to emit leave event');
+              socket.emit('LEAVE_WAITING_ROOM', { 
+                meetingId, 
+                participantId 
+              });
+              
+              // Wait a moment for the event to be processed, then disconnect
+              setTimeout(() => {
+                socket.disconnect();
+              }, 1000);
+            });
+
+            socket.on('WAITING_ROOM_LEFT', (data) => {
+              console.log('✅ WAITING ROOM: Successfully left waiting room:', data);
+            });
+
+            socket.on('error', (error) => {
+              console.error('❌ WAITING ROOM: Error leaving:', error);
+            });
+          }
+        } catch (socketError) {
+          console.error('❌ WAITING ROOM: Error setting up socket for leave:', socketError);
+        }
+        
+        // Redirect to dashboard
+        router.push('/member');
+      }
+    } catch (error) {
+      console.error('Error leaving waiting room:', error);
+    }
   };
 
   return (
@@ -325,6 +460,9 @@ const WaitingRoomPage: React.FC = () => {
                   <button 
                     onClick={async () => {
                       try {
+                        // FIXED: Properly handle leaving waiting room
+                        await handleLeaveWaitingRoom();
+                        
                         const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
                         if (isAuthenticated()) {
                           const currentUser = await getCurrentUser();
@@ -345,7 +483,7 @@ const WaitingRoomPage: React.FC = () => {
                     }}
                     className="nav-button dashboard"
                   >
-                    Back to Dashboard
+                    Leave Waiting Room
                   </button>
                   <button 
                     onClick={() => router.push(`/prejoin/${meetingInfo?._id}`)}
