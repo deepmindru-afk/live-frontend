@@ -6,6 +6,8 @@ import { JOIN_MEETING, LEAVE_MEETING } from '../../../apollo/meeting/mutations';
 import { GET_MEETING_BY_ID } from '../../../apollo/meeting/queries';
 import { UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../../apollo/vod/mutations';
 import Swal from 'sweetalert2';
+import PictureInPicture from '../../../components/PictureInPicture';
+import { usePictureInPicture } from '../../../hooks/usePictureInPicture';
 
 interface Participant {
   _id: string;
@@ -49,6 +51,21 @@ const VideoRoomPage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const screenShareRef = useRef<MediaStream | null>(null);
+
+  // Picture-in-Picture functionality
+  const {
+    isPiPVisible,
+    isPageHidden,
+    backToRoom,
+    closePiP,
+    leaveMeetingFromPiP,
+    isMobile
+  } = usePictureInPicture({
+    meetingId: meetingId as string,
+    meetingTitle: meeting?.title || 'Meeting',
+    participantCount,
+    onLeaveMeeting: leaveMeeting
+  });
 
   useEffect(() => {
     if (meetingId) {
@@ -741,6 +758,18 @@ const VideoRoomPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Picture-in-Picture Component */}
+        <PictureInPicture
+          videoRef={videoRef}
+          meetingId={meetingId as string}
+          meetingTitle={meeting?.title || 'Meeting'}
+          participantCount={participantCount}
+          onLeaveMeeting={leaveMeetingFromPiP}
+          onBackToRoom={backToRoom}
+          isVisible={isPiPVisible}
+          onClose={closePiP}
+        />
       </div>
     </>
   );

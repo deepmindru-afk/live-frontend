@@ -9,6 +9,8 @@ import { useHandRaise } from '../../../hooks/useHandRaise';
 import { HandRaiseButton } from '../../../components/HandRaiseButton';
 import { RaisedHandsList } from '../../../components/RaisedHandsList';
 import Swal from 'sweetalert2';
+import PictureInPicture from '../../../components/PictureInPicture';
+import { usePictureInPicture } from '../../../hooks/usePictureInPicture';
 
 interface Participant {
   _id: string;
@@ -64,6 +66,21 @@ const MeetingPage: React.FC = memo(() => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<any>(null);
+
+  // Picture-in-Picture functionality
+  const {
+    isPiPVisible,
+    isPageHidden,
+    backToRoom,
+    closePiP,
+    leaveMeetingFromPiP,
+    isMobile
+  } = usePictureInPicture({
+    meetingId: meetingId as string,
+    meetingTitle: meeting?.title || 'Meeting',
+    participantCount,
+    onLeaveMeeting: leaveMeeting
+  });
 
   // WebSocket connection for chat and hand raise
   const {
@@ -1753,6 +1770,18 @@ const MeetingPage: React.FC = memo(() => {
             </div>
           </div>
         )}
+
+        {/* Picture-in-Picture Component */}
+        <PictureInPicture
+          videoRef={videoRef}
+          meetingId={meetingId as string}
+          meetingTitle={meeting?.title || 'Meeting'}
+          participantCount={participantCount}
+          onLeaveMeeting={leaveMeetingFromPiP}
+          onBackToRoom={backToRoom}
+          isVisible={isPiPVisible}
+          onClose={closePiP}
+        />
       </div>
     </>
   );

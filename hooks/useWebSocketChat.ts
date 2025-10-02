@@ -106,6 +106,12 @@ export const useWebSocketChat = ({
       console.log('🔌 Disconnected from chat WebSocket:', reason);
       setIsConnected(false);
       
+      // Clean up heartbeat interval on disconnect
+      if ((newSocket as any).heartbeatInterval) {
+        clearInterval((newSocket as any).heartbeatInterval);
+        (newSocket as any).heartbeatInterval = null;
+      }
+      
       // Attempt to reconnect if not manually disconnected
       if (reason !== 'io client disconnect' && reconnectAttempts.current < maxReconnectAttempts) {
         reconnectAttempts.current++;
@@ -147,12 +153,22 @@ export const useWebSocketChat = ({
       console.log('📤 Joining chat room after successful authentication...');
       newSocket.emit('JOIN_CHAT_ROOM', { meetingId });
       
-      // Also join the meeting room for hand raise events
-      console.log('📤 Joining meeting room for hand raise events...');
-      newSocket.emit('PARTICIPANT_JOIN_MEETING', { 
-        meetingId, 
-        participantId: data.participantId || 'unknown' 
-      });
+      // FIXED: Use new presence system instead of old events
+      console.log('📤 Joining meeting with new presence system...');
+      newSocket.emit('JOIN_MEETING', { meetingId });
+      
+      // Start heartbeat system
+      const heartbeatInterval = setInterval(() => {
+        if (newSocket.connected) {
+          console.log('💓 Sending heartbeat...');
+          newSocket.emit('HEARTBEAT', { meetingId });
+        } else {
+          clearInterval(heartbeatInterval);
+        }
+      }, 10000); // Every 10 seconds
+      
+      // Store interval for cleanup
+      (newSocket as any).heartbeatInterval = heartbeatInterval;
     });
 
     newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
@@ -204,6 +220,16 @@ export const useWebSocketChat = ({
       console.log('🏓 Pong received:', data);
     });
 
+    // Add heartbeat acknowledgment listener
+    newSocket.on('HEARTBEAT_ACK', (data) => {
+      console.log('💓 Heartbeat acknowledged:', data);
+    });
+
+    // Add meeting join success listener
+    newSocket.on('MEETING_JOIN_SUCCESS', (data) => {
+      console.log('✅ Meeting join successful:', data);
+    });
+
       console.log('🔌 Setting socket state:', { 
         socketId: newSocket.id, 
         connected: newSocket.connected 
@@ -223,6 +249,15 @@ export const useWebSocketChat = ({
     }
     
     if (socket) {
+      // Send leave meeting event for presence system
+      socket.emit('LEAVE_MEETING', { meetingId });
+      
+      // Clean up heartbeat interval
+      if ((socket as any).heartbeatInterval) {
+        clearInterval((socket as any).heartbeatInterval);
+        (socket as any).heartbeatInterval = null;
+      }
+      
       socket.emit('LEAVE_CHAT_ROOM', { meetingId });
       socket.disconnect();
       setSocket(null);
@@ -263,44 +298,8 @@ export const useWebSocketChat = ({
     }
   }, [socket, isConnected]);
 
-  const joinMeetingRoom = useCallback((meetingId: string, participantId: string) => {
-    try {
-      if (socket && isConnected) {
-        console.log('📤 Joining meeting room for hand raise events:', { meetingId, participantId });
-        socket.emit('PARTICIPANT_JOIN_MEETING', { meetingId, participantId });
-      } else {
-        console.error('❌ Cannot join meeting room: not connected to chat', {
-          socket: !!socket,
-          isConnected,
-          meetingId,
-          participantId
-        });
-        setError('Cannot join meeting room: WebSocket not connected');
-      }
-    } catch (error) {
-      console.error('❌ Error joining meeting room:', error);
-      setError(`Failed to join meeting room: ${(error as Error).message || 'Unknown error'}`);
-    }
-  }, [socket, isConnected]);
-
-  const joinHostMeetingRoom = useCallback((meetingId: string) => {
-    try {
-      if (socket && isConnected) {
-        console.log('📤 Host joining meeting room for hand raise events:', { meetingId });
-        socket.emit('HOST_JOIN_MEETING', { meetingId });
-      } else {
-        console.error('❌ Cannot join meeting room as host: not connected to chat', {
-          socket: !!socket,
-          isConnected,
-          meetingId
-        });
-        setError('Cannot join meeting room as host: WebSocket not connected');
-      }
-    } catch (error) {
-      console.error('❌ Error joining meeting room as host:', error);
-      setError(`Failed to join meeting room as host: ${(error as Error).message || 'Unknown error'}`);
-    }
-  }, [socket, isConnected]);
+  // Note: joinMeetingRoom and joinHostMeetingRoom are now handled automatically
+  // by the new presence system when the WebSocket connects
 
   // Connect on mount and when dependencies change
   useEffect(() => {
@@ -351,7 +350,5 @@ export const useWebSocketChat = ({
     ping,
     connect,
     disconnect,
-    joinMeetingRoom,
-    joinHostMeetingRoom,
   };
 };

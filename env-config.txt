@@ -1,0 +1,14 @@
+# GraphQL Configuration
+NEXT_PUBLIC_GRAPHQL_URL=http://localhost:3007/graphql
+NEXT_PUBLIC_GRAPHQL_ENDPOINT=http://localhost:3007/graphql
+
+# WebSocket Configuration
+NEXT_PUBLIC_WS_URL=ws://localhost:3007/graphql
+
+# LiveKit Configuration
+NEXT_PUBLIC_LIVEKIT_URL=https://your-livekit-server.com
+NEXT_PUBLIC_LIVEKIT_API_KEY=your-livekit-api-key
+
+# Application Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+

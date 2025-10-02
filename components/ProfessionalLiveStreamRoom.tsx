@@ -26,6 +26,11 @@ import ChatView from './ChatView';
 import WebSocketChatView from './WebSocketChatView';
 import ChatDebug from './ChatDebug';
 import MinimalistChat from './MinimalistChat';
+import PictureInPicture from './PictureInPicture';
+import { usePictureInPicture } from '../hooks/usePictureInPicture';
+import ParticipantQueue from './ParticipantQueue';
+import { useParticipantQueue, Participant } from '../hooks/useParticipantQueue';
+import { useAudioLevelDetection } from '../hooks/useAudioLevelDetection';
 
 // Additional mutations for leave functionality
 const FORCE_LEAVE_MEETING = gql`
@@ -87,6 +92,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
+
+  // Participant Queue System
+  const {
+    queueState,
+    addParticipant: addToQueue,
+    removeParticipant: removeFromQueue,
+    updateSpeakingStatus,
+    updateHandRaiseStatus,
+    startScreenShare: startQueueScreenShare,
+    stopScreenShare: stopQueueScreenShare,
+    updateParticipant: updateQueueParticipant,
+    getMainStageParticipants,
+    getThumbnailParticipants,
+    analyzeAudioLevel,
+    updateParticipantAudioLevel
+  } = useParticipantQueue(participants.map(p => ({
+    _id: p._id,
+    displayName: p.displayName,
+    email: p.email || '',
+    isMuted: p.micState === 'OFF',
+    isCameraOff: p.cameraState === 'OFF',
+    joinedAt: p.joinedAt || new Date().toISOString(),
+    isHost: p.role === 'HOST',
+    role: p.role,
+    hasHandRaised: p.hasHandRaised || false,
+    handRaisedAt: p.handRaisedAt,
+    isSpeaking: false,
+    audioLevel: 0,
+    lastActivity: new Date().toISOString()
+  })));
+
+  // Audio Level Detection
+  const { detectSpeakingStatus, isSupported: audioSupported } = useAudioLevelDetection({
+    threshold: 0.01,
+    smoothingFactor: 0.8,
+    updateInterval: 100
+  });
   const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
@@ -164,7 +206,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     tokenPreview: webSocketToken ? webSocketToken.substring(0, 20) + '...' : 'none'
   });
   
-  const { socket, isConnected: wsConnected, joinMeetingRoom, joinHostMeetingRoom } = useWebSocketChat({
+  const { socket, isConnected: wsConnected } = useWebSocketChat({
     meetingId: actualMeetingId,
     token: webSocketToken,
     onMessage: (message) => {
@@ -182,29 +224,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     // Hand raise events are handled through participants data changes
   });
 
-  // Join meeting room for hand raise events when WebSocket is connected
-  useEffect(() => {
-    if (wsConnected && actualMeetingId && currentParticipant?._id) {
-      try {
-        if (currentParticipant.role === 'HOST') {
-          console.log('📤 Host joining meeting room for hand raise events');
-          joinHostMeetingRoom(actualMeetingId);
-        } else {
-          console.log('📤 Participant joining meeting room for hand raise events');
-          joinMeetingRoom(actualMeetingId, currentParticipant._id);
-        }
-      } catch (error) {
-        console.error('❌ Error joining meeting room:', error);
-      }
-    } else {
-      console.log('🔌 Not joining meeting room:', {
-        wsConnected,
-        actualMeetingId,
-        currentParticipantId: currentParticipant?._id,
-        currentParticipantRole: currentParticipant?.role
-      });
-    }
-  }, [wsConnected, actualMeetingId, currentParticipant, joinMeetingRoom, joinHostMeetingRoom]);
+  // Note: Meeting room joining is now handled automatically by the new presence system
+  // when the WebSocket connects via JOIN_MEETING and HEARTBEAT events
 
   // Debug WebSocket connection
   useEffect(() => {
@@ -548,11 +569,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Update participants data
   useEffect(() => {
+    console.log('🔍 PARTICIPANTS DATA UPDATE:', {
+      participantsData,
+      hasData: !!participantsData,
+      dataType: typeof participantsData,
+      hasGetParticipantsByMeeting: participantsData && 'getParticipantsByMeeting' in participantsData,
+      getParticipantsByMeeting: participantsData?.getParticipantsByMeeting,
+      participantsListLength: participantsData?.getParticipantsByMeeting?.length || 0
+    });
+    
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
       const previousParticipants = participants;
       
+      console.log('🔍 SETTING PARTICIPANTS:', {
+        participantsList,
+        participantsListLength: participantsList.length,
+        previousParticipantsLength: previousParticipants.length
+      });
+      
       setParticipants(participantsList);
+
+      // Update queue with new participant data
+      participantsList.forEach(participant => {
+        updateQueueParticipant(participant._id, {
+          _id: participant._id,
+          displayName: participant.displayName,
+          email: participant.email || '',
+          isMuted: participant.micState === 'OFF',
+          isCameraOff: participant.cameraState === 'OFF',
+          joinedAt: participant.joinedAt || new Date().toISOString(),
+          isHost: participant.role === 'HOST',
+          role: participant.role,
+          hasHandRaised: participant.hasHandRaised || false,
+          handRaisedAt: participant.handRaisedAt
+        });
+      });
 
       // Check for new participants (joined)
       if (previousParticipants.length > 0) {
@@ -562,7 +614,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         newParticipants.forEach((participant: any) => {
           console.log('🎉 New participant joined meeting:', participant);
-          // This will be handled by the chat component
+          addToQueue({
+            _id: participant._id,
+            displayName: participant.displayName,
+            email: participant.email || '',
+            isMuted: participant.micState === 'OFF',
+            isCameraOff: participant.cameraState === 'OFF',
+            joinedAt: participant.joinedAt || new Date().toISOString(),
+            isHost: participant.role === 'HOST',
+            role: participant.role,
+            hasHandRaised: participant.hasHandRaised || false,
+            handRaisedAt: participant.handRaisedAt
+          });
         });
 
         // Check for left participants
@@ -572,11 +635,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         leftParticipants.forEach((participant: any) => {
           console.log('👋 Participant left meeting:', participant);
-          // This will be handled by the chat component
+          removeFromQueue(participant._id);
         });
       }
     }
-  }, [participantsData, participants]);
+  }, [participantsData, participants, addToQueue, removeFromQueue, updateQueueParticipant]);
+
+  // Audio level detection and speaking status monitoring
+  useEffect(() => {
+    if (!audioSupported || queueState.participants.length === 0) return;
+
+    const monitorAudioLevels = async () => {
+      try {
+        // Get participants with audio streams (mock for now)
+        const participantsWithStreams = queueState.participants.map(p => ({
+          _id: p._id,
+          stream: undefined // In real implementation, this would be the actual MediaStream
+        }));
+
+        const speakingStatuses = await detectSpeakingStatus(participantsWithStreams);
+        
+        // Update speaking status for each participant
+        speakingStatuses.forEach(({ _id, audioLevel, isSpeaking }) => {
+          updateSpeakingStatus(_id, isSpeaking, audioLevel);
+        });
+      } catch (error) {
+        console.warn('Audio level detection failed:', error);
+      }
+    };
+
+    const interval = setInterval(monitorAudioLevels, 200); // Check every 200ms
+    return () => clearInterval(interval);
+  }, [audioSupported, queueState.participants, detectSpeakingStatus, updateSpeakingStatus]);
 
   // Update waiting participants data
   useEffect(() => {
@@ -1104,6 +1194,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     console.log('⏸️ ============ RECORDING PAUSE/RESUME END ============');
   };
 
+  // Screen share handlers
+  const handleStartScreenShare = useCallback(() => {
+    if (currentParticipant?._id) {
+      startQueueScreenShare(currentParticipant._id);
+      console.log('📺 Started screen share for:', currentParticipant.displayName);
+    }
+  }, [currentParticipant, startQueueScreenShare]);
+
+  const handleStopScreenShare = useCallback(() => {
+    stopQueueScreenShare();
+    console.log('📺 Stopped screen share');
+  }, [stopQueueScreenShare]);
+
   const handleRaiseHand = async () => {
     try {
       if (!currentParticipant?._id) {
@@ -1139,10 +1242,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         // Lower hand
         console.log('✋ Lowering hand...');
         wsLowerHand();
+        updateHandRaiseStatus(currentParticipant._id, false);
       } else {
         // Raise hand
         console.log('✋ Raising hand...');
         wsRaiseHand();
+        updateHandRaiseStatus(currentParticipant._id, true);
       }
     } catch (error) {
       console.error('❌ Error toggling hand raise:', error);
@@ -2264,202 +2369,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
-            {/* Main Video Display */}
-            {viewMode === 'speaker' ? (
-              <div style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: '16px',
-                backgroundColor: '#6b7280',
-                border: '2px solid #d1d5db',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '120px',
-                color: '#9ca3af',
-                position: 'relative',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-              }}>
-                {/* Host Video Label */}
-                <div style={{
-                  position: 'absolute',
-                  top: '20px',
-                  left: '20px',
-                  backgroundColor: '#000000',
-                  color: 'white',
-                  fontSize: '14px',
-                  borderRadius: '8px',
-                  padding: '6px 12px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: '#10b981'
-                  }}></div>
-                  Host Video
-                </div>
-                
-                {selectedParticipant ? (
-                  selectedParticipant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'
-                ) : (
-                  '👨‍🏫'
-                )}
-                
-                <div style={{
-                  position: 'absolute',
-                  bottom: '20px',
-                  right: '20px',
-                  backgroundColor: '#10b981',
-                  color: 'white',
-                  fontSize: '18px',
-                  borderRadius: '8px',
-                  padding: '6px 12px',
-                  fontWeight: '500'
-                }}>
-                  📹
-                </div>
-              </div>
-            ) : (
-              /* Grid View - 2x2, 3x3, 4x4 */
-              <div style={{
-                flex: 1,
-                display: 'grid',
-                gridTemplateColumns: gridSize === '2x2' ? 'repeat(2, 1fr)'
-                  : gridSize === '3x3' ? 'repeat(3, 1fr)'
-                  : 'repeat(4, 1fr)',
-                gridTemplateRows: gridSize === '2x2' ? 'repeat(2, 1fr)'
-                  : gridSize === '3x3' ? 'repeat(3, 1fr)'
-                  : 'repeat(4, 1fr)',
-                gap: '12px',
-                width: '100%',
-                height: '100%'
-              }}>
-                {participantsWithHandRaise.map((participant, index) => (
-                  <div
-                    key={participant._id}
-                    style={{
-                      backgroundColor: '#6b7280',
-                      borderRadius: '12px',
-                      border: participant.role === 'HOST' ? '2px solid #3b82f6' : '1px solid #d1d5db',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    {/* Speaking indicator */}
-                    {participant.micState === 'ON' && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '8px',
-                        left: '8px',
-                        width: '12px',
-                        height: '12px',
-                        backgroundColor: '#22c55e',
-                        borderRadius: '50%',
-                        animation: 'pulse 1s infinite'
-                      }}></div>
-                    )}
-
-                    
-                    {/* Host indicator */}
-                    {participant.role === 'HOST' && (
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '8px',
-                        left: '8px',
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        fontSize: '10px',
-                        fontWeight: '600',
-                        padding: '2px 6px',
-                        borderRadius: '4px'
-                      }}>
-                        HOST
-                      </div>
-                    )}
-
-                    {/* Participant avatar */}
-                    <div style={{
-                      fontSize: '60px',
-                      marginBottom: '8px',
-                      color: '#9ca3af'
-                    }}>
-                      {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
-                    </div>
-
-                    {/* Participant name */}
-                    <div style={{
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      color: '#ffffff',
-                      textAlign: 'center',
-                      marginBottom: '4px',
-                      padding: '0 8px'
-                    }}>
-                      {participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')}
-                    </div>
-
-                    {/* Mic/Camera status */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '4px',
-                      alignItems: 'center'
-                    }}>
-                      <div style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '4px',
-                        backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        {participant.micState === 'ON' ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                          </svg>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                            <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
-                          </svg>
-                        )}
-                      </div>
-                      <div style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '4px',
-                        backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        {participant.cameraState === 'ON' ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                          </svg>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
-                            <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Participant Queue Display */}
+            <ParticipantQueue
+              participants={queueState.participants}
+              activeSpeaker={queueState.activeSpeaker}
+              screenShareMode={queueState.screenShareMode}
+              screenShareParticipant={queueState.screenShareParticipant}
+              onParticipantClick={(participant) => {
+                setSelectedParticipant(participant);
+                console.log('Selected participant:', participant);
+              }}
+              onHandRaiseClick={(participant) => {
+                updateHandRaiseStatus(participant._id, false);
+                console.log('Lowered hand for:', participant.displayName);
+              }}
+              onKickParticipant={(participant) => {
+                handleKickParticipant(participant._id);
+              }}
+              isHost={isHost}
+              viewMode={viewMode}
+              maxThumbnails={6}
+            />
           </div>
 
           {/* Bottom Control Bar */}
