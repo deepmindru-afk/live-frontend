@@ -403,64 +403,69 @@ const WaitingRoomPage: React.FC = () => {
       
       <div className="auth-container">
         <div className="auth-modal">
-          <div className="logo">
-            <Image
-              src="/logoHRDe.png"
-              alt="HRDE"
-              width={150}
-              height={69}
-              style={{
-                objectFit: 'contain'
-              }}
-            />
-          </div>
-
           <div className="form-section">
+            <div className="logo-section">
+              <Image
+                src="/logoHRDe.png"
+                alt="HRDE"
+                width={120}
+                height={55}
+                style={{
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
+
             <h2 className="form-title">
               {isWaitingForMeeting ? '미팅 대기 중' : '미팅 참여'}
             </h2>
-            <p style={{
-              textAlign: 'center',
-              color: '#666',
-              marginBottom: '30px',
-              fontSize: '16px',
-              lineHeight: '1.5'
-            }}>
-              {isWaitingForMeeting 
-                ? '미팅이 시작될 때까지 잠시 기다려주세요. 호스트가 미팅을 시작하면 자동으로 입장됩니다.'
-                : '호스트로부터 받은 초대코드를 입력하여 미팅에 참여하세요.'
-              }
-            </p>
             
             {isWaitingForMeeting ? (
               <div className="waiting-content">
-                {/* Header with tagline and logo */}
-                <div className="waiting-header">
-                  <div className="tagline">Let's go together</div>
-                  <div className="logo-section">
-                    <div className="logo-icon">O</div>
-                    <span className="logo-text">HRDe</span>
-                  </div>
-                </div>
-
                 {meetingInfo && (
                   <div className="meeting-info-card">
                     <h3>{meetingInfo.title}</h3>
-                    <p>Meeting ID: {meetingInfo._id}</p>
-                    <p>Status: {meetingInfo.status === 'SCHEDULED' ? 'Pending' : meetingInfo.status}</p>
+                    <p className="meeting-status">
+                      {meetingInfo.status === 'SCHEDULED' ? '대기 중' : meetingInfo.status}
+                    </p>
+                    <div className="invite-code-section">
+                      <label className="invite-code-label">초대코드</label>
+                      <div className="invite-code-container">
+                        <span className="invite-code">{meetingInfo.inviteCode}</span>
+                        <button 
+                          className="copy-button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(meetingInfo.inviteCode);
+                            // Show temporary success message
+                            const button = document.querySelector('.copy-button') as HTMLButtonElement;
+                            if (button) {
+                              const originalText = button.textContent;
+                              button.textContent = '복사됨!';
+                              button.style.background = '#10b981';
+                              setTimeout(() => {
+                                button.textContent = originalText;
+                                button.style.background = '';
+                              }, 2000);
+                            }
+                          }}
+                          title="초대코드 복사"
+                        >
+                          복사
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
                 
                 <div className="waiting-animation">
                   <div className="spinner"></div>
-                  <p>Waiting for the meeting to start...</p>
+                  <p>미팅이 시작될 때까지 잠시 기다려주세요</p>
                 </div>
                 
                 <div className="navigation-buttons">
                   <button 
                     onClick={async () => {
                       try {
-                        // FIXED: Properly handle leaving waiting room
                         await handleLeaveWaitingRoom();
                         
                         const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
@@ -481,52 +486,48 @@ const WaitingRoomPage: React.FC = () => {
                         router.push('/member');
                       }
                     }}
-                    className="nav-button dashboard"
+                    className="nav-button exit"
                   >
-                    Leave Waiting Room
-                  </button>
-                  <button 
-                    onClick={() => router.push(`/prejoin/${meetingInfo?._id}`)}
-                    className="nav-button test"
-                  >
-                    Back to Test
+                    나가기
                   </button>
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleJoinMeeting}>
-                <div className="form-group">
-                  <label htmlFor="inviteCode">초대코드</label>
-                  <input
-                    type="text"
-                    id="inviteCode"
-                    name="inviteCode"
-                    className={`form-input ${error ? 'error' : ''}`}
-                    placeholder="초대코드를 입력하세요"
-                    value={inviteCode}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                    style={{
-                      textAlign: 'center',
-                      fontSize: '18px',
-                      letterSpacing: '2px',
-                      textTransform: 'uppercase'
-                    }}
-                  />
-                  {error && <div className="error-message">{error}</div>}
-                </div>
+              <div className="join-form">
+                <p className="form-description">
+                  호스트로부터 받은 초대코드를 입력하여 미팅에 참여하세요
+                </p>
+                <form onSubmit={handleJoinMeeting}>
+                  <div className="form-group">
+                    <label htmlFor="inviteCode">초대코드</label>
+                    <input
+                      type="text"
+                      id="inviteCode"
+                      name="inviteCode"
+                      className={`form-input ${error ? 'error' : ''}`}
+                      placeholder="초대코드를 입력하세요"
+                      value={inviteCode}
+                      onChange={handleInputChange}
+                      disabled={isLoading}
+                      style={{
+                        textAlign: 'center',
+                        fontSize: '18px',
+                        letterSpacing: '2px',
+                        textTransform: 'uppercase'
+                      }}
+                    />
+                    {error && <div className="error-message">{error}</div>}
+                  </div>
 
-                <button 
-                  type="submit" 
-                  className="submit-button"
-                  disabled={isLoading || !inviteCode.trim()}
-                  style={{
-                    marginTop: '20px'
-                  }}
-                >
-                  {isLoading ? '참여 중...' : '장치 확인 후 참여'}
-                </button>
-              </form>
+                  <button 
+                    type="submit" 
+                    className="submit-button"
+                    disabled={isLoading || !inviteCode.trim()}
+                  >
+                    {isLoading ? '참여 중...' : '장치 확인 후 참여'}
+                  </button>
+                </form>
+              </div>
             )}
           </div>
 
@@ -602,9 +603,9 @@ const WaitingRoomPage: React.FC = () => {
           border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .logo {
+        .logo-section {
           text-align: center;
-          margin-bottom: 30px;
+          margin-bottom: 40px;
         }
 
         .form-section {
@@ -612,11 +613,23 @@ const WaitingRoomPage: React.FC = () => {
         }
 
         .form-title {
-          font-size: 1.8rem;
-          font-weight: 700;
-          color: #333;
-          margin-bottom: 20px;
+          font-size: 1.6rem;
+          font-weight: 600;
+          color: #2c3e50;
+          margin-bottom: 16px;
           text-align: center;
+        }
+
+        .form-description {
+          text-align: center;
+          color: #64748b;
+          margin-bottom: 32px;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        .join-form {
+          padding: 0;
         }
 
         .form-group {
@@ -633,24 +646,24 @@ const WaitingRoomPage: React.FC = () => {
 
         .form-input {
           width: 100%;
-          padding: 15px;
-          border: 2px solid #e1e5e9;
-          border-radius: 10px;
+          padding: 14px 16px;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
           font-size: 1rem;
-          transition: all 0.3s ease;
+          transition: all 0.2s ease;
           background: #fff;
           box-sizing: border-box;
         }
 
         .form-input:focus {
           outline: none;
-          border-color: #4A90E2;
-          box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .form-input.error {
-          border-color: #e74c3c;
-          box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+          border-color: #ef4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
         }
 
         .form-input::placeholder {
@@ -659,23 +672,22 @@ const WaitingRoomPage: React.FC = () => {
 
         .submit-button {
           width: 100%;
-          padding: 15px;
-          background: linear-gradient(135deg, #4A90E2, #357ABD);
+          padding: 14px 24px;
+          background: #3b82f6;
           color: white;
           border: none;
-          border-radius: 10px;
-          font-size: 1.1rem;
+          border-radius: 12px;
+          font-size: 1rem;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.3s ease;
-          text-transform: uppercase;
-          letter-spacing: 1px;
+          transition: all 0.2s ease;
+          margin-top: 8px;
         }
 
         .submit-button:hover:not(:disabled) {
-          background: linear-gradient(135deg, #357ABD, #2E6BA8);
-          transform: translateY(-2px);
-          box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
+          background: #2563eb;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         .submit-button:disabled {
@@ -753,93 +765,111 @@ const WaitingRoomPage: React.FC = () => {
         }
 
         .error-message {
-          background: #fee;
-          color: #c33;
-          padding: 12px;
+          background: #fef2f2;
+          color: #dc2626;
+          padding: 12px 16px;
           border-radius: 8px;
-          margin: 15px 0;
-          border: 1px solid #fcc;
+          margin: 12px 0;
+          border: 1px solid #fecaca;
           font-size: 0.9rem;
           text-align: center;
+          font-weight: 500;
         }
 
         .waiting-content {
           text-align: center;
-          padding: 0 20px;
-        }
-
-        .waiting-header {
-          margin-bottom: 30px;
-        }
-
-        .tagline {
-          font-family: 'Brush Script MT', cursive;
-          font-size: 1.2rem;
-          color: #666;
-          margin-bottom: 15px;
-          font-weight: 300;
-        }
-
-        .logo-section {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          margin-bottom: 20px;
-        }
-
-        .logo-icon {
-          width: 40px;
-          height: 40px;
-          background: #4A90E2;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: bold;
-          font-size: 1.2rem;
-        }
-
-        .logo-text {
-          font-size: 1.5rem;
-          font-weight: bold;
-          color: #4A90E2;
+          padding: 0;
         }
 
         .meeting-info-card {
-          background: #f8f9fa;
-          padding: 20px;
-          border-radius: 12px;
-          margin-bottom: 30px;
-          border: 1px solid #e9ecef;
+          background: #f8fafc;
+          padding: 24px;
+          border-radius: 16px;
+          margin-bottom: 40px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
         .meeting-info-card h3 {
-          margin: 0 0 10px 0;
-          color: #333;
-          font-size: 1.3rem;
-          font-weight: bold;
+          margin: 0 0 8px 0;
+          color: #1e293b;
+          font-size: 1.25rem;
+          font-weight: 600;
         }
 
-        .meeting-info-card p {
-          margin: 5px 0;
-          color: #666;
-          font-size: 0.95rem;
+        .meeting-status {
+          margin: 0 0 20px 0;
+          color: #64748b;
+          font-size: 0.9rem;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .invite-code-section {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #e2e8f0;
+        }
+
+        .invite-code-label {
+          display: block;
+          font-size: 0.85rem;
+          color: #64748b;
+          margin-bottom: 8px;
+          font-weight: 500;
+        }
+
+        .invite-code-container {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 8px 12px;
+        }
+
+        .invite-code {
+          flex: 1;
+          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #1e293b;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        }
+
+        .copy-button {
+          background: #3b82f6;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          padding: 6px 12px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .copy-button:hover {
+          background: #2563eb;
+          transform: translateY(-1px);
         }
 
         .waiting-animation {
-          margin: 30px 0;
+          margin: 40px 0;
         }
 
         .spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #f0f0f0;
-          border-top: 3px solid #4A90E2;
+          width: 32px;
+          height: 32px;
+          border: 2px solid #e2e8f0;
+          border-top: 2px solid #3b82f6;
           border-radius: 50%;
           animation: spin 1s linear infinite;
-          margin: 0 auto 15px;
+          margin: 0 auto 16px;
         }
 
         @keyframes spin {
@@ -848,46 +878,41 @@ const WaitingRoomPage: React.FC = () => {
         }
 
         .waiting-animation p {
-          color: #666;
-          font-size: 1rem;
+          color: #64748b;
+          font-size: 0.95rem;
           margin: 0;
+          font-weight: 500;
         }
 
         .navigation-buttons {
           display: flex;
-          gap: 15px;
           justify-content: center;
-          margin-top: 30px;
+          margin-top: 40px;
         }
 
         .nav-button {
-          padding: 12px 20px;
-          border: none;
-          border-radius: 8px;
+          padding: 12px 32px;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
           font-size: 0.9rem;
           font-weight: 500;
           cursor: pointer;
-          transition: all 0.3s ease;
-          min-width: 140px;
+          transition: all 0.2s ease;
+          background: #f8fafc;
+          color: #64748b;
+          border-color: #e2e8f0;
+          min-width: 120px;
         }
 
-        .nav-button.dashboard {
-          background: #6c757d;
-          color: white;
+        .nav-button.exit {
+          background: #f8fafc;
+          color: #64748b;
+          border-color: #e2e8f0;
         }
 
-        .nav-button.dashboard:hover {
-          background: #5a6268;
-          transform: translateY(-1px);
-        }
-
-        .nav-button.test {
-          background: #007bff;
-          color: white;
-        }
-
-        .nav-button.test:hover {
-          background: #0056b3;
+        .nav-button.exit:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
           transform: translateY(-1px);
         }
 
@@ -896,9 +921,29 @@ const WaitingRoomPage: React.FC = () => {
             padding: 16px;
           }
 
+          .auth-modal {
+            padding: 24px 20px;
+          }
+
+          .form-title {
+            font-size: 1.4rem;
+          }
+
+          .logo-section {
+            margin-bottom: 30px;
+          }
+
+          .meeting-info-card {
+            padding: 20px;
+            margin-bottom: 30px;
+          }
+
+          .waiting-animation {
+            margin: 30px 0;
+          }
+
           .navigation-buttons {
-            flex-direction: column;
-            align-items: center;
+            margin-top: 30px;
           }
 
           .nav-button {
@@ -906,35 +951,23 @@ const WaitingRoomPage: React.FC = () => {
             max-width: 200px;
           }
 
-          .waiting-header {
-            margin-bottom: 20px;
+          .invite-code-container {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
           }
 
-          .tagline {
-            font-size: 1rem;
+          .invite-code {
+            text-align: center;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
           }
 
-          .logo-section {
-            margin-bottom: 15px;
-          }
-
-          .logo-icon {
-            width: 35px;
-            height: 35px;
-            font-size: 1rem;
-          }
-
-          .logo-text {
-            font-size: 1.3rem;
-          }
-        }
-
-          .auth-modal {
-            padding: 30px 20px;
-          }
-
-          .form-title {
-            font-size: 1.5rem;
+          .copy-button {
+            width: 100%;
+            padding: 8px 12px;
           }
         }
       `}</style>

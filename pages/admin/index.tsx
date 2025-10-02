@@ -1090,20 +1090,37 @@ const AdminDashboard: React.FC = () => {
                               {meeting.participantCount || 0}명
                             </td>
                             <td style={{ padding: '15px' }}>
-                              <button
-                                onClick={() => handleMeetingParticipantsClick(meeting)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  fontSize: '18px',
-                                  color: '#6c757d',
-                                  padding: '4px'
-                                }}
-                                title="참가자 보기"
-                              >
-                                ⋯
-                              </button>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <button
+                                  onClick={() => handleMeetingParticipantsClick(meeting)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '18px',
+                                    color: '#6c757d',
+                                    padding: '4px'
+                                  }}
+                                  title="참가자 보기"
+                                >
+                                  ⋯
+                                </button>
+                                <button
+                                  onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                  style={{
+                                    background: '#6c757d',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '6px 12px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                  }}
+                                  title="출석 상세"
+                                >
+                                  상세
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

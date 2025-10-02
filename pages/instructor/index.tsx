@@ -1190,22 +1190,39 @@ const Dashboard: React.FC = () => {
                             <td>
                               <div className="actions">
                                 {meeting.status === 'SCHEDULED' && (
-                                  <button 
-                                    onClick={() => handleStartMeeting(meeting._id)}
-                                    style={{
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      fontSize: '12px',
-                                      fontWeight: '500',
-                                      background: '#28a745',
-                                      color: 'white',
-                                      marginRight: '8px'
-                                    }}
-                                  >
-                                    시작
-                                  </button>
+                                  <>
+                                    <button 
+                                      onClick={() => handleStartMeeting(meeting._id)}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#28a745',
+                                        color: 'white',
+                                        marginRight: '8px'
+                                      }}
+                                    >
+                                      시작
+                                    </button>
+                                    <button 
+                                      onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#6c757d',
+                                        color: 'white'
+                                      }}
+                                    >
+                                      상세
+                                    </button>
+                                  </>
                                 )}
                                 {(meeting.status === 'LIVE' || meeting.status === 'STARTED') && (
                                   <>
@@ -1246,52 +1263,86 @@ const Dashboard: React.FC = () => {
                                         fontSize: '12px',
                                         fontWeight: '500',
                                         background: '#dc3545',
-                                        color: 'white'
+                                        color: 'white',
+                                        marginRight: '8px'
                                       }}
                                     >
                                       종료
                                     </button>
+                                    <button 
+                                      onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#6c757d',
+                                        color: 'white'
+                                      }}
+                                    >
+                                      상세
+                                    </button>
                                   </>
                                 )}
                                 {meeting.status === 'ENDED' && (
-                                  <button 
-                                    onClick={() => {
-                                      if (meeting.isCurrentUserHost) {
-                                        // User is still the host, can rejoin
-                                        if (isValidObjectId(meeting._id)) {
-                                          window.location.href = `/prejoin/${meeting._id}`;
+                                  <>
+                                    <button 
+                                      onClick={() => {
+                                        if (meeting.isCurrentUserHost) {
+                                          // User is still the host, can rejoin
+                                          if (isValidObjectId(meeting._id)) {
+                                            window.location.href = `/prejoin/${meeting._id}`;
+                                          } else {
+                                            Swal.fire({
+                                              icon: 'error',
+                                              title: 'Invalid Meeting',
+                                              text: 'This meeting has an invalid ID format. Please create a new meeting.',
+                                              confirmButtonText: 'OK'
+                                            });
+                                          }
                                         } else {
+                                          // User is no longer the host, show info
                                           Swal.fire({
-                                            icon: 'error',
-                                            title: 'Invalid Meeting',
-                                            text: 'This meeting has an invalid ID format. Please create a new meeting.',
-                                            confirmButtonText: 'OK'
+                                            icon: 'info',
+                                            title: '호스트 역할 이전됨',
+                                            text: '이 회의의 호스트 역할이 다른 사용자에게 이전되었습니다. 더 이상 참여할 수 없습니다.',
+                                            confirmButtonText: '확인'
                                           });
                                         }
-                                      } else {
-                                        // User is no longer the host, show info
-                                        Swal.fire({
-                                          icon: 'info',
-                                          title: '호스트 역할 이전됨',
-                                          text: '이 회의의 호스트 역할이 다른 사용자에게 이전되었습니다. 더 이상 참여할 수 없습니다.',
-                                          confirmButtonText: '확인'
-                                        });
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '6px 12px',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      fontSize: '12px',
-                                      fontWeight: '500',
-                                      background: meeting.isCurrentUserHost ? '#6c757d' : '#e9ecef',
-                                      color: meeting.isCurrentUserHost ? 'white' : '#6c757d'
-                                    }}
-                                    disabled={!meeting.isCurrentUserHost}
-                                  >
-                                    {meeting.isCurrentUserHost ? '다시 참여' : '이전됨'}
-                                  </button>
+                                      }}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: meeting.isCurrentUserHost ? '#6c757d' : '#e9ecef',
+                                        color: meeting.isCurrentUserHost ? 'white' : '#6c757d',
+                                        marginRight: '8px'
+                                      }}
+                                      disabled={!meeting.isCurrentUserHost}
+                                    >
+                                      {meeting.isCurrentUserHost ? '다시 참여' : '이전됨'}
+                                    </button>
+                                    <button 
+                                      onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                      style={{
+                                        padding: '6px 12px',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        background: '#6c757d',
+                                        color: 'white'
+                                      }}
+                                    >
+                                      상세
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>

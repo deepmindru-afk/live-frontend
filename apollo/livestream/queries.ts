@@ -105,10 +105,30 @@ export const GET_MEETING_ATTENDANCE = gql`
       participants {
         _id
         displayName
+        email
+        firstName
+        lastName
+        systemRole
+        avatarUrl
+        organization
+        department
+        role
         joinedAt
         leftAt
         totalTime
+        sessionCount
+        isCurrentlyOnline
         status
+        micState
+        cameraState
+        hasHandRaised
+        handRaisedAt
+        handLoweredAt
+        sessions {
+          joinedAt
+          leftAt
+          durationSec
+        }
       }
     }
   }

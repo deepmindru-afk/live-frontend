@@ -559,52 +559,7 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
 
   // Handle participantsByMeeting query
   if (query.includes('participantsByMeeting')) {
-    const { meetingId } = variables;
-    const meeting = mockMeetings.find(m => m._id === meetingId);
-    
-    if (meeting) {
-      return {
-        participantsByMeeting: [
-          {
-            _id: 'participant-1',
-            displayName: '김철수',
-            email: 'kim@example.com',
-            joinedAt: '2025-01-15T09:00:00Z',
-            leftAt: '2025-01-15T10:30:00Z',
-            isHost: true,
-            totalTime: 90
-          },
-          {
-            _id: 'participant-2',
-            displayName: '이영희',
-            email: 'lee@example.com',
-            joinedAt: '2025-01-15T09:15:00Z',
-            leftAt: '2025-01-15T10:15:00Z',
-            isHost: false,
-            totalTime: 60
-          },
-          {
-            _id: 'participant-3',
-            displayName: '박민수',
-            email: 'park@example.com',
-            joinedAt: '2025-01-15T09:30:00Z',
-            leftAt: '2025-01-15T10:00:00Z',
-            isHost: false,
-            totalTime: 30
-          },
-          {
-            _id: 'participant-4',
-            displayName: '정수진',
-            email: 'jung@example.com',
-            joinedAt: '2025-01-15T09:45:00Z',
-            leftAt: '2025-01-15T10:45:00Z',
-            isHost: false,
-            totalTime: 60
-          }
-        ]
-      };
-    }
-
+    // Return empty array - let real data come from backend
     return {
       participantsByMeeting: []
     };
@@ -612,15 +567,14 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
 
   // Handle participantStats query
   if (query.includes('participantStats')) {
-    const { meetingId } = variables;
-    
+    // Return empty stats - let real data come from backend
     return {
       participantStats: {
-        totalParticipants: 4,
-        averageAttendanceTime: 60, // minutes
-        hostAttendanceTime: 90, // minutes
-        longestAttendance: 90, // minutes
-        shortestAttendance: 30 // minutes
+        totalParticipants: 0,
+        averageAttendanceTime: 0,
+        hostAttendanceTime: 0,
+        longestAttendance: 0,
+        shortestAttendance: 0
       }
     };
   }

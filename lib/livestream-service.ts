@@ -277,47 +277,8 @@ export const getParticipantsByMeeting = async (meetingId: string): Promise<Parti
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock participants due to permission restrictions');
-      return [
-        {
-          _id: 'demo-participant-1',
-          meetingId: meetingId,
-          displayName: 'Demo Student 1',
-          role: 'PARTICIPANT',
-          micState: 'ON',
-          cameraState: 'ON',
-          socketId: 'socket-123',
-          user: {
-            _id: 'user-1',
-            email: 'student1@demo.com',
-            displayName: 'Demo Student 1',
-            avatarUrl: null,
-            organization: 'Demo University',
-            department: 'Computer Science'
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          _id: 'demo-participant-2',
-          meetingId: meetingId,
-          displayName: 'Demo Student 2',
-          role: 'PARTICIPANT',
-          micState: 'OFF',
-          cameraState: 'ON',
-          socketId: 'socket-456',
-          user: {
-            _id: 'user-2',
-            email: 'student2@demo.com',
-            displayName: 'Demo Student 2',
-            avatarUrl: null,
-            organization: 'Demo University',
-            department: 'Mathematics'
-          },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
+      console.log('❌ Permission error: Cannot access participants for this meeting');
+      return [];
     }
     
     throw error;
@@ -364,20 +325,8 @@ export const getWaitingParticipants = async (meetingId: string): Promise<Partici
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock waiting participants due to permission restrictions');
-      return [
-        {
-          _id: 'waiting-participant-1',
-          displayName: 'Waiting Student 1',
-          status: 'WAITING',
-          joinedAt: new Date().toISOString(),
-          email: 'waiting1@demo.com',
-          avatarUrl: null,
-          micState: 'ON',
-          cameraState: 'OFF',
-          socketId: 'waiting-socket-1'
-        }
-      ];
+      console.log('❌ Permission error: Cannot access waiting participants for this meeting');
+      return [];
     }
     
     throw error;

@@ -370,19 +370,72 @@ const SimpleDashboard: React.FC = () => {
                           <td>
                             <div className="actions">
                               {meeting.status === 'SCHEDULED' && (
-                                <button 
-                                  className="action-btn start"
-                                  onClick={() => handleStartMeeting(meeting._id)}
-                                >
-                                  시작
-                                </button>
+                                <>
+                                  <button 
+                                    className="action-btn start"
+                                    onClick={() => handleStartMeeting(meeting._id)}
+                                    style={{ marginRight: '8px' }}
+                                  >
+                                    시작
+                                  </button>
+                                  <button 
+                                    className="action-btn details"
+                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                    style={{ 
+                                      background: '#6c757d',
+                                      color: 'white',
+                                      border: 'none',
+                                      padding: '6px 12px',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    상세
+                                  </button>
+                                </>
                               )}
                               {meeting.status === 'STARTED' && (
+                                <>
+                                  <button 
+                                    className="action-btn end"
+                                    onClick={() => handleEndMeeting(meeting._id)}
+                                    style={{ marginRight: '8px' }}
+                                  >
+                                    종료
+                                  </button>
+                                  <button 
+                                    className="action-btn details"
+                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                    style={{ 
+                                      background: '#6c757d',
+                                      color: 'white',
+                                      border: 'none',
+                                      padding: '6px 12px',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    상세
+                                  </button>
+                                </>
+                              )}
+                              {meeting.status === 'ENDED' && (
                                 <button 
-                                  className="action-btn end"
-                                  onClick={() => handleEndMeeting(meeting._id)}
+                                  className="action-btn details"
+                                  onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                  style={{ 
+                                    background: '#6c757d',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '6px 12px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                  }}
                                 >
-                                  종료
+                                  상세
                                 </button>
                               )}
                             </div>

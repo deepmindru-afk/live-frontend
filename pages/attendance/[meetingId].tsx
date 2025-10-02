@@ -9,10 +9,30 @@ import Swal from 'sweetalert2';
 interface ParticipantAttendance {
   _id: string;
   displayName: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  systemRole?: string;
+  avatarUrl?: string;
+  organization?: string;
+  department?: string;
+  role: string;
   joinedAt: string;
   leftAt?: string;
   totalTime: number; // in seconds
+  sessionCount: number;
+  isCurrentlyOnline: boolean;
   status: string;
+  micState: string;
+  cameraState: string;
+  hasHandRaised: boolean;
+  handRaisedAt?: string;
+  handLoweredAt?: string;
+        sessions: Array<{
+          joinedAt: string;
+          leftAt?: string;
+          durationSec: number;
+        }>;
 }
 
 interface MeetingAttendance {
@@ -73,58 +93,29 @@ const AttendancePage: React.FC = () => {
 
       // Load attendance data
       try {
+        console.log('🔍 Loading attendance data for meeting:', meetingId);
         const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         });
         
+        console.log('📊 Attendance result:', attendanceResult);
+        
         if (attendanceResult.getMeetingAttendance) {
+          console.log('✅ Setting attendance data:', attendanceResult.getMeetingAttendance);
           setAttendance(attendanceResult.getMeetingAttendance);
+        } else {
+          console.log('❌ No attendance data in result');
+          setAttendance(null);
         }
       } catch (error) {
-        console.warn('Failed to load attendance data:', error);
-        // Fallback to mock data if needed
-        setAttendance({
-          meetingId: meetingId as string,
-          totalParticipants: 4,
-          presentParticipants: 4,
-          absentParticipants: 0,
-          averageAttendanceTime: 3600, // 1 hour in seconds
-          attendanceRate: 100,
-          participants: [
-            {
-              _id: 'participant-1',
-              displayName: '김철수',
-              joinedAt: '2025-01-15T09:00:00Z',
-              leftAt: '2025-01-15T10:30:00Z',
-              totalTime: 5400, // 90 minutes in seconds
-              status: 'PRESENT'
-            },
-            {
-              _id: 'participant-2',
-              displayName: '이영희',
-              joinedAt: '2025-01-15T09:15:00Z',
-              leftAt: '2025-01-15T10:15:00Z',
-              totalTime: 3600, // 60 minutes in seconds
-              status: 'PRESENT'
-            },
-            {
-              _id: 'participant-3',
-              displayName: '박민수',
-              joinedAt: '2025-01-15T09:30:00Z',
-              leftAt: '2025-01-15T10:00:00Z',
-              totalTime: 1800, // 30 minutes in seconds
-              status: 'PRESENT'
-            },
-            {
-              _id: 'participant-4',
-              displayName: '정수진',
-              joinedAt: '2025-01-15T09:45:00Z',
-              leftAt: '2025-01-15T10:45:00Z',
-              totalTime: 3600, // 60 minutes in seconds
-              status: 'PRESENT'
-            }
-          ]
+        console.error('❌ Failed to load attendance data:', error);
+        console.error('❌ Error details:', {
+          message: error.message,
+          stack: error.stack,
+          response: error.response
         });
+        // No fallback data - let it show empty state
+        setAttendance(null);
       }
       
     } catch (error) {
@@ -175,8 +166,22 @@ const AttendancePage: React.FC = () => {
   };
 
   const getTotalMeetingDuration = () => {
-    if (!meeting?.duration) return 0;
-    return meeting.duration;
+    if (!meeting) return 0;
+    
+    // Calculate meeting duration from actual start and end times
+    if (meeting.actualStartAt && meeting.endedAt) {
+      const startTime = new Date(meeting.actualStartAt).getTime();
+      const endTime = new Date(meeting.endedAt).getTime();
+      return Math.floor((endTime - startTime) / 1000); // Convert to seconds
+    } else if (meeting.actualStartAt) {
+      const startTime = new Date(meeting.actualStartAt).getTime();
+      const currentTime = Date.now();
+      return Math.floor((currentTime - startTime) / 1000); // Convert to seconds
+    } else if (meeting.duration) {
+      return meeting.duration * 60; // Convert minutes to seconds
+    }
+    
+    return 0;
   };
 
   const filteredParticipants = attendance?.participants.filter(participant =>
@@ -194,17 +199,27 @@ const AttendancePage: React.FC = () => {
     const totalMeetingDuration = getTotalMeetingDuration();
     
     const csvContent = [
-      ['No', '참가자', '참석 시간', '퇴장 시간', '참여 시간', '출석률 (%)', '상태'],
+      ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
       ...attendance.participants.map((participant, index) => {
         const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
         return [
           index + 1,
           participant.displayName,
+          participant.email || '',
+          participant.organization || '',
+          participant.department || '',
+          participant.systemRole || '',
           formatTime(participant.joinedAt),
           participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
           formatDuration(participant.totalTime),
+          participant.sessionCount,
           attendancePercentage,
-          participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'
+          participant.status === 'ONLINE' ? '온라인' : 
+          participant.status === 'PRESENT' ? '참석' : 
+          participant.status === 'LEFT' ? '퇴장' : '미정',
+          participant.micState === 'ON' ? '켜짐' : '꺼짐',
+          participant.cameraState === 'ON' ? '켜짐' : '꺼짐',
+          participant.hasHandRaised ? '예' : '아니오'
         ];
       })
     ].map(row => row.join(',')).join('\n');
@@ -302,8 +317,19 @@ const AttendancePage: React.FC = () => {
             </p>
             <div style={{ marginTop: '10px', fontSize: '14px', color: '#888' }}>
               <div>생성일: {formatTime(meeting.createdAt)}</div>
+              {meeting.actualStartAt && <div>시작일: {formatTime(meeting.actualStartAt)}</div>}
               {meeting.endedAt && <div>종료일: {formatTime(meeting.endedAt)}</div>}
               {meeting.scheduledFor && <div>예정일: {formatTime(meeting.scheduledFor)}</div>}
+              <div>초대코드: <strong>{meeting.inviteCode}</strong></div>
+              <div>상태: <span style={{
+                color: meeting.status === 'ENDED' ? '#dc3545' : 
+                       meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '#28a745' : '#6c757d',
+                fontWeight: 'bold'
+              }}>
+                {meeting.status === 'ENDED' ? '종료됨' : 
+                 meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '진행중' : 
+                 meeting.status === 'SCHEDULED' ? '예약됨' : '생성됨'}
+              </span></div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -396,7 +422,33 @@ const AttendancePage: React.FC = () => {
           }}>
             <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 미팅 시간</h3>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#6c757d' }}>
-              {meeting.duration ? formatDurationShort(meeting.duration) : 'N/A'}
+              {formatDurationShort(getTotalMeetingDuration())}
+            </div>
+          </div>
+          
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>평균 참여 시간</h3>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#17a2b8' }}>
+              {attendance?.averageAttendanceTime ? formatDurationShort(attendance.averageAttendanceTime) : 'N/A'}
+            </div>
+          </div>
+          
+          <div style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>현재 온라인</h3>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
+              {attendance?.participants.filter(p => p.status === 'ONLINE').length || 0}명
             </div>
           </div>
         </div>
@@ -441,6 +493,7 @@ const AttendancePage: React.FC = () => {
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>퇴장 시간</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참여 시간</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>출석률</th>
+                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>상태</th>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>비고</th>
               </tr>
             </thead>
@@ -464,18 +517,69 @@ const AttendancePage: React.FC = () => {
                     <td style={{ padding: '15px' }}>{index + 1}</td>
                     <td style={{ padding: '15px' }}>
                       <div>
-                        <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
-                        <span style={{
-                          display: 'inline-block',
-                          backgroundColor: participant.status === 'PRESENT' ? '#28a745' : participant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
-                          color: 'white',
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          marginTop: '4px'
-                        }}>
-                          {participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'}
-                        </span>
+                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {participant.avatarUrl && (
+                            <img 
+                              src={participant.avatarUrl} 
+                              alt={participant.displayName}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                          )}
+                          <div>
+                            <div>{participant.displayName}</div>
+                            {participant.email && (
+                              <div style={{ fontSize: '12px', color: '#666' }}>{participant.email}</div>
+                            )}
+                            {participant.organization && (
+                              <div style={{ fontSize: '11px', color: '#888' }}>{participant.organization}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: participant.status === 'ONLINE' ? '#28a745' : 
+                                           participant.status === 'PRESENT' ? '#17a2b8' : 
+                                           participant.status === 'LEFT' ? '#6c757d' : '#dc3545',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '12px'
+                          }}>
+                            {participant.status === 'ONLINE' ? '온라인' : 
+                             participant.status === 'PRESENT' ? '참석' : 
+                             participant.status === 'LEFT' ? '퇴장' : '미정'}
+                          </span>
+                          {participant.systemRole && (
+                            <span style={{
+                              display: 'inline-block',
+                              backgroundColor: '#e9ecef',
+                              color: '#495057',
+                              padding: '2px 6px',
+                              borderRadius: '8px',
+                              fontSize: '10px'
+                            }}>
+                              {participant.systemRole}
+                            </span>
+                          )}
+                          {participant.hasHandRaised && (
+                            <span style={{
+                              display: 'inline-block',
+                              backgroundColor: '#ffc107',
+                              color: '#212529',
+                              padding: '2px 6px',
+                              borderRadius: '8px',
+                              fontSize: '10px'
+                            }}>
+                              ✋ 손들기
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td style={{ padding: '15px' }}>{formatTime(participant.joinedAt)}</td>
@@ -510,6 +614,35 @@ const AttendancePage: React.FC = () => {
                         }}>
                           {attendancePercentage}%
                         </span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: participant.micState === 'ON' ? '#28a745' : '#dc3545'
+                          }} title={`마이크: ${participant.micState === 'ON' ? '켜짐' : '꺼짐'}`}></span>
+                          <span style={{ fontSize: '12px' }}>마이크</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: participant.cameraState === 'ON' ? '#28a745' : '#dc3545'
+                          }} title={`카메라: ${participant.cameraState === 'ON' ? '켜짐' : '꺼짐'}`}></span>
+                          <span style={{ fontSize: '12px' }}>카메라</span>
+                        </div>
+                        {participant.sessionCount > 1 && (
+                          <div style={{ fontSize: '11px', color: '#666' }}>
+                            {participant.sessionCount}회 재접속
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td style={{ padding: '15px' }}>
@@ -588,23 +721,59 @@ const AttendancePage: React.FC = () => {
                   borderRadius: '8px',
                   marginBottom: '15px'
                 }}>
-                  <div style={{ marginBottom: '10px' }}>
-                    <strong>이름:</strong> {selectedParticipant.displayName}
+                  <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {selectedParticipant.avatarUrl && (
+                      <img 
+                        src={selectedParticipant.avatarUrl} 
+                        alt={selectedParticipant.displayName}
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{selectedParticipant.displayName}</div>
+                      {selectedParticipant.email && (
+                        <div style={{ fontSize: '14px', color: '#666' }}>{selectedParticipant.email}</div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>상태:</strong> 
                     <span style={{
                       display: 'inline-block',
-                      backgroundColor: selectedParticipant.status === 'PRESENT' ? '#28a745' : selectedParticipant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
+                      backgroundColor: selectedParticipant.status === 'ONLINE' ? '#28a745' : 
+                                     selectedParticipant.status === 'PRESENT' ? '#17a2b8' : 
+                                     selectedParticipant.status === 'LEFT' ? '#6c757d' : '#dc3545',
                       color: 'white',
                       padding: '2px 8px',
                       borderRadius: '12px',
                       fontSize: '12px',
                       marginLeft: '8px'
                     }}>
-                      {selectedParticipant.status === 'PRESENT' ? '참석' : selectedParticipant.status === 'ABSENT' ? '결석' : '미정'}
+                      {selectedParticipant.status === 'ONLINE' ? '온라인' : 
+                       selectedParticipant.status === 'PRESENT' ? '참석' : 
+                       selectedParticipant.status === 'LEFT' ? '퇴장' : '미정'}
                     </span>
                   </div>
+                  {selectedParticipant.systemRole && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <strong>역할:</strong> {selectedParticipant.systemRole}
+                    </div>
+                  )}
+                  {selectedParticipant.organization && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <strong>소속:</strong> {selectedParticipant.organization}
+                    </div>
+                  )}
+                  {selectedParticipant.department && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <strong>부서:</strong> {selectedParticipant.department}
+                    </div>
+                  )}
                 </div>
 
                 <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참여 정보</h3>
@@ -624,6 +793,9 @@ const AttendancePage: React.FC = () => {
                     <strong>총 참여 시간:</strong> {formatDuration(selectedParticipant.totalTime)}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
+                    <strong>재접속 횟수:</strong> {selectedParticipant.sessionCount}회
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
                     <strong>출석률:</strong> 
                     <span style={{
                       marginLeft: '8px',
@@ -638,6 +810,60 @@ const AttendancePage: React.FC = () => {
                       {calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration())}%
                     </span>
                   </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <strong>미디어 상태:</strong>
+                    <div style={{ marginTop: '5px', display: 'flex', gap: '10px' }}>
+                      <span style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 8px',
+                        backgroundColor: selectedParticipant.micState === 'ON' ? '#d4edda' : '#f8d7da',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
+                        <span style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: selectedParticipant.micState === 'ON' ? '#28a745' : '#dc3545'
+                        }}></span>
+                        마이크 {selectedParticipant.micState === 'ON' ? '켜짐' : '꺼짐'}
+                      </span>
+                      <span style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 8px',
+                        backgroundColor: selectedParticipant.cameraState === 'ON' ? '#d4edda' : '#f8d7da',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
+                        <span style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: selectedParticipant.cameraState === 'ON' ? '#28a745' : '#dc3545'
+                        }}></span>
+                        카메라 {selectedParticipant.cameraState === 'ON' ? '켜짐' : '꺼짐'}
+                      </span>
+                    </div>
+                  </div>
+                  {selectedParticipant.hasHandRaised && (
+                    <div style={{ marginBottom: '10px' }}>
+                      <strong>손들기:</strong> 
+                      <span style={{
+                        marginLeft: '8px',
+                        padding: '4px 8px',
+                        backgroundColor: '#fff3cd',
+                        color: '#856404',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
+                        ✋ {selectedParticipant.handRaisedAt ? formatTime(selectedParticipant.handRaisedAt) : '진행 중'}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>같은 미팅 참가자</h3>
@@ -660,14 +886,18 @@ const AttendancePage: React.FC = () => {
                           <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
                           <span style={{
                             display: 'inline-block',
-                            backgroundColor: participant.status === 'PRESENT' ? '#28a745' : participant.status === 'ABSENT' ? '#dc3545' : '#6c757d',
+                            backgroundColor: participant.status === 'ONLINE' ? '#28a745' : 
+                                           participant.status === 'PRESENT' ? '#17a2b8' : 
+                                           participant.status === 'LEFT' ? '#6c757d' : '#dc3545',
                             color: 'white',
                             padding: '2px 6px',
                             borderRadius: '8px',
                             fontSize: '10px',
                             marginTop: '2px'
                           }}>
-                            {participant.status === 'PRESENT' ? '참석' : participant.status === 'ABSENT' ? '결석' : '미정'}
+                            {participant.status === 'ONLINE' ? '온라인' : 
+                             participant.status === 'PRESENT' ? '참석' : 
+                             participant.status === 'LEFT' ? '퇴장' : '미정'}
                           </span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
