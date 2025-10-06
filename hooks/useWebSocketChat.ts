@@ -19,10 +19,10 @@ interface ChatParticipant {
 
 interface UseWebSocketChatProps {
   meetingId: string;
-  token: string;
+  token?: string;
   onMessage?: (message: ChatMessage) => void;
-  onParticipantJoined?: (participant: ChatParticipant) => void;
-  onParticipantLeft?: (participant: ChatParticipant) => void;
+  onParticipantJoined?: (participant: any) => void;
+  onParticipantLeft?: (data: any) => void;
   onError?: (error: string) => void;
 }
 
@@ -44,11 +44,14 @@ export const useWebSocketChat = ({
   const maxReconnectAttempts = 5;
 
   const connect = useCallback(() => {
+    // Get token from localStorage if not provided
+    const authToken = token || localStorage.getItem('token');
+    
     console.log('🔌 connect() called:', { 
       meetingId, 
-      token: token ? 'present' : 'missing', 
-      tokenLength: token?.length || 0,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'none',
+      token: authToken ? 'present' : 'missing', 
+      tokenLength: authToken?.length || 0,
+      tokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'none',
       socket: !!socket,
       socketConnected: socket?.connected
     });
@@ -59,12 +62,12 @@ export const useWebSocketChat = ({
     }
 
     // Don't connect if no token
-    if (!token || token.trim() === '') {
+    if (!authToken || authToken.trim() === '') {
       console.warn('⚠️ No JWT token provided, skipping WebSocket connection', { 
-        token, 
+        token: authToken, 
         meetingId,
-        tokenType: typeof token,
-        tokenLength: token?.length || 0
+        tokenType: typeof authToken,
+        tokenLength: authToken?.length || 0
       });
       setError('No authentication token provided');
       return;
@@ -73,13 +76,13 @@ export const useWebSocketChat = ({
     try {
       console.log('🔌 Creating new socket connection...', {
         url: 'http://localhost:3007/signaling',
-        token: token ? 'present' : 'missing',
-        tokenLength: token?.length || 0
+        token: authToken ? 'present' : 'missing',
+        tokenLength: authToken?.length || 0
       });
       
       const newSocket = io('http://localhost:3007/signaling', {
         auth: {
-          token,
+          token: authToken,
         },
         transports: ['websocket', 'polling'],
         timeout: 20000,
@@ -230,6 +233,24 @@ export const useWebSocketChat = ({
       console.log('✅ Meeting join successful:', data);
     });
 
+    // Add meeting event listeners for participant management
+    newSocket.on('PARTICIPANT_JOINED', (participant) => {
+      console.log('👤 Participant joined meeting:', participant);
+      onParticipantJoined?.(participant);
+    });
+
+    newSocket.on('PARTICIPANT_LEFT', (data) => {
+      console.log('👤 Participant left meeting:', data);
+      onParticipantLeft?.(data);
+    });
+
+    newSocket.on('NEW_MESSAGE', (message) => {
+      console.log('💬 New meeting message:', message);
+      // Handle as chat message
+      setMessages(prev => [...prev, message]);
+      onMessage?.(message);
+    });
+
       console.log('🔌 Setting socket state:', { 
         socketId: newSocket.id, 
         connected: newSocket.connected 
@@ -249,6 +270,8 @@ export const useWebSocketChat = ({
     }
     
     if (socket) {
+      console.log('🔌 Disconnecting and cleaning up event listeners');
+      
       // Send leave meeting event for presence system
       socket.emit('LEAVE_MEETING', { meetingId });
       
@@ -259,6 +282,10 @@ export const useWebSocketChat = ({
       }
       
       socket.emit('LEAVE_CHAT_ROOM', { meetingId });
+      
+      // CRITICAL: Remove all event listeners before disconnecting
+      socket.removeAllListeners();
+      
       socket.disconnect();
       setSocket(null);
       setIsConnected(false);
@@ -324,10 +351,14 @@ export const useWebSocketChat = ({
       });
     }
 
+    // Only disconnect if we're actually changing the connection parameters
     return () => {
-      disconnect();
+      if (socket && isConnected) {
+        console.log('🔌 Cleaning up previous connection due to dependency change');
+        disconnect();
+      }
     };
-  }, [meetingId, token]); // Remove connect and disconnect from dependencies to prevent re-renders
+  }, [meetingId, token]); // Keep dependencies but handle cleanup more carefully
 
   // Cleanup on unmount
   useEffect(() => {
@@ -337,7 +368,7 @@ export const useWebSocketChat = ({
       }
       disconnect();
     };
-  }, [disconnect]);
+  }, []); // Remove disconnect from dependencies to prevent infinite re-renders
 
   return {
     socket,

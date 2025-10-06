@@ -198,7 +198,7 @@
                 socket = io('http://localhost:3007/chat', {
                     auth: { token },
                     transports: ['websocket', 'polling'],
-                    timeout: 10000,
+                    timeout: 30000,
                     forceNew: true
                 });
 

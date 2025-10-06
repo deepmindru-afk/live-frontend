@@ -61,7 +61,7 @@ export const sweetTopSuccessAlert = async (msg: string, duration = 2000) => {
   });
 };
 
-export const sweetContactAlert = async (msg: string, duration = 10000) => {
+export const sweetContactAlert = async (msg: string, duration = 30000) => {
   await luxeSwal.fire({
     title: msg,
     showConfirmButton: false,

@@ -70,7 +70,7 @@ class PresenceService {
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Connection timeout'));
-        }, 10000);
+        }, 30000);
 
         this.socket!.on('connect', () => {
           clearTimeout(timeout);
@@ -154,7 +154,7 @@ class PresenceService {
     // Set up interval for regular heartbeats
     this.heartbeatInterval = setInterval(() => {
       this.sendHeartbeat();
-    }, 10000); // 10 seconds
+    }, 30000); // 10 seconds
   }
 
   /**

@@ -2,21 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { GET_CHAT_HISTORY } from '../apollo/livestream/queries';
 import { DELETE_CHAT_MESSAGE } from '../apollo/livestream/mutations';
+import { Socket } from 'socket.io-client';
 
 interface ChatViewProps {
   meetingId: string;
   currentUser: any;
   isHost: boolean;
+  socket: any; // Add socket prop
 }
 
 const ChatView: React.FC<ChatViewProps> = ({
   meetingId,
   currentUser,
-  isHost
+  isHost,
+  socket // Add socket parameter
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // GraphQL Queries
   const { data: chatData, loading: chatLoading } = useQuery(GET_CHAT_HISTORY, {
@@ -47,28 +52,68 @@ const ChatView: React.FC<ChatViewProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // WebSocket event listeners for real-time messaging
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = (message: any) => {
+      setMessages(prev => [...prev, message]);
+    };
+
+    const handleUserTyping = (data: any) => {
+      // Handle typing indicators if needed
+      console.log('User typing:', data);
+    };
+
+    socket.on('NEW_MESSAGE', handleNewMessage);
+    socket.on('USER_TYPING', handleUserTyping);
+
+    return () => {
+      socket.off('NEW_MESSAGE', handleNewMessage);
+      socket.off('USER_TYPING', handleUserTyping);
+    };
+  }, [socket]);
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !socket) return;
 
     try {
-      // For now, we'll simulate sending a message
-      // In a real implementation, this would use WebSocket or a GraphQL mutation
-      console.log('Sending message:', newMessage);
+      console.log('[CHAT] Sending message:', newMessage);
       
-      // Add the message to local state immediately (optimistic update)
-      const newMsg = {
-        _id: Date.now().toString(),
-        message: newMessage.trim(),
-        senderId: currentUser._id,
-        senderDisplayName: currentUser.displayName || currentUser.email,
-        timestamp: new Date().toISOString()
-      };
+      // Send message via WebSocket
+      socket.emit('SEND_MESSAGE', {
+        meetingId,
+        message: newMessage.trim()
+      });
       
-      setMessages(prev => [...prev, newMsg]);
       setNewMessage('');
+      
+      // Stop typing indicator
+      socket.emit('TYPING_STOP', { meetingId });
+      setIsTyping(false);
     } catch (error) {
       console.error('❌ Error sending message:', error);
     }
+  };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    
+    if (!isTyping) {
+      setIsTyping(true);
+      socket?.emit('TYPING_START', { meetingId });
+    }
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set new timeout to stop typing indicator
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      socket?.emit('TYPING_STOP', { meetingId });
+    }, 1000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -203,7 +248,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         }}>
           <textarea
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleTyping}
             onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             style={{

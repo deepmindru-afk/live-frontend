@@ -11,6 +11,8 @@ import { RaisedHandsList } from '../../../components/RaisedHandsList';
 import Swal from 'sweetalert2';
 import PictureInPicture from '../../../components/PictureInPicture';
 import { usePictureInPicture } from '../../../hooks/usePictureInPicture';
+import { io } from 'socket.io-client';
+import ChatView from '../../../components/ChatView';
 
 interface Participant {
   _id: string;
@@ -57,6 +59,7 @@ const MeetingPage: React.FC = memo(() => {
   const [isHost, setIsHost] = useState(false);
   const [participantCount, setParticipantCount] = useState(0);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [forceUpdate, setForceUpdate] = useState(0); // Force re-render trigger
   const [showParticipantMenu, setShowParticipantMenu] = useState<string | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [showHostTransferModal, setShowHostTransferModal] = useState(false);
@@ -96,6 +99,51 @@ const MeetingPage: React.FC = memo(() => {
     },
     onError: (error) => {
       console.error('WebSocket error:', error);
+    },
+    onParticipantJoined: (participant) => {
+      console.log('👤 Participant joined meeting:', participant);
+      // Use React.startTransition to batch state updates properly
+      React.startTransition(() => {
+        setParticipants(prev => {
+          const exists = prev.find(p => p._id === participant.userId);
+          if (exists) {
+            console.log('👤 Participant already exists, skipping duplicate');
+            return prev; // Prevent duplicates
+          }
+          const newParticipants = [...prev, participant];
+          console.log('👤 Participants after join:', newParticipants.length);
+          return newParticipants;
+        });
+        
+        setParticipantCount(prev => {
+          const newCount = prev + 1;
+          console.log('👤 Participant count updated:', newCount);
+          return newCount;
+        });
+        
+        // Force re-render to ensure UI updates
+        setForceUpdate(prev => prev + 1);
+      });
+    },
+    onParticipantLeft: (data) => {
+      console.log('👤 Participant left meeting:', data);
+      // Use React.startTransition to batch state updates properly
+      React.startTransition(() => {
+        setParticipants(prev => {
+          const filtered = prev.filter(p => p._id !== data.userId);
+          console.log('👤 Participants after leave:', filtered.length);
+          return filtered;
+        });
+        
+        setParticipantCount(prev => {
+          const newCount = Math.max(0, prev - 1);
+          console.log('👤 Participant count updated:', newCount);
+          return newCount;
+        });
+        
+        // Force re-render to ensure UI updates
+        setForceUpdate(prev => prev + 1);
+      });
     }
   });
 
@@ -166,17 +214,32 @@ const MeetingPage: React.FC = memo(() => {
   useEffect(() => {
     if (isJoined) {
       startVideo();
-      connectToSignaling();
+      // FIXED: WebSocket connection is handled by useWebSocketChat hook
+      // connectToSignaling(); // Removed duplicate connection
     }
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (socketRef.current) {
+        // Clear heartbeat interval
+        if ((socketRef.current as any).heartbeatInterval) {
+          clearInterval((socketRef.current as any).heartbeatInterval);
+        }
         socketRef.current.disconnect();
       }
     };
-  }, [isJoined]);
+  }, [isJoined, meetingId]); // Add meetingId to dependencies
+
+  // Sync participant count with participants array to prevent state inconsistencies
+  useEffect(() => {
+    const actualCount = participants.length;
+    if (actualCount !== participantCount) {
+      console.log('🔧 Syncing participant count:', actualCount, 'vs', participantCount);
+      setParticipantCount(actualCount);
+      setForceUpdate(prev => prev + 1); // Force re-render
+    }
+  }, [participants, participantCount]);
 
   const loadMeeting = async () => {
     try {
@@ -263,10 +326,104 @@ const MeetingPage: React.FC = memo(() => {
   };
 
   const connectToSignaling = () => {
-    // Mock signaling connection
-    console.log('🔌 Connecting to signaling server...');
-    // In real implementation, you would connect to Socket.IO server
-    // socketRef.current = io(process.env.NEXT_PUBLIC_SIGNALING_WS);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No authentication token found');
+      return;
+    }
+
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
+    console.log('🔌 Connecting to signaling server...', `${backendUrl}/signaling`);
+    
+    const newSocket = io(`${backendUrl}/signaling`, {
+      auth: { token },
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+    newSocket.on('connect', () => {
+      console.log('🔌 Connected to signaling server with ID:', newSocket.id);
+      
+      // Join the meeting room
+      newSocket.emit('JOIN_MEETING', { meetingId });
+      
+      // Start heartbeat
+      const heartbeatInterval = setInterval(() => {
+        if (newSocket.connected) {
+          newSocket.emit('HEARTBEAT', { meetingId });
+        }
+      }, 5000); // Send heartbeat every 5 seconds
+
+      // Store heartbeat interval for cleanup
+      (newSocket as any).heartbeatInterval = heartbeatInterval;
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('🔌 Disconnected from signaling server. Reason:', reason);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('🔌 Connection error:', error);
+    });
+
+    // Listen for real-time events
+    newSocket.on('PARTICIPANT_JOINED', (participant) => {
+      console.log('🔌 Participant joined:', participant);
+      
+      // Use React.startTransition to batch state updates properly
+      React.startTransition(() => {
+        setParticipants(prev => {
+          const exists = prev.find(p => p._id === participant._id);
+          if (exists) {
+            console.log('🔌 Participant already exists, skipping duplicate');
+            return prev; // Prevent duplicates
+          }
+          const newParticipants = [...prev, participant];
+          console.log('🔌 Participants after join:', newParticipants.length);
+          return newParticipants;
+        });
+        
+        setParticipantCount(prev => {
+          const newCount = prev + 1;
+          console.log('🔌 Participant count updated:', newCount);
+          return newCount;
+        });
+        
+        // Force re-render to ensure UI updates
+        setForceUpdate(prev => prev + 1);
+      });
+    });
+
+    newSocket.on('PARTICIPANT_LEFT', (data) => {
+      console.log('🔌 Participant left:', data);
+      
+      // Use React.startTransition to batch state updates properly
+      React.startTransition(() => {
+        setParticipants(prev => {
+          const filtered = prev.filter(p => p._id !== data.userId);
+          console.log('🔌 Participants after removal:', filtered.length);
+          return filtered;
+        });
+        
+        setParticipantCount(prev => {
+          const newCount = Math.max(0, prev - 1);
+          console.log('🔌 Participant count after removal:', newCount);
+          return newCount;
+        });
+        
+        // Force re-render to ensure UI updates
+        setForceUpdate(prev => prev + 1);
+      });
+    });
+
+    newSocket.on('NEW_MESSAGE', (message) => {
+      console.log('🔌 New chat message:', message);
+      setChatMessages(prev => [...prev, message]);
+    });
+
+    socketRef.current = newSocket;
   };
 
   const joinMeeting = async () => {
@@ -1057,6 +1214,21 @@ const MeetingPage: React.FC = memo(() => {
             }}>
               {participantCount}
             </div>
+            
+            {/* Debug info */}
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              backgroundColor: 'rgba(0,0,0,0.8)',
+              color: 'white',
+              padding: '5px 10px',
+              borderRadius: '5px',
+              fontSize: '12px',
+              zIndex: 1000
+            }}>
+              Debug: Count={participantCount}, Array={participants.length}, Force={forceUpdate}
+            </div>
 
             {/* Video Element */}
             <video
@@ -1238,70 +1410,20 @@ const MeetingPage: React.FC = memo(() => {
             flexDirection: 'column',
             borderLeft: '1px solid #34495e'
           }}>
-            <div style={{
-              padding: '15px',
-              borderBottom: '1px solid #34495e',
-              fontSize: '16px',
-              fontWeight: 'bold'
-            }}>
-              채팅
-            </div>
-            
-            <div style={{
-              flex: 1,
-              padding: '10px',
-              overflowY: 'auto',
-              maxHeight: '400px'
-            }}>
-              {chatMessages.map((msg) => (
-                <div key={msg._id} style={{ marginBottom: '10px' }}>
-                  <div style={{ fontSize: '12px', color: '#95a5a6' }}>
-                    {msg.sender.displayName}
-                  </div>
-                  <div style={{ fontSize: '14px' }}>
-                    {msg.message}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div style={{
-              padding: '10px',
-              borderTop: '1px solid #34495e',
-              display: 'flex',
-              gap: '10px'
-            }}>
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="메시지 입력..."
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  backgroundColor: '#34495e',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: 'white',
-                  fontSize: '14px'
-                }}
-              />
-              <button
-                onClick={sendMessage}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: '#3498db',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                전송
-              </button>
-            </div>
+            <ChatView
+              meetingId={meetingId as string}
+              currentUser={(() => {
+                const userStr = localStorage.getItem('user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                return {
+                  _id: user?._id || 'current-user',
+                  displayName: user?.displayName || 'Anonymous User',
+                  email: user?.email || 'me@example.com'
+                };
+              })()}
+              isHost={isHost}
+              socket={socket}
+            />
           </div>
         )}
 

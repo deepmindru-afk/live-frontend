@@ -98,7 +98,7 @@ const WaitingRoomPage: React.FC = () => {
           const redirectKey = `redirected_to_live_${meetingId}`;
           const lastRedirectTime = localStorage.getItem(redirectKey);
           const now = Date.now();
-          const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
+          const REDIRECT_COOLDOWN = 30000; // 10 seconds cooldown
           
           console.log('🔍 WAITING: Initial redirect check:', {
             meetingId,
@@ -195,7 +195,7 @@ const WaitingRoomPage: React.FC = () => {
             const redirectKey = `redirected_to_live_${meetingId}`;
             const lastRedirectTime = localStorage.getItem(redirectKey);
             const now = Date.now();
-            const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
+            const REDIRECT_COOLDOWN = 30000; // 10 seconds cooldown
             
             if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
               localStorage.setItem(redirectKey, now.toString());

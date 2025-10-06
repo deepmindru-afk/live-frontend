@@ -554,7 +554,7 @@ const PrejoinPage = () => {
             const redirectKey = `redirected_${meetingId}_anonymous`;
             const lastRedirectTime = localStorage.getItem(redirectKey);
             const now = Date.now();
-            const REDIRECT_COOLDOWN = 10000; // 10 seconds cooldown
+            const REDIRECT_COOLDOWN = 30000; // 10 seconds cooldown
             
             console.log('🔍 PREJOIN: Redirect check:', {
               meetingId,

@@ -56,7 +56,7 @@ export const usePresence = ({
     // Set up interval to send heartbeat every 10 seconds
     heartbeatIntervalRef.current = setInterval(() => {
       sendHeartbeat();
-    }, 10000); // 10 seconds
+    }, 30000); // 10 seconds
 
     setIsPresenceActive(true);
   }, [socket, isConnected, meetingId]);

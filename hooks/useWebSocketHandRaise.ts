@@ -16,6 +16,8 @@ interface UseWebSocketHandRaiseProps {
   isConnected?: boolean;
   onHandRaised?: (info: HandRaiseInfo) => void;
   onHandLowered?: (info: HandRaiseInfo) => void;
+  onHandLoweredByHost?: (info: HandRaiseInfo & { hostId: string; hostDisplayName: string; reason?: string }) => void;
+  onAllHandsLowered?: (data: { hostId: string; hostDisplayName: string; reason?: string; loweredCount: number; loweredHands: HandRaiseInfo[] }) => void;
   onHandAutoLowered?: (info: HandRaiseInfo & { reason: string }) => void;
   onError?: (error: string) => void;
 }
@@ -28,6 +30,8 @@ export const useWebSocketHandRaise = ({
   isConnected,
   onHandRaised,
   onHandLowered,
+  onHandLoweredByHost,
+  onAllHandsLowered,
   onHandAutoLowered,
   onError,
 }: UseWebSocketHandRaiseProps) => {
@@ -35,12 +39,32 @@ export const useWebSocketHandRaise = ({
   const [myHandRaised, setMyHandRaised] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const timeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  
+  // Store callback functions in refs to avoid dependency array issues
+  const callbacksRef = useRef({
+    onHandRaised,
+    onHandLowered,
+    onHandLoweredByHost,
+    onAllHandsLowered,
+    onHandAutoLowered,
+    onError,
+  });
+  
+  // Update callbacks ref when they change
+  callbacksRef.current = {
+    onHandRaised,
+    onHandLowered,
+    onHandLoweredByHost,
+    onAllHandsLowered,
+    onHandAutoLowered,
+    onError,
+  };
 
   // Raise hand
   const raiseHand = useCallback(() => {
     if (!socket || !isConnected) {
       console.error('✋ WebSocket not connected');
-      onError?.('Not connected to server');
+      callbacksRef.current.onError?.('Not connected to server');
       return;
     }
 
@@ -69,7 +93,7 @@ export const useWebSocketHandRaise = ({
       if (isLoading) {
         console.error('✋ Hand raise timeout - no response received');
         setIsLoading(false);
-        onError?.('Hand raise timeout - no response from server');
+        callbacksRef.current.onError?.('Hand raise timeout - no response from server');
       }
     }, 5000);
   }, [socket, isConnected, meetingId, userId, displayName, myHandRaised, onError, isLoading]);
@@ -78,7 +102,7 @@ export const useWebSocketHandRaise = ({
   const lowerHand = useCallback(() => {
     if (!socket || !isConnected) {
       console.error('✋ WebSocket not connected');
-      onError?.('Not connected to server');
+      callbacksRef.current.onError?.('Not connected to server');
       return;
     }
 
@@ -132,7 +156,7 @@ export const useWebSocketHandRaise = ({
         setMyHandRaised(true);
       }
       
-      onHandRaised?.(data);
+      callbacksRef.current.onHandRaised?.(data);
     };
 
     const handleHandLowered = (data: HandRaiseInfo) => {
@@ -149,7 +173,7 @@ export const useWebSocketHandRaise = ({
         setMyHandRaised(false);
       }
       
-      onHandLowered?.(data);
+      callbacksRef.current.onHandLowered?.(data);
     };
 
     const handleHandAutoLowered = (data: HandRaiseInfo & { reason: string }) => {
@@ -166,7 +190,7 @@ export const useWebSocketHandRaise = ({
         setMyHandRaised(false);
       }
       
-      onHandAutoLowered?.(data);
+      callbacksRef.current.onHandAutoLowered?.(data);
     };
 
     const handleRaisedHandsList = (data: { raisedHands: HandRaiseInfo[] }) => {
@@ -192,7 +216,7 @@ export const useWebSocketHandRaise = ({
         setMyHandRaised(false);
       }
       
-      onHandLowered?.(data);
+      callbacksRef.current.onHandLoweredByHost?.(data);
     };
 
     const handleAllHandsLowered = (data: { hostId: string; hostDisplayName: string; reason?: string; loweredCount: number; loweredHands: HandRaiseInfo[] }) => {
@@ -203,13 +227,13 @@ export const useWebSocketHandRaise = ({
       setRaisedHands([]);
       setMyHandRaised(false);
       
-      onHandLowered?.(data);
+      callbacksRef.current.onAllHandsLowered?.(data);
     };
 
     const handleError = (error: { message: string }) => {
       console.error('✋ Hand raise error:', error);
       setIsLoading(false);
-      onError?.(error.message);
+      callbacksRef.current.onError?.(error.message);
     };
 
     // Register event listeners
@@ -229,15 +253,19 @@ export const useWebSocketHandRaise = ({
       }
     });
 
-    // Cleanup
+    // Cleanup - CRITICAL: Remove ALL listeners to prevent duplication
     return () => {
+      console.log('✋ Cleaning up WebSocket event listeners');
       socket.off('HAND_RAISED', handleHandRaised);
       socket.off('HAND_LOWERED', handleHandLowered);
+      socket.off('HAND_LOWERED_BY_HOST', handleHandLoweredByHost);
+      socket.off('ALL_HANDS_LOWERED', handleAllHandsLowered);
       socket.off('HAND_AUTO_LOWERED', handleHandAutoLowered);
       socket.off('RAISED_HANDS_LIST', handleRaisedHandsList);
       socket.off('ERROR', handleError);
+      socket.offAny(); // CRITICAL: Remove the catch-all listener
     };
-  }, [socket, userId, onHandRaised, onHandLowered, onHandAutoLowered, onError]);
+  }, [socket, userId, meetingId]); // Remove callback functions from dependencies to prevent infinite re-renders
 
   // Get raised hands when connected
   useEffect(() => {

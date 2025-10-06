@@ -351,6 +351,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         setCurrentHandRaiseMessage(null);
       }
     },
+    onHandLoweredByHost: (info) => {
+      console.log('✋ Hand lowered by host:', info);
+      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
+      
+      // Show notification if this was my hand
+      if (info.userId === currentParticipant?._id) {
+        Swal.fire({
+          icon: 'info',
+          title: 'Hand Lowered',
+          text: 'The host lowered your hand',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+      
+      // Clear current message if this was the last hand
+      if (isHost && handRaiseQueue.length <= 1) {
+        setCurrentHandRaiseMessage(null);
+      }
+    },
+    onAllHandsLowered: () => {
+      console.log('✋ All hands lowered by host');
+      setHandRaiseQueue([]);
+      setCurrentHandRaiseMessage(null);
+      
+      // Show notification if I had my hand raised
+      if (wsMyHandRaised) {
+        Swal.fire({
+          icon: 'info',
+          title: 'All Hands Lowered',
+          text: 'The host lowered all hands',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+    },
     onError: (error) => {
       console.error('✋ Hand raise error:', error);
       // No alert - just log the error
