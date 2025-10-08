@@ -214,7 +214,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     },
     onParticipantJoined: (participant) => {
       console.log('👋 Participant joined:', participant);
-      // Trigger a refresh of participant data
+      // CRITICAL FIX: Directly update local participants state for immediate UI update
+      setParticipants(prev => {
+        const exists = prev.find(p => p._id === participant._id || p.userId === participant.userId);
+        if (exists) {
+          console.log('👋 WEBSOCKET JOIN: Participant already exists, skipping duplicate');
+          return prev;
+        }
+        const newParticipants = [...prev, participant];
+        console.log('👋 WEBSOCKET JOIN: Participants after join:', {
+          newParticipants,
+          newParticipantsLength: newParticipants.length,
+          previousParticipantsLength: prev.length,
+          source: 'WebSocket JOIN_MEETING'
+        });
+        return newParticipants;
+      });
+      
+      // Also trigger a refresh of participant data for consistency
       if (refetchParticipants) {
         console.log('🔄 Refreshing participant data due to new participant');
         refetchParticipants();
@@ -222,7 +239,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     },
     onParticipantLeft: (participant) => {
       console.log('👋 Participant left:', participant);
-      // Trigger a refresh of participant data
+      // CRITICAL FIX: Directly update local participants state for immediate UI update
+      setParticipants(prev => {
+        const filtered = prev.filter(p => p._id !== participant._id && p.userId !== participant.userId);
+        console.log('👋 WEBSOCKET LEAVE: Participants after leave:', {
+          filtered,
+          filteredLength: filtered.length,
+          previousParticipantsLength: prev.length,
+          source: 'WebSocket LEAVE_MEETING'
+        });
+        return filtered;
+      });
+      
+      // Also trigger a refresh of participant data for consistency
       if (refetchParticipants) {
         console.log('🔄 Refreshing participant data due to participant leaving');
         refetchParticipants();
@@ -517,6 +546,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           console.log('🔐 User with token:', { user: userWithToken, token: token ? 'present' : 'missing' });
           setCurrentUser(userWithToken);
           setActualUserId(user?.id || userId);
+          
+          // CRITICAL FIX: Call GraphQL joinMeeting mutation to create participant record
+          try {
+            console.log('🚀 PROFESSIONAL_LIVE_STREAM: Calling GraphQL joinMeeting mutation...');
+            const joinResult = await joinMeeting({
+              variables: {
+                input: {
+                  meetingId: meetingIdToUse,
+                  displayName: user.displayName || 'Participant',
+                  role: user.systemRole === 'TUTOR' || user.systemRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
+                }
+              }
+            });
+            
+            if (joinResult.data?.joinMeeting) {
+              console.log('✅ PROFESSIONAL_LIVE_STREAM: Successfully joined meeting via GraphQL:', joinResult.data.joinMeeting);
+              setCurrentParticipant(joinResult.data.joinMeeting);
+            } else {
+              console.warn('⚠️ PROFESSIONAL_LIVE_STREAM: GraphQL joinMeeting returned no data');
+            }
+          } catch (joinError) {
+            console.error('❌ PROFESSIONAL_LIVE_STREAM: GraphQL joinMeeting failed:', joinError);
+            // Don't fail the entire initialization, just log the error
+          }
           } else {
           const mockUser = {
             id: userId,
@@ -530,6 +583,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
         
         setAuthComplete(true);
+        
         setLoading(false);
     } catch (error) {
         console.error('Error initializing meeting:', error);
@@ -675,6 +729,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         previousParticipantsLength: previousParticipants.length
       });
       
+      console.log('🔍 GRAPHQL UPDATE: Setting participants from GraphQL query:', {
+        participantsList,
+        participantsListLength: participantsList.length,
+        previousParticipantsLength: participants.length,
+        source: 'GraphQL Query'
+      });
       setParticipants(participantsList);
 
       // Update queue with new participant data
@@ -2504,7 +2564,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 fontWeight: '600',
                 fontSize: '16px'
               }}>
-                {participants.length}
+                {(() => {
+                  console.log('🔍 DISPLAYING PARTICIPANT COUNT:', {
+                    participantsLength: participants.length,
+                    participants: participants,
+                    timestamp: new Date().toISOString()
+                  });
+                  return participants.length;
+                })()}
               </div>
               
               {/* Mic Control */}

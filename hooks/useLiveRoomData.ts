@@ -39,13 +39,9 @@ export const useLiveRoomData = (meetingId: string): LiveRoomData => {
     }
 
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
-    const newSocket = io(`${backendUrl}/signaling`, {
-      auth: { token },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5
-    });
+    // FIXED: WebSocket connection is handled by useWebSocketChat hook
+    // This prevents duplicate connections and heartbeat conflicts
+    const newSocket = null; // Disabled to prevent duplicate connections
 
     // Connection events
     newSocket.on('connect', () => {

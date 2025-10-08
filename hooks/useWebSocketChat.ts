@@ -34,6 +34,14 @@ export const useWebSocketChat = ({
   onParticipantLeft,
   onError,
 }: UseWebSocketChatProps) => {
+  console.log('🔌 useWebSocketChat hook called:', { 
+    meetingId, 
+    token: token ? 'provided' : 'not provided',
+    hasOnMessage: !!onMessage,
+    hasOnParticipantJoined: !!onParticipantJoined,
+    hasOnParticipantLeft: !!onParticipantLeft,
+    hasOnError: !!onError
+  });
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
@@ -42,10 +50,28 @@ export const useWebSocketChat = ({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  
+  // Use refs to store callbacks to prevent infinite re-renders
+  const callbacksRef = useRef({
+    onMessage,
+    onParticipantJoined,
+    onParticipantLeft,
+    onError
+  });
+  
+  // Update callbacks ref when they change
+  useEffect(() => {
+    callbacksRef.current = {
+      onMessage,
+      onParticipantJoined,
+      onParticipantLeft,
+      onError
+    };
+  }, [onMessage, onParticipantJoined, onParticipantLeft, onError]);
 
   const connect = useCallback(() => {
-    // Get token from localStorage if not provided
-    const authToken = token || localStorage.getItem('token');
+    // Get token from localStorage if not provided - check both 'jwt' and 'token' keys
+    const authToken = token || localStorage.getItem('jwt') || localStorage.getItem('token');
     
     console.log('🔌 connect() called:', { 
       meetingId, 
@@ -53,7 +79,10 @@ export const useWebSocketChat = ({
       tokenLength: authToken?.length || 0,
       tokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'none',
       socket: !!socket,
-      socketConnected: socket?.connected
+      socketConnected: socket?.connected,
+      jwtToken: localStorage.getItem('jwt') ? 'present' : 'missing',
+      tokenKey: localStorage.getItem('token') ? 'present' : 'missing',
+      allKeys: Object.keys(localStorage).filter(key => key.includes('token') || key.includes('jwt'))
     });
     
     if (socket?.connected) {
@@ -72,6 +101,8 @@ export const useWebSocketChat = ({
       setError('No authentication token provided');
       return;
     }
+
+    console.log('🔌 Creating new WebSocket connection...');
 
     try {
       console.log('🔌 Creating new socket connection...', {
@@ -115,15 +146,18 @@ export const useWebSocketChat = ({
         (newSocket as any).heartbeatInterval = null;
       }
       
-      // Attempt to reconnect if not manually disconnected
+      // Attempt to reconnect if not manually disconnected - IMPROVED with better error handling
       if (reason !== 'io client disconnect' && reconnectAttempts.current < maxReconnectAttempts) {
         reconnectAttempts.current++;
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-        console.log(`🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts.current})`);
+        console.log(`🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
         
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, delay);
+      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+        console.error('❌ Max reconnection attempts reached, giving up');
+        setError('Connection failed after multiple attempts. Please refresh the page.');
       }
     });
 
@@ -138,14 +172,14 @@ export const useWebSocketChat = ({
       });
       const errorMessage = `Failed to connect to chat server: ${error.message || 'Unknown error'}`;
       setError(errorMessage);
-      onError?.(errorMessage);
+      callbacksRef.current.onError?.(errorMessage);
     });
 
     newSocket.on('ERROR', (data) => {
       console.error('❌ Chat WebSocket server error:', data);
       const errorMessage = `Server error: ${data.message || 'Unknown server error'}`;
       setError(errorMessage);
-      onError?.(errorMessage);
+      callbacksRef.current.onError?.(errorMessage);
     });
 
     newSocket.on('CONNECTION_SUCCESS', (data) => {
@@ -157,18 +191,31 @@ export const useWebSocketChat = ({
       newSocket.emit('JOIN_CHAT_ROOM', { meetingId });
       
       // FIXED: Use new presence system instead of old events
-      console.log('📤 Joining meeting with new presence system...');
-      newSocket.emit('JOIN_MEETING', { meetingId });
+      console.log('📤 Joining meeting with new presence system...', { meetingId, socketId: newSocket.id });
       
-          // Start heartbeat system - HYBRID APPROACH: Every 5 seconds for best balance
+      // Add a small delay to ensure connection is fully established
+      setTimeout(() => {
+        console.log('📤 Emitting JOIN_MEETING event after delay...', { meetingId, socketId: newSocket.id, connected: newSocket.connected });
+        
+        // Test with a simple event first
+        newSocket.emit('TEST_EVENT', { message: 'test', meetingId });
+        console.log('📤 TEST_EVENT emitted');
+        
+        // Then emit the actual JOIN_MEETING event
+        newSocket.emit('JOIN_MEETING', { meetingId });
+        console.log('📤 JOIN_MEETING event emitted successfully');
+      }, 1000); // 1 second delay
+      
+          // Start heartbeat system - OPTIMIZED: Every 10 seconds for better performance
           const heartbeatInterval = setInterval(() => {
             if (newSocket.connected) {
-              console.log('💓 Sending heartbeat...');
+              console.log('💓 Sending heartbeat...', { meetingId, socketId: newSocket.id, connected: newSocket.connected });
               newSocket.emit('HEARTBEAT', { meetingId });
             } else {
+              console.log('❌ Socket not connected, clearing heartbeat interval');
               clearInterval(heartbeatInterval);
             }
-          }, 5000); // Every 5 seconds - HYBRID: Fast detection + Smart DB updates
+          }, 10000); // Every 10 seconds - OPTIMIZED: Reduced frequency for better performance
       
       // Store interval for cleanup
       (newSocket as any).heartbeatInterval = heartbeatInterval;
@@ -177,7 +224,7 @@ export const useWebSocketChat = ({
     newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
       console.log('📨 Received chat message:', message);
       setMessages(prev => [...prev, message]);
-      onMessage?.(message);
+      callbacksRef.current.onMessage?.(message);
     });
 
     newSocket.on('CHAT_MESSAGE_DELETED', (data) => {
@@ -226,9 +273,13 @@ export const useWebSocketChat = ({
     // Add heartbeat acknowledgment listener
     newSocket.on('HEARTBEAT_ACK', (data) => {
       console.log('💓 Heartbeat acknowledged:', data);
+      if (data.dbUpdated) {
+        console.log('✅ Database updated with heartbeat');
+      } else {
+        console.log('⏭️ Database update optimized (throttled for performance)');
+      }
     });
 
-    // Add meeting join success listener
     newSocket.on('MEETING_JOIN_SUCCESS', (data) => {
       console.log('✅ Meeting join successful:', data);
     });
@@ -236,19 +287,19 @@ export const useWebSocketChat = ({
     // Add meeting event listeners for participant management
     newSocket.on('PARTICIPANT_JOINED', (participant) => {
       console.log('👤 Participant joined meeting:', participant);
-      onParticipantJoined?.(participant);
+      callbacksRef.current.onParticipantJoined?.(participant);
     });
 
     newSocket.on('PARTICIPANT_LEFT', (data) => {
       console.log('👤 Participant left meeting:', data);
-      onParticipantLeft?.(data);
+      callbacksRef.current.onParticipantLeft?.(data);
     });
 
     newSocket.on('NEW_MESSAGE', (message) => {
       console.log('💬 New meeting message:', message);
       // Handle as chat message
       setMessages(prev => [...prev, message]);
-      onMessage?.(message);
+      callbacksRef.current.onMessage?.(message);
     });
 
       console.log('🔌 Setting socket state:', { 
@@ -259,9 +310,9 @@ export const useWebSocketChat = ({
     } catch (error) {
       console.error('❌ Failed to create WebSocket connection:', error);
       setError('Failed to create WebSocket connection');
-      onError?.('Failed to create WebSocket connection');
+      callbacksRef.current.onError?.('Failed to create WebSocket connection');
     }
-  }, [meetingId, token, onMessage, onParticipantJoined, onParticipantLeft, onError]);
+  }, [meetingId, token]); // FIXED: Removed callback dependencies to prevent infinite re-renders
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -290,7 +341,7 @@ export const useWebSocketChat = ({
       setSocket(null);
       setIsConnected(false);
     }
-  }, [socket, meetingId]);
+  }, [socket, meetingId]); // FIXED: Keep only essential dependencies
 
   const sendMessage = useCallback((message: string, replyToMessageId?: string) => {
     console.log('🚀 sendMessage called:', { message, meetingId, isConnected, socket: !!socket });

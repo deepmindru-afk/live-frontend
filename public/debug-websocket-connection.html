@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Connection Debug</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { margin: 5px 0; padding: 5px; border-radius: 3px; }
+        .info { background-color: #e3f2fd; }
+        .success { background-color: #e8f5e8; }
+        .error { background-color: #ffebee; }
+        .warning { background-color: #fff3e0; }
+        button { margin: 5px; padding: 10px; }
+        input { margin: 5px; padding: 5px; width: 300px; }
+        #logs { max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket Connection Debug</h1>
+    
+    <div>
+        <h3>Token Status:</h3>
+        <div id="tokenStatus"></div>
+        <button onclick="checkToken()">Check Token</button>
+        <button onclick="clearToken()">Clear Token</button>
+    </div>
+    
+    <div>
+        <h3>WebSocket Test:</h3>
+        <input type="text" id="meetingId" placeholder="Meeting ID" value="68e3efb33439bb6d3701feeb">
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+    
+    <div>
+        <h3>Logs:</h3>
+        <div id="logs"></div>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <script>
+        let socket = null;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(logDiv);
+            logs.scrollTop = logs.scrollHeight;
+            console.log(message);
+        }
+        
+        function checkToken() {
+            const jwtToken = localStorage.getItem('jwt');
+            const tokenKey = localStorage.getItem('token');
+            const allKeys = Object.keys(localStorage);
+            
+            const status = document.getElementById('tokenStatus');
+            status.innerHTML = `
+                <div><strong>JWT Token:</strong> ${jwtToken ? 'Present (' + jwtToken.length + ' chars)' : 'Missing'}</div>
+                <div><strong>Token Key:</strong> ${tokenKey ? 'Present (' + tokenKey.length + ' chars)' : 'Missing'}</div>
+                <div><strong>All Keys:</strong> ${allKeys.join(', ')}</div>
+                <div><strong>Token Preview:</strong> ${jwtToken ? jwtToken.substring(0, 50) + '...' : 'None'}</div>
+            `;
+            
+            log(`Token check: JWT=${jwtToken ? 'present' : 'missing'}, Token=${tokenKey ? 'present' : 'missing'}`, 'info');
+        }
+        
+        function clearToken() {
+            localStorage.removeItem('jwt');
+            localStorage.removeItem('token');
+            log('Tokens cleared', 'warning');
+            checkToken();
+        }
+        
+        function testConnection() {
+            const meetingId = document.getElementById('meetingId').value;
+            if (!meetingId) {
+                log('Please enter a meeting ID', 'error');
+                return;
+            }
+            
+            // Get token (same logic as useWebSocketChat)
+            const authToken = localStorage.getItem('jwt') || localStorage.getItem('token');
+            
+            if (!authToken) {
+                log('❌ No authentication token found', 'error');
+                return;
+            }
+            
+            log(`🔌 Testing WebSocket connection with token: ${authToken.substring(0, 20)}...`, 'info');
+            
+            // Disconnect existing connection
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            // Create new connection
+            socket = io('http://localhost:3007/signaling', {
+                auth: { token: authToken },
+                transports: ['websocket'],
+                timeout: 10000
+            });
+            
+            socket.on('connect', () => {
+                log(`✅ Connected to WebSocket with ID: ${socket.id}`, 'success');
+                
+                // Join meeting
+                log(`📤 Joining meeting: ${meetingId}`, 'info');
+                socket.emit('JOIN_MEETING', { meetingId });
+                
+                // Start heartbeat
+                const heartbeatInterval = setInterval(() => {
+                    if (socket.connected) {
+                        log('💓 Sending heartbeat...', 'info');
+                        socket.emit('HEARTBEAT', { meetingId });
+                    } else {
+                        clearInterval(heartbeatInterval);
+                    }
+                }, 5000);
+                
+                // Store interval for cleanup
+                socket.heartbeatInterval = heartbeatInterval;
+            });
+            
+            socket.on('disconnect', (reason) => {
+                log(`🔌 Disconnected: ${reason}`, 'warning');
+            });
+            
+            socket.on('connect_error', (error) => {
+                log(`❌ Connection error: ${error.message}`, 'error');
+            });
+            
+            socket.on('HEARTBEAT_ACK', (data) => {
+                log(`✅ Heartbeat acknowledged: ${JSON.stringify(data)}`, 'success');
+            });
+            
+            socket.on('PARTICIPANT_JOINED', (participant) => {
+                log(`👤 Participant joined: ${JSON.stringify(participant)}`, 'success');
+            });
+            
+            socket.on('PARTICIPANT_LEFT', (data) => {
+                log(`👤 Participant left: ${JSON.stringify(data)}`, 'warning');
+            });
+            
+            socket.on('ERROR', (error) => {
+                log(`❌ Server error: ${JSON.stringify(error)}`, 'error');
+            });
+        }
+        
+        function disconnect() {
+            if (socket) {
+                if (socket.heartbeatInterval) {
+                    clearInterval(socket.heartbeatInterval);
+                }
+                socket.disconnect();
+                socket = null;
+                log('🔌 Disconnected manually', 'info');
+            }
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+        
+        // Check token on page load
+        window.onload = () => {
+            log('🚀 Page loaded, ready to test', 'info');
+            checkToken();
+        };
+    </script>
+</body>
+</html>
+
