@@ -109,41 +109,64 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
   // Add participant join/leave messages when participants change
   useEffect(() => {
     if (participants.length > 0 && previousParticipants.length > 0) {
-      // Check for new participants (joined meeting)
-      const newParticipants = participants.filter(newP => 
-        !previousParticipants.find(oldP => oldP._id === newP._id)
-      );
-      
-      newParticipants.forEach(participant => {
-        const joinMsg: Message = {
-          _id: `meeting-join-${participant._id}-${Date.now()}`,
-          text: `${participant.displayName || 'A participant'} joined the meeting`,
-          displayName: 'System',
-          createdAt: new Date().toISOString(),
-          type: 'join'
-        };
-        setMessages(prev => [...prev, joinMsg]);
-      });
+      // FIXED: Add debouncing to prevent spam from frequent participant updates
+      const timeoutId = setTimeout(() => {
+        console.log('🔍 PARTICIPANT COMPARISON:', {
+          currentCount: participants.length,
+          previousCount: previousParticipants.length,
+          currentIds: participants.map(p => p._id),
+          previousIds: previousParticipants.map(p => p._id)
+        });
+        // Only show join/leave messages for actual status changes, not frequent array updates
+        // Check for new participants (actually joined - not just appeared in array due to heartbeat updates)
+        const newParticipants = participants.filter(newP => {
+          const wasPresent = previousParticipants.find(oldP => oldP._id === newP._id);
+          // Only show join message if participant was not present before OR status changed to ADMITTED
+          const isActuallyNew = !wasPresent && newP.status === 'ADMITTED';
+          const statusChangedToAdmitted = wasPresent && wasPresent.status !== 'ADMITTED' && newP.status === 'ADMITTED';
+          return isActuallyNew || statusChangedToAdmitted;
+        });
+        
+        newParticipants.forEach(participant => {
+          const joinMsg: Message = {
+            _id: `meeting-join-${participant._id}-${Date.now()}`,
+            text: `${participant.displayName || 'A participant'} joined the meeting`,
+            displayName: 'System',
+            createdAt: new Date().toISOString(),
+            type: 'join'
+          };
+          setMessages(prev => [...prev, joinMsg]);
+        });
 
-      // Check for left participants (left meeting)
-      const leftParticipants = previousParticipants.filter(oldP => 
-        !participants.find(newP => newP._id === oldP._id)
-      );
+        // Check for left participants (actually left - not just disappeared from array due to heartbeat updates)
+        const leftParticipants = previousParticipants.filter(oldP => {
+          const stillPresent = participants.find(newP => newP._id === oldP._id);
+          // Only show leave message if participant was ADMITTED before and is now LEFT or completely gone
+          const wasAdmitted = oldP.status === 'ADMITTED';
+          const isNowLeft = !stillPresent || (stillPresent && stillPresent.status === 'LEFT');
+          return wasAdmitted && isNowLeft;
+        });
+        
+        leftParticipants.forEach(participant => {
+          const leaveMsg: Message = {
+            _id: `meeting-leave-${participant._id}-${Date.now()}`,
+            text: `${participant.displayName || 'A participant'} left the meeting`,
+            displayName: 'System',
+            createdAt: new Date().toISOString(),
+            type: 'leave'
+          };
+          setMessages(prev => [...prev, leaveMsg]);
+        });
+        
+        // Update previous participants for next comparison
+        setPreviousParticipants(participants);
+      }, 500); // 500ms debounce to prevent spam from frequent updates
       
-      leftParticipants.forEach(participant => {
-        const leaveMsg: Message = {
-          _id: `meeting-leave-${participant._id}-${Date.now()}`,
-          text: `${participant.displayName || 'A participant'} left the meeting`,
-          displayName: 'System',
-          createdAt: new Date().toISOString(),
-          type: 'leave'
-        };
-        setMessages(prev => [...prev, leaveMsg]);
-      });
+      return () => clearTimeout(timeoutId);
+    } else {
+      // Update previous participants for next comparison (no debounce needed for initial load)
+      setPreviousParticipants(participants);
     }
-    
-    // Update previous participants for next comparison
-    setPreviousParticipants(participants);
   }, [participants]);
 
   const scrollToBottom = () => {

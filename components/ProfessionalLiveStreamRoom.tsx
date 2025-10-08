@@ -160,7 +160,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     skip: !actualMeetingId,
     pollInterval: 1500,
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only', // FIXED: Always fetch from network to ensure all users see same count
     notifyOnNetworkStatusChange: false
   });
 
