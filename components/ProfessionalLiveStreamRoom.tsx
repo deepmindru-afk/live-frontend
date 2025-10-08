@@ -29,8 +29,10 @@ import MinimalistChat from './MinimalistChat';
 import PictureInPicture from './PictureInPicture';
 import { usePictureInPicture } from '../hooks/usePictureInPicture';
 import ParticipantQueue from './ParticipantQueue';
+import LiveKitParticipantQueue from './LiveKitParticipantQueue';
 import { useParticipantQueue, Participant } from '../hooks/useParticipantQueue';
 import { useAudioLevelDetection } from '../hooks/useAudioLevelDetection';
+import { useLiveKit } from '../hooks/useLiveKit';
 
 // Additional mutations for leave functionality
 const FORCE_LEAVE_MEETING = gql`
@@ -134,6 +136,56 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [thumbnailPanelOpen, setThumbnailPanelOpen] = useState(true);
+  
+  // LiveKit integration
+  const {
+    isConnected: isLiveKitConnected,
+    connectionState: liveKitConnectionState,
+    isConnecting: isLiveKitConnecting,
+    error: liveKitError,
+    participants: liveKitParticipants,
+    localParticipant: liveKitLocalParticipant,
+    isMuted: liveKitIsMuted,
+    isCameraEnabled: liveKitIsCameraEnabled,
+    isScreenSharing: liveKitIsScreenSharing,
+    connect: liveKitConnect,
+    disconnect: liveKitDisconnect,
+    toggleMicrophone: liveKitToggleMicrophone,
+    toggleCamera: liveKitToggleCamera,
+    toggleScreenShare: liveKitToggleScreenShare,
+    liveKitService
+  } = useLiveKit({
+    roomName: '', // Will be set when connecting
+    participantName: '',
+    meetingRole: 'PARTICIPANT' as const,
+    autoConnect: false,
+    onConnected: (roomState) => {
+      console.log('🎥 LiveKit connected:', roomState);
+      setMicEnabled(!roomState.isMuted);
+      setCameraEnabled(roomState.isCameraEnabled);
+      setScreenSharing(roomState.isScreenSharing);
+      
+      // IMPORTANT: Camera enable should happen here, after connection is fully established
+      // The delayed camera enable in useEffect won't work because isLiveKitConnected updates asynchronously
+      console.log('✅ LiveKit onConnected: Connection fully established, ready for camera');
+    },
+    onParticipantConnected: (participant) => {
+      console.log('👤 LiveKit participant connected:', participant);
+    },
+    onParticipantDisconnected: (participantId) => {
+      console.log('👋 LiveKit participant disconnected:', participantId);
+    },
+    onTrackSubscribed: (track, publication, participant) => {
+      console.log('🎵 LiveKit track subscribed:', { 
+        track, 
+        participant: participant?.identity || 'unknown',
+        hasParticipant: !!participant 
+      });
+    },
+    onError: (error) => {
+      console.error('❌ LiveKit error:', error);
+    }
+  });
   
   // Debug: Track recording state changes
   useEffect(() => {
@@ -594,6 +646,67 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     initializeMeeting();
   }, [propMeetingId, userId, role]);
 
+  // Connect to LiveKit when authentication is complete
+  useEffect(() => {
+    console.log('🔍 LiveKit Connection Check:', {
+      authComplete,
+      actualMeetingId,
+      currentUser: !!currentUser,
+      isLiveKitConnected,
+      isLiveKitConnecting,
+      shouldConnect: authComplete && actualMeetingId && currentUser && !isLiveKitConnected && !isLiveKitConnecting
+    });
+
+    if (authComplete && actualMeetingId && currentUser && !isLiveKitConnected && !isLiveKitConnecting) {
+      console.log('🎥 Initializing LiveKit connection...', {
+        meetingId: actualMeetingId,
+        userId: actualUserId,
+        userName: currentUser.displayName || currentUser.name || 'User'
+      });
+
+      // Connect to LiveKit with camera/mic settings from state
+      // Camera will be enabled during connection if cameraEnabled=true
+      console.log('🔌 LiveKit: Initiating connection with options:', {
+        roomName: actualMeetingId,
+        participantName: currentUser.displayName || currentUser.name || 'User',
+        meetingRole: role,
+        enableCamera: cameraEnabled,  // Now passing actual camera state
+        enableMicrophone: micEnabled,
+        isLiveKitConnected,
+        isLiveKitConnecting
+      });
+
+      liveKitConnect({
+        roomName: actualMeetingId,
+        participantName: currentUser.displayName || currentUser.name || 'User',
+        meetingRole: role as 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER',
+        enableCamera: cameraEnabled, // Enable camera based on state - connection handles it properly now
+        enableMicrophone: micEnabled,
+        enableScreenShare: true
+      }).catch(error => {
+        console.error('❌ LiveKit connection failed:', error);
+      });
+    }
+  }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
+
+  // Debug: Log when dependencies change
+  useEffect(() => {
+    console.log('🔍 LiveKit Dependencies Changed:', {
+      authComplete,
+      actualMeetingId,
+      currentUser: !!currentUser,
+      role,
+      cameraEnabled,
+      micEnabled,
+      isLiveKitConnected,
+      isLiveKitConnecting,
+      liveKitConnect: !!liveKitConnect
+    });
+  }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
+
+  // NOTE: Video elements ready event listener removed - no longer needed
+  // Camera is enabled during initial connection in the connect() method
+
   // Mobile detection and force speaker mode
   useEffect(() => {
     const checkMobile = () => {
@@ -716,7 +829,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       dataType: typeof participantsData,
       hasGetParticipantsByMeeting: participantsData && 'getParticipantsByMeeting' in participantsData,
       getParticipantsByMeeting: participantsData?.getParticipantsByMeeting,
-      participantsListLength: participantsData?.getParticipantsByMeeting?.length || 0
+      participantsListLength: participantsData?.getParticipantsByMeeting?.length || 0,
+      actualMeetingId,
+      participantsLoading,
+      participantsError
     });
     
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
@@ -1069,17 +1185,40 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleMicToggle = async () => {
-    setMicEnabled(!micEnabled);
+    if (isLiveKitConnected) {
+      await liveKitToggleMicrophone();
+      setMicEnabled(!micEnabled);
+    } else {
+      setMicEnabled(!micEnabled);
+    }
     console.log('Mic toggled:', !micEnabled);
   };
 
   const handleCameraToggle = async () => {
-    setCameraEnabled(!cameraEnabled);
-    console.log('Camera toggled:', !cameraEnabled);
+    if (isLiveKitConnected) {
+      try {
+        console.log('🎥 Attempting to toggle camera via LiveKit...');
+        await liveKitToggleCamera();
+        setCameraEnabled(!cameraEnabled);
+        console.log('✅ Camera toggled successfully via LiveKit');
+      } catch (error) {
+        console.error('❌ Error toggling camera via LiveKit:', error);
+        // Fallback to local state only
+        setCameraEnabled(!cameraEnabled);
+      }
+    } else {
+      setCameraEnabled(!cameraEnabled);
+      console.log('📹 Camera toggled (LiveKit not connected)');
+    }
   };
 
   const handleScreenShareToggle = async () => {
-    setScreenSharing(!screenSharing);
+    if (isLiveKitConnected) {
+      await liveKitToggleScreenShare();
+      setScreenSharing(!screenSharing);
+    } else {
+      setScreenSharing(!screenSharing);
+    }
     console.log('Screen share toggled:', !screenSharing);
   };
 
@@ -2492,12 +2631,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
+            {/* LiveKit Connection Status */}
+            <div style={{
+              position: 'absolute',
+              top: '20px',
+              left: '20px',
+              backgroundColor: isLiveKitConnected ? '#d1fae5' : '#fef2f2',
+              border: `2px solid ${isLiveKitConnected ? '#10b981' : '#ef4444'}`,
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: isLiveKitConnected ? '#065f46' : '#991b1b',
+              zIndex: 1000,
+              boxShadow: `0 4px 12px rgba(${isLiveKitConnected ? '16, 185, 129' : '239, 68, 68'}, 0.3)`
+            }}>
+              {isLiveKitConnected ? '🎥 LiveKit Connected' : '❌ LiveKit Disconnected'}
+              {isLiveKitConnecting && ' (Connecting...)'}
+            </div>
+
             {/* Hand raise count - Host Only */}
             {isHost && wsRaisedHands.length > 0 && (
               <div style={{
                 position: 'absolute',
                 top: '20px',
-                left: '20px',
+                left: isLiveKitConnected ? '200px' : '20px',
                 backgroundColor: '#fef3c7',
                 border: '2px solid #f59e0b',
                 borderRadius: '8px',
@@ -2516,8 +2677,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
-            {/* Participant Queue Display */}
-            <ParticipantQueue
+            {/* Participant Queue Display with LiveKit */}
+            {(() => {
+              console.log('🔍 LiveKitParticipantQueue Render Check:', {
+                isLiveKitConnected,
+                participantsCount: queueState.participants.length,
+                participants: queueState.participants.map(p => ({ id: p._id, name: p.displayName })),
+                liveKitParticipantsCount: liveKitParticipants.size,
+                liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([id, p]) => ({ id, name: p.name }))
+              });
+              return null;
+            })()}
+            {isLiveKitConnected ? (
+            <LiveKitParticipantQueue
               participants={queueState.participants}
               activeSpeaker={queueState.activeSpeaker}
               screenShareMode={queueState.screenShareMode}
@@ -2536,7 +2708,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               isHost={isHost}
               viewMode={viewMode}
               maxThumbnails={6}
+              liveKitParticipants={liveKitParticipants}
+              localParticipant={liveKitLocalParticipant}
+              liveKitService={liveKitService}
+              isLiveKitConnected={isLiveKitConnected}
             />
+            ) : (
+              <ParticipantQueue
+                participants={queueState.participants}
+                activeSpeaker={queueState.activeSpeaker}
+                screenShareMode={queueState.screenShareMode}
+                screenShareParticipant={queueState.screenShareParticipant}
+                onParticipantClick={(participant) => {
+                  setSelectedParticipant(participant);
+                  console.log('Selected participant:', participant);
+                }}
+                onHandRaiseClick={(participant) => {
+                  updateHandRaiseStatus(participant._id, false);
+                  console.log('Lowered hand for:', participant.displayName);
+                }}
+                onKickParticipant={(participant) => {
+                  handleKickParticipant(participant._id);
+                }}
+                isHost={isHost}
+                viewMode={viewMode}
+                maxThumbnails={6}
+              />
+            )}
           </div>
 
           {/* Bottom Control Bar */}

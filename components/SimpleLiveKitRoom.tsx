@@ -169,7 +169,17 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
     });
 
     roomInstance.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-      console.log('🔊 LiveKit: Track unmuted', { participant: participant.identity, track: publication.kind });
+      // CRITICAL FIX: Add null checks for participant to prevent "cannot read properties of undefined" errors
+      if (!participant) {
+        console.warn('⚠️ LiveKit: TrackUnmuted event received with undefined participant');
+        return;
+      }
+      
+      console.log('🔊 LiveKit: Track unmuted', { 
+        participant: participant.identity || 'unknown', 
+        track: publication?.kind || 'unknown' 
+      });
+      
       if (participant === roomInstance.localParticipant) {
         if (publication.kind === Track.Kind.Audio) {
           setIsMuted(false);
@@ -266,7 +276,14 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
         setIsCameraEnabled(false);
         console.log('📹 LiveKit: Camera disabled');
       } else {
-        await room.localParticipant.setCameraEnabled(true);
+        // FIX: Use explicit video constraints to prevent "scaleResolutionDownBy non-finite" error
+        await room.localParticipant.setCameraEnabled(true, {
+          resolution: {
+            width: 1280,   // Explicit finite number
+            height: 720,   // Explicit finite number
+            frameRate: 30,
+          },
+        });
         setIsCameraEnabled(true);
         console.log('📹 LiveKit: Camera enabled');
       }

@@ -58,47 +58,45 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
   
   const liveKitServiceRef = useRef<LiveKitService | null>(null);
   const optionsRef = useRef(options);
+  const cleanupListenersRef = useRef<(() => void) | null>(null);
 
   // Update options ref when options change
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
-  // Initialize LiveKit service
-  useEffect(() => {
-    if (!liveKitServiceRef.current) {
-      liveKitServiceRef.current = new LiveKitService();
-      setupEventListeners();
-    }
-
-    return () => {
-      if (liveKitServiceRef.current) {
-        liveKitServiceRef.current.disconnect();
-      }
-    };
-  }, []);
-
   const setupEventListeners = useCallback(() => {
     if (!liveKitServiceRef.current) return;
 
     const service = liveKitServiceRef.current;
 
-    service.addEventListener('connected', () => {
+    // Define all event handlers
+    const handleConnected = () => {
+      console.log('🔍 [useLiveKit] handleConnected called - LiveKit connection established');
+      console.log('🔍 [useLiveKit] Current state before update:', {
+        isConnected,
+        isConnecting,
+        participantsSize: participants.size,
+        participantsKeys: Array.from(participants.keys())
+      });
+      
       setIsConnected(true);
       setIsConnecting(false);
       setError(null);
+      
+      console.log('🔍 [useLiveKit] handleConnected completed - state updated');
       optionsRef.current.onConnected?.(service.state);
-    });
+    };
 
-    service.addEventListener('disconnected', () => {
+    const handleDisconnected = () => {
       setIsConnected(false);
       setIsConnecting(false);
       setParticipants(new Map());
       setLocalParticipant(null);
       optionsRef.current.onDisconnected?.(service.state);
-    });
+    };
 
-    service.addEventListener('roomStateChanged', (roomState: LiveKitRoomState) => {
+    const handleRoomStateChanged = (roomState: LiveKitRoomState) => {
       setIsConnected(roomState.isConnected);
       setConnectionState(roomState.connectionState);
       setParticipants(new Map(roomState.participants));
@@ -107,43 +105,110 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
       setIsCameraEnabled(roomState.isCameraEnabled);
       setIsScreenSharing(roomState.isScreenSharing);
       setError(roomState.error);
-    });
+    };
 
-    service.addEventListener('participantConnected', ({ participant }: { participant: LiveKitParticipant }) => {
-      setParticipants(prev => new Map(prev.set(participant.identity, participant)));
+    const handleParticipantConnected = ({ participant }: { participant: LiveKitParticipant }) => {
+      console.log('🔍 [useLiveKit] handleParticipantConnected called:', {
+        participantIdentity: participant.identity,
+        participantName: participant.name,
+        currentParticipantsSize: participants.size
+      });
+      
+      setParticipants(prev => {
+        const newMap = new Map(prev.set(participant.identity, participant));
+        console.log('🔍 [useLiveKit] Participants map updated:', {
+          newSize: newMap.size,
+          keys: Array.from(newMap.keys()),
+          participants: Array.from(newMap.entries()).map(([id, p]) => ({ id, name: p.name }))
+        });
+        return newMap;
+      });
+      
       optionsRef.current.onParticipantConnected?.(participant);
-    });
+    };
 
-    service.addEventListener('participantDisconnected', ({ participant }: { participant: string }) => {
+    const handleParticipantDisconnected = ({ participant }: { participant: string }) => {
       setParticipants(prev => {
         const newMap = new Map(prev);
         newMap.delete(participant);
         return newMap;
       });
       optionsRef.current.onParticipantDisconnected?.(participant);
-    });
+    };
 
-    service.addEventListener('trackSubscribed', ({ track, publication, participant }) => {
+    // Add event listeners
+    service.addEventListener('connected', handleConnected);
+    service.addEventListener('disconnected', handleDisconnected);
+    service.addEventListener('roomStateChanged', handleRoomStateChanged);
+    service.addEventListener('participantConnected', handleParticipantConnected);
+    service.addEventListener('participantDisconnected', handleParticipantDisconnected);
+
+    const handleTrackSubscribed = ({ track, publication, participant }: any) => {
       optionsRef.current.onTrackSubscribed?.(track, publication, participant);
-    });
+    };
 
-    service.addEventListener('trackUnsubscribed', ({ track, publication, participant }) => {
+    const handleTrackUnsubscribed = ({ track, publication, participant }: any) => {
       optionsRef.current.onTrackUnsubscribed?.(track, publication, participant);
-    });
+    };
 
-    service.addEventListener('error', (error: Error) => {
+    const handleError = (error: Error) => {
       setError(error.message);
       setIsConnecting(false);
       optionsRef.current.onError?.(error);
-    });
+    };
 
+    service.addEventListener('trackSubscribed', handleTrackSubscribed);
+    service.addEventListener('trackUnsubscribed', handleTrackUnsubscribed);
+    service.addEventListener('error', handleError);
+
+    // Return cleanup function
+    return () => {
+      service.removeEventListener('connected', handleConnected);
+      service.removeEventListener('disconnected', handleDisconnected);
+      service.removeEventListener('roomStateChanged', handleRoomStateChanged);
+      service.removeEventListener('participantConnected', handleParticipantConnected);
+      service.removeEventListener('participantDisconnected', handleParticipantDisconnected);
+      service.removeEventListener('trackSubscribed', handleTrackSubscribed);
+      service.removeEventListener('trackUnsubscribed', handleTrackUnsubscribed);
+      service.removeEventListener('error', handleError);
+    };
   }, []);
 
-  const connect = useCallback(async (connectOptions?: Partial<LiveKitConnectionOptions>) => {
+  // Initialize LiveKit service
+  useEffect(() => {
+    console.log('🔌 useLiveKit: Initializing LiveKit service...');
     if (!liveKitServiceRef.current) {
+      console.log('🔌 useLiveKit: Creating new LiveKitService instance');
+      liveKitServiceRef.current = new LiveKitService();
+      cleanupListenersRef.current = setupEventListeners();
+      console.log('🔌 useLiveKit: LiveKitService created and event listeners setup');
+    } else {
+      console.log('🔌 useLiveKit: LiveKitService already exists');
+    }
+
+    return () => {
+      // Clean up event listeners first
+      if (cleanupListenersRef.current) {
+        cleanupListenersRef.current();
+        cleanupListenersRef.current = null;
+      }
+      
+      // Then disconnect
+      if (liveKitServiceRef.current) {
+        liveKitServiceRef.current.disconnect();
+      }
+    };
+  }, [setupEventListeners]);
+
+  const connect = useCallback(async (connectOptions?: Partial<LiveKitConnectionOptions>) => {
+    console.log('🔌 useLiveKit connect called with options:', connectOptions);
+    
+    if (!liveKitServiceRef.current) {
+      console.error('❌ LiveKit service not initialized');
       throw new Error('LiveKit service not initialized');
     }
 
+    console.log('🔌 LiveKit service exists, starting connection...');
     setIsConnecting(true);
     setError(null);
 
