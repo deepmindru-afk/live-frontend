@@ -524,11 +524,14 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           borderRadius: isMainStage ? '12px' : '8px',
           overflow: 'hidden',
           cursor: onParticipantClick ? 'pointer' : 'default',
-          border: isActiveSpeaker ? '3px solid #3b82f6' : '2px solid transparent',
+          border: isActiveSpeaker ? '3px solid #3b82f6' : '2px solid #e5e7eb',
           boxShadow: isActiveSpeaker 
             ? '0 0 20px rgba(59, 130, 246, 0.5)' 
-            : '0 4px 12px rgba(0, 0, 0, 0.1)',
-          transition: 'all 0.3s ease'
+            : '0 2px 8px rgba(0, 0, 0, 0.1)',
+          transition: 'all 0.3s ease',
+          backgroundColor: '#1f2937',
+          minWidth: isMainStage ? '200px' : '120px',
+          minHeight: isMainStage ? '150px' : '80px'
         }}
         onClick={() => onParticipantClick?.(participant)}
       >
@@ -569,7 +572,10 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            backgroundColor: '#1f2937'
+            backgroundColor: '#1f2937',
+            borderRadius: isMainStage ? '10px' : '6px',
+            minWidth: '100%',
+            minHeight: '100%'
           }}
         />
         
@@ -769,15 +775,27 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   };
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
+    <div style={{ 
+      width: '100%', 
+      height: '100%',
+      padding: '12px',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px'
+    }}>
       {/* Main Stage */}
       <div
         style={{
           width: '100%',
           height: screenShareMode ? '70%' : '100%',
           display: 'flex',
-          gap: '8px',
-          marginBottom: screenShareMode ? '8px' : '0'
+          gap: '12px',
+          marginBottom: screenShareMode ? '12px' : '0',
+          padding: '8px',
+          backgroundColor: '#f8fafc',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
         }}
       >
         {mainStageParticipants.map((participant, index) => (
@@ -786,7 +804,11 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             style={{
               flex: 1,
               height: '100%',
-              minHeight: '200px'
+              minHeight: '200px',
+              margin: '4px',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
             }}
           >
             {renderParticipantVideo(participant, true)}
@@ -801,18 +823,25 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             width: '100%',
             height: '30%',
             display: 'flex',
-            gap: '4px',
+            gap: '8px',
             overflowX: 'auto',
-            padding: '4px 0'
+            padding: '8px',
+            backgroundColor: '#f1f5f9',
+            borderRadius: '8px',
+            boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)'
           }}
         >
           {thumbnailParticipants.map((participant) => (
             <div
               key={participant._id}
               style={{
-                minWidth: '120px',
+                minWidth: '140px',
                 height: '100%',
-                flexShrink: 0
+                flexShrink: 0,
+                margin: '4px',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
               }}
             >
               {renderParticipantVideo(participant, false)}
@@ -825,15 +854,17 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       <div
         style={{
           position: 'absolute',
-          top: '8px',
-          left: '8px',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          top: '20px',
+          left: '20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
           color: 'white',
-          padding: '8px 12px',
+          padding: '8px 16px',
           borderRadius: '8px',
           fontSize: '12px',
           fontWeight: '500',
-          zIndex: 10
+          zIndex: 10,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
         👥 {participants.length} participants
