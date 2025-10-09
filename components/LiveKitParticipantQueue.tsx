@@ -90,7 +90,8 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         isLocal: participant.isLocal
       });
 
-      // CRITICAL FIX: Use improved video element lookup with multiple fallback strategies
+      // CRITICAL FIX: participant.identity is the user._id (set in backend token)
+      // This should match our video element registration which uses userId
       console.log('🔍 LiveKit participant object:', {
         identity: participant.identity,
         name: participant.name,
@@ -99,18 +100,30 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         allKeys: Object.keys(participant)
       });
       
-      // Try multiple lookup strategies for video element
-      let videoElement = videoRefs.current[participant.identity] || 
-                        videoRefs.current[participant._id] || 
-                        videoRefs.current[participant.name];
+      // PRIMARY: Look up by participant.identity (which is user._id)
+      let videoElement = videoRefs.current[participant.identity];
       
-      // If still not found, try to find by matching participant ID in our participants list
+      // FALLBACK 1: Try to find by matching user._id in our participants list
       if (!videoElement) {
-        const matchingParticipant = participants.find(p => p._id === participant.identity || p.displayName === participant.name);
+        const matchingParticipant = participants.find(p => 
+          (p.user?._id === participant.identity) || 
+          (p.userId === participant.identity) ||
+          (p._id === participant.identity)
+        );
         if (matchingParticipant) {
-          videoElement = videoRefs.current[matchingParticipant._id] || 
-                        videoRefs.current[matchingParticipant.displayName];
+          const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+          videoElement = videoRefs.current[userId];
+          console.log('🔍 Found video element via participant match:', {
+            matchingParticipantId: matchingParticipant._id,
+            userId: userId
+          });
         }
+      }
+      
+      // FALLBACK 2: Try other keys
+      if (!videoElement) {
+        videoElement = videoRefs.current[participant.name] || 
+                      videoRefs.current[participant._id];
       }
       
       console.log('🔍 Video element lookup:', {
@@ -177,18 +190,30 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       });
 
       if (publication.kind === Track.Kind.Video && participant.isLocal) {
-        // CRITICAL FIX: Local participant video element lookup with multiple fallback strategies
-        let videoElement = videoRefs.current[participant.identity] || 
-                          videoRefs.current[participant._id] || 
-                          videoRefs.current[participant.name];
+        // CRITICAL FIX: Use participant.identity (user._id) as primary lookup key
+        let videoElement = videoRefs.current[participant.identity];
         
-        // If still not found, try to find by matching participant ID in our participants list
+        // FALLBACK: Try to find by matching user._id in our participants list
         if (!videoElement) {
-          const matchingParticipant = participants.find(p => p._id === participant.identity || p.displayName === participant.name);
+          const matchingParticipant = participants.find(p => 
+            (p.user?._id === participant.identity) || 
+            (p.userId === participant.identity) ||
+            (p._id === participant.identity)
+          );
           if (matchingParticipant) {
-            videoElement = videoRefs.current[matchingParticipant._id] || 
-                          videoRefs.current[matchingParticipant.displayName];
+            const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+            videoElement = videoRefs.current[userId];
+            console.log('🔍 Found local video element via participant match:', {
+              matchingParticipantId: matchingParticipant._id,
+              userId: userId
+            });
           }
+        }
+        
+        // FALLBACK 2: Try other keys
+        if (!videoElement) {
+          videoElement = videoRefs.current[participant.name] || 
+                        videoRefs.current[participant._id];
         }
         
         console.log('🔍 Local video element lookup:', {
@@ -251,18 +276,26 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         if (participant.trackPublications && Array.isArray(participant.trackPublications)) {
           participant.trackPublications.forEach((publication: any) => {
             if (publication.track && publication.kind === Track.Kind.Video) {
-              // Use improved video element lookup
-              let videoElement = videoRefs.current[participant.identity] || 
-                                videoRefs.current[participant._id] || 
-                                videoRefs.current[participant.name];
+              // CRITICAL FIX: Use participant.identity (user._id) as primary lookup key
+              let videoElement = videoRefs.current[participant.identity];
               
-              // If still not found, try to find by matching participant ID in our participants list
+              // FALLBACK: Try to find by matching user._id in our participants list
               if (!videoElement) {
-                const matchingParticipant = participants.find(p => p._id === participant.identity || p.displayName === participant.name);
+                const matchingParticipant = participants.find(p => 
+                  (p.user?._id === participant.identity) || 
+                  (p.userId === participant.identity) ||
+                  (p._id === participant.identity)
+                );
                 if (matchingParticipant) {
-                  videoElement = videoRefs.current[matchingParticipant._id] || 
-                                videoRefs.current[matchingParticipant.displayName];
+                  const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+                  videoElement = videoRefs.current[userId];
                 }
+              }
+              
+              // FALLBACK 2: Try other keys
+              if (!videoElement) {
+                videoElement = videoRefs.current[participant.name] || 
+                              videoRefs.current[participant._id];
               }
               
               if (videoElement) {
@@ -301,18 +334,26 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       if (room.localParticipant.trackPublications && Array.isArray(room.localParticipant.trackPublications)) {
         room.localParticipant.trackPublications.forEach((publication: any) => {
           if (publication.track && publication.kind === Track.Kind.Video) {
-            // Use improved video element lookup for local participant
-            let videoElement = videoRefs.current[room.localParticipant.identity] || 
-                              videoRefs.current[room.localParticipant._id] || 
-                              videoRefs.current[room.localParticipant.name];
+            // CRITICAL FIX: Use localParticipant.identity (user._id) as primary lookup key
+            let videoElement = videoRefs.current[room.localParticipant.identity];
             
-            // If still not found, try to find by matching participant ID in our participants list
+            // FALLBACK: Try to find by matching user._id in our participants list
             if (!videoElement) {
-              const matchingParticipant = participants.find(p => p._id === room.localParticipant.identity || p.displayName === room.localParticipant.name);
+              const matchingParticipant = participants.find(p => 
+                (p.user?._id === room.localParticipant.identity) || 
+                (p.userId === room.localParticipant.identity) ||
+                (p._id === room.localParticipant.identity)
+              );
               if (matchingParticipant) {
-                videoElement = videoRefs.current[matchingParticipant._id] || 
-                              videoRefs.current[matchingParticipant.displayName];
+                const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+                videoElement = videoRefs.current[userId];
               }
+            }
+            
+            // FALLBACK 2: Try other keys
+            if (!videoElement) {
+              videoElement = videoRefs.current[room.localParticipant.name] || 
+                            videoRefs.current[room.localParticipant._id];
             }
             
             if (videoElement) {
@@ -396,37 +437,56 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
     totalParticipants: participants.length
   });
 
-  // Helper function to find LiveKit participant by backend participant ID
-  const findLiveKitParticipantById = (participantId: string) => {
+  // Helper function to get user ID from participant (used as LiveKit identity)
+  const getUserIdFromParticipant = (participant: Participant): string | null => {
+    // LiveKit identity is set to user._id in backend token generation
+    // Priority: 1) user._id, 2) userId, 3) _id as fallback
+    return participant.user?._id || participant.userId || participant._id;
+  };
+
+  // Helper function to find LiveKit participant by backend participant
+  const findLiveKitParticipantById = (participant: Participant) => {
+    // Get the user ID which is used as LiveKit identity
+    const userId = getUserIdFromParticipant(participant);
+    
     console.log('🔍 findLiveKitParticipantById called:', {
-      participantId,
+      participantId: participant._id,
+      participantName: participant.displayName,
+      userId,
       liveKitParticipantsSize: liveKitParticipants.size,
       liveKitParticipantsKeys: Array.from(liveKitParticipants.keys())
     });
     
-    // First try direct lookup by participant ID
-    let liveKitParticipant = liveKitParticipants.get(participantId);
+    // CRITICAL FIX: Use user ID (LiveKit identity) for lookup
+    let liveKitParticipant = liveKitParticipants.get(userId);
     
-    // If not found, search by identity across all participants
+    // If not found by user ID, try participant._id as fallback
     if (!liveKitParticipant) {
+      console.log('⚠️ Not found by userId, trying participant._id:', participant._id);
+      liveKitParticipant = liveKitParticipants.get(participant._id);
+    }
+    
+    // If still not found, search by identity or name across all participants
+    if (!liveKitParticipant) {
+      console.log('⚠️ Not found by direct lookup, searching all participants...');
       for (const [key, lkParticipant] of liveKitParticipants.entries()) {
-        console.log('🔍 Checking participant:', {
-          key,
-          lkParticipantIdentity: lkParticipant?.identity,
-          lkParticipantName: lkParticipant?.name,
-          matches: lkParticipant?.identity === participantId
-        });
-        
-        if (lkParticipant?.identity === participantId) {
+        if (lkParticipant?.identity === userId || 
+            lkParticipant?.identity === participant._id ||
+            lkParticipant?.name === participant.displayName) {
           liveKitParticipant = lkParticipant;
-          console.log('✅ Found LiveKit participant by identity:', liveKitParticipant);
+          console.log('✅ Found LiveKit participant by search:', {
+            key,
+            identity: lkParticipant.identity,
+            name: lkParticipant.name
+          });
           break;
         }
       }
     }
     
     console.log('🔍 findLiveKitParticipantById result:', {
-      participantId,
+      participantId: participant._id,
+      userId,
       found: !!liveKitParticipant,
       liveKitParticipantIdentity: liveKitParticipant?.identity,
       liveKitParticipantName: liveKitParticipant?.name
@@ -441,8 +501,9 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
     const isScreenSharing = screenShareMode && screenShareParticipant?._id === participant._id;
     
     // Find corresponding LiveKit participant using improved lookup
-    const liveKitParticipant = findLiveKitParticipantById(participant._id);
-    const isLocalParticipant = localParticipant?.identity === participant._id;
+    const liveKitParticipant = findLiveKitParticipantById(participant);
+    const userId = getUserIdFromParticipant(participant);
+    const isLocalParticipant = localParticipant?.identity === userId;
     
     console.log('🎬 renderParticipantVideo called:', {
       participantId: participant._id,
@@ -474,25 +535,31 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         {/* Video Element */}
         <video
           ref={el => {
-            // CRITICAL FIX: Use consistent key strategy for video elements
-            // Priority: 1) LiveKit identity, 2) participant ID, 3) participant name
-            const videoKey = liveKitParticipant?.identity || participant._id || participant.displayName;
-            videoRefs.current[videoKey] = el;
+            // CRITICAL FIX: Use user ID (LiveKit identity) as primary key
+            // This ensures video elements are registered with the same key LiveKit uses
+            const primaryKey = userId; // User ID is the LiveKit identity
+            videoRefs.current[primaryKey] = el;
+            
             console.log('🎬 Video element created:', {
               participantId: participant._id,
               participantDisplayName: participant.displayName,
+              userId: userId,
               liveKitIdentity: liveKitParticipant?.identity,
-              videoKey: videoKey,
+              primaryKey: primaryKey,
               hasElement: !!el,
               currentKeys: Object.keys(videoRefs.current)
             });
             
-            // Also create backup keys for different lookup scenarios
-            if (liveKitParticipant?.identity && liveKitParticipant.identity !== videoKey) {
+            // Create backup keys for different lookup scenarios
+            // This ensures compatibility with track subscription handlers
+            if (liveKitParticipant?.identity && liveKitParticipant.identity !== primaryKey) {
               videoRefs.current[liveKitParticipant.identity] = el;
             }
-            if (participant._id && participant._id !== videoKey) {
+            if (participant._id && participant._id !== primaryKey) {
               videoRefs.current[participant._id] = el;
+            }
+            if (participant.displayName && participant.displayName !== primaryKey) {
+              videoRefs.current[participant.displayName] = el;
             }
           }}
           autoPlay

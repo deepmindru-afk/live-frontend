@@ -360,3 +360,4 @@ We ensure WebRTC receives only valid, finite numbers, preventing the TypeError a
 **Status**: ✅ Production Ready  
 **Tested**: Chrome, Firefox, Safari, Mobile
 
+

@@ -15,6 +15,14 @@ export interface Participant {
   audioLevel?: number;
   lastActivity?: string;
   originalJoinOrder?: number;
+  // User object contains the user/member ID used as LiveKit identity
+  user?: {
+    _id: string;
+    displayName?: string;
+    email?: string;
+  };
+  // Sometimes participants may have userId directly
+  userId?: string;
 }
 
 export interface QueueState {
