@@ -403,27 +403,35 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
     };
   }, [liveKitService]);
 
-  // Get main stage participants
+  // Get main stage participants based on view mode
   const getMainStageParticipants = () => {
     if (screenShareMode && screenShareParticipant) {
       return [screenShareParticipant];
     }
     
     if (viewMode === 'speaker') {
-      return participants.slice(0, 1); // Only active speaker in speaker view
+      // Speaker mode: Show only the first participant (active speaker) in main stage
+      return participants.slice(0, 1);
     }
     
-    return participants.slice(0, 4); // Up to 4 in grid view
+    // Grid mode: Show ALL participants in the main stage
+    return participants;
   };
 
-  // Get thumbnail participants
+  // Get thumbnail participants based on view mode
   const getThumbnailParticipants = () => {
     if (screenShareMode) {
-      return participants.filter(p => p._id !== screenShareParticipant?._id).slice(0, maxThumbnails);
+      // In screen share mode, show all other participants as thumbnails
+      return participants.filter(p => p._id !== screenShareParticipant?._id);
     }
     
-    const startIndex = viewMode === 'speaker' ? 1 : 4;
-    return participants.slice(startIndex, startIndex + maxThumbnails);
+    if (viewMode === 'speaker') {
+      // Speaker mode: Show remaining participants as thumbnails
+      return participants.slice(1);
+    }
+    
+    // Grid mode: No thumbnails needed since all participants are in main stage
+    return [];
   };
 
   const mainStageParticipants = getMainStageParticipants();
@@ -784,31 +792,54 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       flexDirection: 'column',
       gap: '12px'
     }}>
+      {/* CSS Animation for loading indicator */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
       {/* Main Stage */}
       <div
         style={{
           width: '100%',
-          height: screenShareMode ? '70%' : '100%',
-          display: 'flex',
-          gap: '12px',
-          marginBottom: screenShareMode ? '12px' : '0',
-          padding: '8px',
-          backgroundColor: '#f8fafc',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+          height: screenShareMode ? '70%' : (viewMode === 'speaker' ? '70%' : '100%'),
+          display: 'grid',
+          gridTemplateColumns: viewMode === 'speaker' ? '1fr' :
+                               mainStageParticipants.length === 1 ? '1fr' :
+                               mainStageParticipants.length === 2 ? '1fr 1fr' :
+                               mainStageParticipants.length === 3 ? '1fr 1fr 1fr' :
+                               mainStageParticipants.length === 4 ? '1fr 1fr 1fr 1fr' :
+                               mainStageParticipants.length <= 6 ? '1fr 1fr 1fr' :
+                               mainStageParticipants.length <= 9 ? '1fr 1fr 1fr' :
+                               '1fr 1fr 1fr 1fr',
+          gridTemplateRows: viewMode === 'speaker' ? '1fr' :
+                           mainStageParticipants.length <= 4 ? '1fr' :
+                           mainStageParticipants.length <= 6 ? '1fr 1fr' :
+                           mainStageParticipants.length <= 9 ? '1fr 1fr 1fr' :
+                           '1fr 1fr 1fr 1fr',
+          gap: viewMode === 'speaker' ? '0' : '12px',
+          marginBottom: (screenShareMode || viewMode === 'speaker') ? '12px' : '0',
+          padding: viewMode === 'speaker' ? '0' : '8px',
+          backgroundColor: viewMode === 'speaker' ? 'transparent' : '#f8fafc',
+          borderRadius: viewMode === 'speaker' ? '0' : '12px',
+          boxShadow: viewMode === 'speaker' ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)'
         }}
       >
         {mainStageParticipants.map((participant, index) => (
           <div
             key={participant._id}
             style={{
-              flex: 1,
               height: '100%',
-              minHeight: '200px',
-              margin: '4px',
-              borderRadius: '8px',
+              minHeight: viewMode === 'speaker' ? '300px' : '200px',
+              margin: viewMode === 'speaker' ? '0' : '4px',
+              borderRadius: viewMode === 'speaker' ? '12px' : '8px',
               overflow: 'hidden',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              boxShadow: viewMode === 'speaker' ? '0 4px 12px rgba(0, 0, 0, 0.15)' : '0 2px 4px rgba(0, 0, 0, 0.1)'
             }}
           >
             {renderParticipantVideo(participant, true)}
@@ -816,8 +847,8 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         ))}
       </div>
       
-      {/* Thumbnail Strip (only in screen share mode or when there are more participants) */}
-      {(screenShareMode || participants.length > (viewMode === 'speaker' ? 1 : 4)) && (
+      {/* Thumbnail Strip (in screen share mode or speaker mode) */}
+      {(screenShareMode || viewMode === 'speaker') && thumbnailParticipants.length > 0 && (
         <div
           style={{
             width: '100%',

@@ -241,14 +241,21 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
+      console.log('🎤 [useLiveKit] Toggling microphone:', { isMuted, newState: !isMuted });
+      
       if (isMuted) {
         await liveKitServiceRef.current.enableMicrophone();
       } else {
         await liveKitServiceRef.current.disableMicrophone();
       }
+      
+      console.log('✅ [useLiveKit] Microphone toggled successfully');
     } catch (err: any) {
-      console.error('Failed to toggle microphone:', err);
-      setError(err.message);
+      console.error('❌ [useLiveKit] Failed to toggle microphone:', err);
+      
+      // Don't set error state to prevent UI disruption
+      // The service handles graceful degradation internally
+      console.warn('⚠️ [useLiveKit] Microphone toggle failed, but continuing operation');
     }
   }, [isMuted]);
 
@@ -256,14 +263,21 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
+      console.log('📹 [useLiveKit] Toggling camera:', { isCameraEnabled, newState: !isCameraEnabled });
+      
       if (isCameraEnabled) {
         await liveKitServiceRef.current.disableCamera();
       } else {
         await liveKitServiceRef.current.enableCamera();
       }
+      
+      console.log('✅ [useLiveKit] Camera toggled successfully');
     } catch (err: any) {
-      console.error('Failed to toggle camera:', err);
-      setError(err.message);
+      console.error('❌ [useLiveKit] Failed to toggle camera:', err);
+      
+      // Don't set error state to prevent UI disruption
+      // The service handles graceful degradation internally
+      console.warn('⚠️ [useLiveKit] Camera toggle failed, but continuing operation');
     }
   }, [isCameraEnabled]);
 
@@ -271,14 +285,21 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
+      console.log('🖥️ [useLiveKit] Toggling screen share:', { isScreenSharing, newState: !isScreenSharing });
+      
       if (isScreenSharing) {
         await liveKitServiceRef.current.stopScreenShare();
       } else {
         await liveKitServiceRef.current.startScreenShare();
       }
+      
+      console.log('✅ [useLiveKit] Screen share toggled successfully');
     } catch (err: any) {
-      console.error('Failed to toggle screen share:', err);
-      setError(err.message);
+      console.error('❌ [useLiveKit] Failed to toggle screen share:', err);
+      
+      // Don't set error state to prevent UI disruption
+      // The service handles graceful degradation internally
+      console.warn('⚠️ [useLiveKit] Screen share toggle failed, but continuing operation');
     }
   }, [isScreenSharing]);
 

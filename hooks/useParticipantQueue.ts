@@ -248,22 +248,35 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
     });
   }, [sortParticipants]);
 
-  // Get main stage participants (first 4 or screen share participant)
-  const getMainStageParticipants = useCallback(() => {
+  // Get main stage participants based on view mode
+  const getMainStageParticipants = useCallback((viewMode: 'speaker' | 'grid' = 'grid') => {
     if (queueState.screenShareMode && queueState.screenShareParticipant) {
       return [queueState.screenShareParticipant];
     }
     
-    return queueState.participants.slice(0, 4);
+    if (viewMode === 'speaker') {
+      // Speaker mode: Show only the first participant (active speaker) in main stage
+      return queueState.participants.slice(0, 1);
+    }
+    
+    // Grid mode: Return ALL participants - no artificial limiting
+    return queueState.participants;
   }, [queueState.participants, queueState.screenShareMode, queueState.screenShareParticipant]);
 
-  // Get thumbnail participants (remaining participants)
-  const getThumbnailParticipants = useCallback(() => {
+  // Get thumbnail participants based on view mode
+  const getThumbnailParticipants = useCallback((viewMode: 'speaker' | 'grid' = 'grid') => {
     if (queueState.screenShareMode) {
+      // In screen share mode, show all other participants as thumbnails
       return queueState.participants.filter(p => p._id !== queueState.screenShareParticipant?._id);
     }
     
-    return queueState.participants.slice(4);
+    if (viewMode === 'speaker') {
+      // Speaker mode: Show remaining participants as thumbnails
+      return queueState.participants.slice(1);
+    }
+    
+    // Grid mode: No thumbnails needed since all participants are in main stage
+    return [];
   }, [queueState.participants, queueState.screenShareMode, queueState.screenShareParticipant]);
 
   // Initialize audio analysis on mount
@@ -279,6 +292,27 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
       }
     };
   }, [initializeAudioAnalysis]);
+
+  // Update participants when initialParticipants changes
+  useEffect(() => {
+    console.log('🔄 [useParticipantQueue] initialParticipants changed:', {
+      initialParticipantsLength: initialParticipants.length,
+      initialParticipants: initialParticipants.map(p => ({ id: p._id, name: p.displayName }))
+    });
+    
+    const updatedParticipants = initialParticipants.map((p, index) => ({
+      ...p,
+      originalJoinOrder: index,
+      isSpeaking: false,
+      audioLevel: 0,
+      lastActivity: new Date().toISOString()
+    }));
+    
+    setQueueState(prev => ({
+      ...prev,
+      participants: sortParticipants(updatedParticipants)
+    }));
+  }, [initialParticipants, sortParticipants]);
 
   // Re-sort participants when dependencies change
   useEffect(() => {

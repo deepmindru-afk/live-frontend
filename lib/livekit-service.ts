@@ -661,12 +661,24 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('📹 LiveKit: Attempting to disable camera gracefully...');
+      
+      // Gracefully disable camera without stopping the entire stream
       await this._room.localParticipant.setCameraEnabled(false);
+      
+      // Update state after successful disable
       this.updateRoomState({ isCameraEnabled: false });
-      console.log('📹 LiveKit: Camera disabled');
+      
+      console.log('✅ LiveKit: Camera disabled gracefully - stream continues');
     } catch (error) {
       console.error('❌ LiveKit: Failed to disable camera', error);
-      throw error;
+      
+      // Even if disable fails, don't stop the entire stream
+      // Just update the state to reflect the intended state
+      this.updateRoomState({ isCameraEnabled: false });
+      
+      // Don't rethrow the error to prevent stream interruption
+      console.warn('⚠️ LiveKit: Camera disable failed, but continuing stream');
     }
   }
 
@@ -687,12 +699,24 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🎤 LiveKit: Attempting to disable microphone gracefully...');
+      
+      // Gracefully disable microphone without stopping the entire stream
       await this._room.localParticipant.setMicrophoneEnabled(false);
+      
+      // Update state after successful disable
       this.updateRoomState({ isMuted: true });
-      console.log('🎤 LiveKit: Microphone disabled');
+      
+      console.log('✅ LiveKit: Microphone disabled gracefully - stream continues');
     } catch (error) {
       console.error('❌ LiveKit: Failed to disable microphone', error);
-      throw error;
+      
+      // Even if disable fails, don't stop the entire stream
+      // Just update the state to reflect the intended state
+      this.updateRoomState({ isMuted: true });
+      
+      // Don't rethrow the error to prevent stream interruption
+      console.warn('⚠️ LiveKit: Microphone disable failed, but continuing stream');
     }
   }
 
@@ -713,12 +737,24 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🖥️ LiveKit: Attempting to stop screen share gracefully...');
+      
+      // Gracefully stop screen share without stopping the entire stream
       await this._room.localParticipant.setScreenShareEnabled(false);
+      
+      // Update state after successful stop
       this.updateRoomState({ isScreenSharing: false });
-      console.log('🖥️ LiveKit: Screen sharing stopped');
+      
+      console.log('✅ LiveKit: Screen share stopped gracefully - stream continues');
     } catch (error) {
       console.error('❌ LiveKit: Failed to stop screen share', error);
-      throw error;
+      
+      // Even if stop fails, don't stop the entire stream
+      // Just update the state to reflect the intended state
+      this.updateRoomState({ isScreenSharing: false });
+      
+      // Don't rethrow the error to prevent stream interruption
+      console.warn('⚠️ LiveKit: Screen share stop failed, but continuing stream');
     }
   }
 

@@ -852,22 +852,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         source: 'GraphQL Query'
       });
       setParticipants(participantsList);
-
-      // Update queue with new participant data
-      participantsList.forEach(participant => {
-        updateQueueParticipant(participant._id, {
-          _id: participant._id,
-          displayName: participant.displayName,
-          email: participant.email || '',
-          isMuted: participant.micState === 'OFF',
-          isCameraOff: participant.cameraState === 'OFF',
-          joinedAt: participant.joinedAt || new Date().toISOString(),
-          isHost: participant.role === 'HOST',
-          role: participant.role,
-          hasHandRaised: participant.hasHandRaised || false,
-          handRaisedAt: participant.handRaisedAt
-        });
-      });
+      
+      // Note: Queue will be automatically updated via useEffect in useParticipantQueue hook
 
       // Check for new participants (joined)
       if (previousParticipants.length > 0) {
@@ -2651,6 +2637,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             }}>
               {isLiveKitConnected ? '🎥 LiveKit Connected' : '❌ LiveKit Disconnected'}
               {isLiveKitConnecting && ' (Connecting...)'}
+              {isLiveKitConnected && liveKitParticipants.size === 0 && ' (No Participants)'}
+            </div>
+            
+            {/* Debug Info */}
+            <div style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              zIndex: 1000,
+              maxWidth: '300px'
+            }}>
+              <div>GraphQL: {participants.length} participants</div>
+              <div>Queue: {queueState.participants.length} participants</div>
+              <div>LiveKit: {liveKitParticipants.size} participants</div>
+              <div>Mode: {isLiveKitConnected && liveKitParticipants.size > 0 ? 'LiveKit' : 'Fallback'}</div>
             </div>
 
             {/* Hand raise count - Host Only */}
@@ -2682,13 +2688,37 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               console.log('🔍 LiveKitParticipantQueue Render Check:', {
                 isLiveKitConnected,
                 participantsCount: queueState.participants.length,
-                participants: queueState.participants.map(p => ({ id: p._id, name: p.displayName })),
+                participants: queueState.participants.map(p => ({ id: p._id, name: p.displayName, user: p.user })),
                 liveKitParticipantsCount: liveKitParticipants.size,
-                liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([id, p]) => ({ id, name: p.name }))
+                liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([id, p]) => ({ id, name: p.name })),
+                currentUser: currentUser,
+                actualMeetingId
               });
+              
+              // DEBUG: Check participant identity mapping
+              console.log('🔍 PARTICIPANT IDENTITY MAPPING DEBUG:', {
+                graphqlParticipants: participants.map(p => ({
+                  _id: p._id,
+                  displayName: p.displayName,
+                  user: p.user,
+                  userId: p.userId
+                })),
+                queueParticipants: queueState.participants.map(p => ({
+                  _id: p._id,
+                  displayName: p.displayName,
+                  user: p.user,
+                  userId: p.userId
+                })),
+                liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([id, p]) => ({
+                  liveKitId: id,
+                  name: p.name,
+                  identity: p.identity
+                }))
+              });
+              
               return null;
             })()}
-            {isLiveKitConnected ? (
+            {isLiveKitConnected && liveKitParticipants.size > 0 ? (
             <LiveKitParticipantQueue
               participants={queueState.participants}
               activeSpeaker={queueState.activeSpeaker}
