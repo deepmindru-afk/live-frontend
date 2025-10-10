@@ -161,9 +161,6 @@ export const useMeetingPresence = (meetingId: string, userId: string, token: str
     onHeartbeatTimeout: () => {
       setIsPresent(false);
     },
-    onDisconnected: () => {
-      setIsPresent(false);
-    },
   });
 
   return {

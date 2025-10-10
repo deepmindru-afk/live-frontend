@@ -466,7 +466,7 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
     });
     
     // CRITICAL FIX: Use user ID (LiveKit identity) for lookup
-    let liveKitParticipant = liveKitParticipants.get(userId);
+    let liveKitParticipant = userId ? liveKitParticipants.get(userId) : undefined;
     
     // If not found by user ID, try participant._id as fallback
     if (!liveKitParticipant) {
@@ -548,7 +548,7 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           ref={el => {
             // CRITICAL FIX: Use user ID (LiveKit identity) as primary key
             // This ensures video elements are registered with the same key LiveKit uses
-            const primaryKey = userId; // User ID is the LiveKit identity
+            const primaryKey = userId || participant._id; // User ID is the LiveKit identity, fallback to _id
             videoRefs.current[primaryKey] = el;
             
             console.log('🎬 Video element created:', {

@@ -96,7 +96,7 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
     
     if (!isTyping) {

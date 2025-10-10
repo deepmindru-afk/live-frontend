@@ -90,7 +90,7 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
       >
         {/* Video Element */}
         <video
-          ref={el => videoRefs.current[participant._id] = el}
+          ref={el => { videoRefs.current[participant._id] = el; }}
           autoPlay
           muted
           playsInline

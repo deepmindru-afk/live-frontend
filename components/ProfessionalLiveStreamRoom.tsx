@@ -612,9 +612,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               }
             });
             
-            if (joinResult.data?.joinMeeting) {
-              console.log('✅ PROFESSIONAL_LIVE_STREAM: Successfully joined meeting via GraphQL:', joinResult.data.joinMeeting);
-              setCurrentParticipant(joinResult.data.joinMeeting);
+            if ((joinResult.data as any)?.joinMeeting) {
+              console.log('✅ PROFESSIONAL_LIVE_STREAM: Successfully joined meeting via GraphQL:', (joinResult.data as any).joinMeeting);
+              setCurrentParticipant((joinResult.data as any).joinMeeting);
             } else {
               console.warn('⚠️ PROFESSIONAL_LIVE_STREAM: GraphQL joinMeeting returned no data');
             }

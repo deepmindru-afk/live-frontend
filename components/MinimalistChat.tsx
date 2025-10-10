@@ -43,10 +43,10 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
       console.log('📨 Chat message received:', message);
       const newMsg: Message = {
         _id: message._id || Date.now().toString(),
-        text: message.text || message.message || '',
-        displayName: message.displayName || message.senderName || 'Unknown',
+        text: message.text || (message as any).message || '',
+        displayName: message.displayName || (message as any).senderName || 'Unknown',
         createdAt: message.createdAt || new Date().toISOString(),
-        userId: message.userId || message.senderId,
+        userId: message.userId || (message as any).senderId,
         type: 'chat'
       };
       

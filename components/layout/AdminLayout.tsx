@@ -29,7 +29,8 @@ import {
   School,
 } from '@mui/icons-material';
 import { useRouter } from 'next/router';
-import { User } from '../../apollo/types';
+// import { User } from '../../apollo/types'; // Type not exported
+type User = any; // Define locally
 import { getCurrentUser } from '../../lib/simple-auth-handlers';
 
 const drawerWidth = 240;

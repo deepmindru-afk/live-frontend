@@ -124,13 +124,13 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
       const room = liveKitService.room;
       
       // Get local video track
-      const videoTrack = room.localParticipant.videoTrackPublications.find(
+      const videoTrack = Array.from(room.localParticipant.videoTrackPublications.values()).find(
         pub => pub.track
       )?.track;
       setLocalVideoTrack(videoTrack || null);
 
       // Get local audio track
-      const audioTrack = room.localParticipant.audioTrackPublications.find(
+      const audioTrack = Array.from(room.localParticipant.audioTrackPublications.values()).find(
         pub => pub.track
       )?.track;
       setLocalAudioTrack(audioTrack || null);
