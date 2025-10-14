@@ -6,6 +6,7 @@ interface ParticipantQueueProps {
   activeSpeaker: Participant | null;
   screenShareMode: boolean;
   screenShareParticipant: Participant | null;
+  selectedParticipant?: Participant | null;
   onParticipantClick?: (participant: Participant) => void;
   onHandRaiseClick?: (participant: Participant) => void;
   onKickParticipant?: (participant: Participant) => void;
@@ -19,6 +20,7 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
   activeSpeaker,
   screenShareMode,
   screenShareParticipant,
+  selectedParticipant,
   onParticipantClick,
   onHandRaiseClick,
   onKickParticipant,
@@ -35,7 +37,11 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
     }
     
     if (viewMode === 'speaker') {
-      // Speaker mode: Show only the first participant (active speaker) in main stage
+      // Speaker mode: Show selectedParticipant if available, otherwise first participant
+      if (selectedParticipant && participants.find(p => p._id === selectedParticipant._id)) {
+        return [selectedParticipant];
+      }
+      // Fallback to first participant if no selected participant or selected participant not found
       return participants.slice(0, 1);
     }
     
@@ -51,8 +57,10 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
     }
     
     if (viewMode === 'speaker') {
-      // Speaker mode: Show remaining participants as thumbnails
-      return participants.slice(1);
+      // Speaker mode: Show all participants except the one being displayed as main video
+      const mainParticipants = getMainStageParticipants();
+      const mainParticipantId = mainParticipants[0]?._id;
+      return participants.filter(p => p._id !== mainParticipantId);
     }
     
     // Grid mode: No thumbnails needed since all participants are in main stage
@@ -296,7 +304,7 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
       <div
         style={{
           width: '100%',
-          height: screenShareMode ? '70%' : (viewMode === 'speaker' ? '70%' : '100%'),
+          height: '100%',
           display: 'grid',
           gridTemplateColumns: viewMode === 'speaker' ? '1fr' :
                                mainStageParticipants.length === 1 ? '1fr' :
@@ -312,7 +320,6 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
                            mainStageParticipants.length <= 9 ? '1fr 1fr 1fr' :
                            '1fr 1fr 1fr 1fr',
           gap: viewMode === 'speaker' ? '0' : '12px',
-          marginBottom: (screenShareMode || viewMode === 'speaker') ? '12px' : '0',
           padding: viewMode === 'speaker' ? '0' : '8px',
           backgroundColor: viewMode === 'speaker' ? 'transparent' : '#f8fafc',
           borderRadius: viewMode === 'speaker' ? '0' : '12px',
@@ -336,39 +343,6 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
         ))}
       </div>
       
-      {/* Thumbnail Strip (in screen share mode or speaker mode) */}
-      {(screenShareMode || viewMode === 'speaker') && thumbnailParticipants.length > 0 && (
-        <div
-          style={{
-            width: '100%',
-            height: '30%',
-            display: 'flex',
-            gap: '8px',
-            overflowX: 'auto',
-            padding: '8px',
-            backgroundColor: '#f1f5f9',
-            borderRadius: '8px',
-            boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)'
-          }}
-        >
-          {thumbnailParticipants.map((participant) => (
-            <div
-              key={participant._id}
-              style={{
-                minWidth: '140px',
-                height: '100%',
-                flexShrink: 0,
-                margin: '4px',
-                borderRadius: '6px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              {renderParticipantVideo(participant, false)}
-            </div>
-          ))}
-        </div>
-      )}
       
       {/* Queue Order Indicator */}
       <div

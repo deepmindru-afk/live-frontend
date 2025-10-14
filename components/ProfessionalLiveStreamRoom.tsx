@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
+
+// Extend Window interface for thumbnail video refs
+declare global {
+  interface Window {
+    thumbnailVideoRefs?: { [key: string]: HTMLVideoElement };
+  }
+}
 import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
@@ -705,6 +712,70 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
 
   // NOTE: Video elements ready event listener removed - no longer needed
+
+  // Connect LiveKit tracks to thumbnail video elements
+  useEffect(() => {
+    if (!liveKitService?.room || !isLiveKitConnected) return;
+
+    const room = liveKitService.room;
+    
+    const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
+      if (track.kind === 'video') {
+        console.log('🎥 Thumbnail track subscribed:', { 
+          participant: participant.identity, 
+          participantName: participant.name,
+          trackSource: track.source
+        });
+
+        // Find the thumbnail video element for this participant
+        const videoId = `thumbnail-${participant.identity}`;
+        const videoElement = window.thumbnailVideoRefs?.[videoId];
+        
+        if (videoElement) {
+          console.log('🎥 Attaching thumbnail track to video element:', videoId);
+          track.attach(videoElement);
+          
+          // Hide fallback avatar when video is attached
+          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+          if (fallbackDiv) {
+            (fallbackDiv as HTMLElement).style.display = 'none';
+          }
+        }
+      }
+    };
+
+    const handleTrackUnsubscribed = (track: any, publication: any, participant: any) => {
+      if (track.kind === 'video') {
+        console.log('🎥 Thumbnail track unsubscribed:', { 
+          participant: participant.identity, 
+          participantName: participant.name
+        });
+
+        // Show fallback avatar when video is detached
+        const videoId = `thumbnail-${participant.identity}`;
+        const videoElement = window.thumbnailVideoRefs?.[videoId];
+        if (videoElement) {
+          track.detach();
+          
+          // Show fallback avatar when video is detached
+          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+          if (fallbackDiv) {
+            (fallbackDiv as HTMLElement).style.display = 'flex';
+          }
+        }
+      }
+    };
+
+    // Listen for track events
+    room.on('trackSubscribed', handleTrackSubscribed);
+    room.on('trackUnsubscribed', handleTrackUnsubscribed);
+
+    // Cleanup
+    return () => {
+      room.off('trackSubscribed', handleTrackSubscribed);
+      room.off('trackUnsubscribed', handleTrackUnsubscribed);
+    };
+  }, [liveKitService, isLiveKitConnected]);
   // Camera is enabled during initial connection in the connect() method
 
   // Mobile detection and force speaker mode
@@ -2257,7 +2328,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           {/* Participant Thumbnails Row - Only show in Main view */}
           {viewMode === 'speaker' && (
             <div style={{
-              height: thumbnailPanelOpen ? (isMobile ? '120px' : '120px') : (isMobile ? '0px' : '0px'),
+              height: thumbnailPanelOpen ? (isMobile ? '140px' : '140px') : (isMobile ? '0px' : '0px'),
               backgroundColor: '#ffffff',
               borderBottom: thumbnailPanelOpen ? '1px solid #e5e7eb' : 'none',
               display: 'flex',
@@ -2275,21 +2346,74 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   key={participant._id}
                   onClick={() => setSelectedParticipant(participant)}
                   style={{
-                    minWidth: isMobile ? '95px' : '95px',
-                    height: isMobile ? '95px' : '95px',
-                    backgroundColor: '#f9fafb',
+                    minWidth: isMobile ? '120px' : '120px',
+                    height: isMobile ? '120px' : '120px',
+                    backgroundColor: '#1f2937',
                     borderRadius: isMobile ? '12px' : '10px',
-                    border: participant.role === 'HOST' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                    border: participant.role === 'HOST' ? '2px solid #10b981' : '2px solid #e5e7eb',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     position: 'relative',
-                    transition: 'all 0.3s ease'
+                    transition: 'all 0.3s ease',
+                    overflow: 'hidden'
                   }}
                 >
+                  {/* Video Element */}
+                  <video
+                    ref={el => {
+                      if (el) {
+                        // Store video element for LiveKit track attachment
+                        const videoId = `thumbnail-${participant._id}`;
+                        if (!window.thumbnailVideoRefs) window.thumbnailVideoRefs = {};
+                        window.thumbnailVideoRefs[videoId] = el;
+                      }
+                    }}
+                    autoPlay
+                    muted
+                    playsInline
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: isMobile ? '10px' : '8px'
+                    }}
+                  />
                   
+                  {/* Fallback Avatar - Show when video is off or not available */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#374151',
+                    borderRadius: isMobile ? '10px' : '8px'
+                  }}>
+                    <div style={{ fontSize: isMobile ? '28px' : '26px', marginBottom: '6px' }}>
+                      {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+                    </div>
+                    <div style={{ 
+                      fontSize: isMobile ? '11px' : '12px', 
+                      fontWeight: '500', 
+                      textAlign: 'center',
+                      color: '#f3f4f6',
+                      lineHeight: 1.2,
+                      maxWidth: '90%'
+                    }}>
+                      {isMobile ? 
+                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 8) :
+                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
+                      }
+                    </div>
+                  </div>
+                  
+                  {/* Overlay Indicators */}
                   {participant.role === 'HOST' && (
                     <div style={{
                       position: 'absolute',
@@ -2299,79 +2423,73 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       color: 'white',
                       fontSize: isMobile ? '8px' : '9px',
                       fontWeight: '600',
-                      padding: '2px 5px',
-                      borderRadius: '4px',
-                      zIndex: 5
+                      padding: '3px 5px',
+                      borderRadius: '3px',
+                      zIndex: 10
                     }}>
                       HOST
                     </div>
                   )}
                   
-                  {/* Hand Raise Indicator - Visible for ALL */}
+                  {/* Hand Raise Indicator */}
                   {participant.hasHandRaised && (
                     <div style={{
                       position: 'absolute',
                       top: '4px',
                       right: '4px',
-                      fontSize: isMobile ? '20px' : '22px',
-                      zIndex: 5,
+                      fontSize: isMobile ? '18px' : '20px',
+                      zIndex: 10,
                       animation: 'pulse 1.5s infinite'
                     }}>
                       ✋
                     </div>
                   )}
                   
-                  <div style={{ fontSize: isMobile ? '32px' : '30px', marginBottom: '6px' }}>
-                    {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
-                  </div>
+                  {/* Mic/Camera Status Indicators */}
                   <div style={{ 
-                    fontSize: isMobile ? '12px' : '12px', 
-                    fontWeight: '500', 
-                    textAlign: 'center',
-                    lineHeight: 1.2,
-                    maxWidth: '90%'
+                    position: 'absolute', 
+                    bottom: '4px', 
+                    left: '4px', 
+                    right: '4px', 
+                    display: 'flex', 
+                    gap: '2px', 
+                    justifyContent: 'center' 
                   }}>
-                    {isMobile ? 
-                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 10) :
-                      (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
-                    }
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '5px' }}>
                     <div style={{
-                      width: isMobile ? '20px' : '20px',
-                      height: isMobile ? '20px' : '20px',
-                      borderRadius: '4px',
+                      width: isMobile ? '18px' : '20px',
+                      height: isMobile ? '18px' : '20px',
+                      borderRadius: '3px',
                       backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
                       {participant.micState === 'ON' ? (
-                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
                           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
                           <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
                         </svg>
                       ) : (
-                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
                           <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
                         </svg>
                       )}
                     </div>
                     <div style={{
-                      width: isMobile ? '20px' : '20px',
-                      height: isMobile ? '20px' : '20px',
-                      borderRadius: '4px',
+                      width: isMobile ? '18px' : '20px',
+                      height: isMobile ? '18px' : '20px',
+                      borderRadius: '3px',
                       backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
                       {participant.cameraState === 'ON' ? (
-                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
                           <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
                         </svg>
                       ) : (
-                        <svg width={isMobile ? "11" : "12"} height={isMobile ? "11" : "12"} viewBox="0 0 24 24" fill="white">
+                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
                           <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
                         </svg>
                       )}
@@ -2724,6 +2842,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               activeSpeaker={queueState.activeSpeaker}
               screenShareMode={queueState.screenShareMode}
               screenShareParticipant={queueState.screenShareParticipant}
+              selectedParticipant={selectedParticipant}
               onParticipantClick={(participant) => {
                 setSelectedParticipant(participant);
                 console.log('Selected participant:', participant);
@@ -2749,6 +2868,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 activeSpeaker={queueState.activeSpeaker}
                 screenShareMode={queueState.screenShareMode}
                 screenShareParticipant={queueState.screenShareParticipant}
+                selectedParticipant={selectedParticipant}
                 onParticipantClick={(participant) => {
                   setSelectedParticipant(participant);
                   console.log('Selected participant:', participant);
