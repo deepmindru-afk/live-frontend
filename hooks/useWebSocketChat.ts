@@ -105,19 +105,33 @@ export const useWebSocketChat = ({
     console.log('🔌 Creating new WebSocket connection...');
 
     try {
+      // PRODUCTION FIX: Use environment variable for backend URL
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
+      const wsUrl = `${backendUrl}/signaling`;
+      
       console.log('🔌 Creating new socket connection...', {
-        url: 'http://localhost:3007/signaling',
+        url: wsUrl,
+        backendUrl,
+        environment: process.env.NODE_ENV,
         token: authToken ? 'present' : 'missing',
         tokenLength: authToken?.length || 0
       });
       
-      const newSocket = io('http://localhost:3007/signaling', {
+      const newSocket = io(wsUrl, {
         auth: {
           token: authToken,
         },
         transports: ['websocket', 'polling'],
         timeout: 20000,
         forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        // Production optimizations
+        path: '/socket.io/',
+        secure: backendUrl.startsWith('https'),
+        rejectUnauthorized: false, // Set to true in production with valid SSL
       });
       
       console.log('🔌 Socket created:', { 
