@@ -537,15 +537,15 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           position: 'relative',
           width: '100%',
           height: '100%',
-          borderRadius: isMainStage ? '12px' : '8px',
+          borderRadius: isScreenSharing ? '0' : (isMainStage ? '12px' : '8px'),
           overflow: 'hidden',
           cursor: onParticipantClick ? 'pointer' : 'default',
-          border: isActiveSpeaker ? '3px solid #3b82f6' : '2px solid #e5e7eb',
-          boxShadow: isActiveSpeaker 
+          border: isScreenSharing ? 'none' : (isActiveSpeaker ? '3px solid #3b82f6' : '2px solid #e5e7eb'),
+          boxShadow: isScreenSharing ? 'none' : (isActiveSpeaker 
             ? '0 0 20px rgba(59, 130, 246, 0.5)' 
-            : '0 2px 8px rgba(0, 0, 0, 0.1)',
+            : '0 2px 8px rgba(0, 0, 0, 0.1)'),
           transition: 'all 0.3s ease',
-          backgroundColor: '#1f2937',
+          backgroundColor: isScreenSharing ? '#000000' : '#1f2937',
           minWidth: isMainStage ? '200px' : '120px',
           minHeight: isMainStage ? '150px' : '80px'
         }}
@@ -558,6 +558,27 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             // This ensures video elements are registered with the same key LiveKit uses
             const primaryKey = userId || participant._id; // User ID is the LiveKit identity, fallback to _id
             videoRefs.current[primaryKey] = el;
+            
+            // IMMEDIATE FIX: If this is local participant and we have their video track, attach it NOW
+            if (el && isLocalParticipant && liveKitService?.room?.localParticipant) {
+              const roomLocalParticipant = liveKitService.room.localParticipant;
+              const localVideoTrack = Array.from(roomLocalParticipant.videoTrackPublications.values())
+                .find((pub: any) => pub.source === 'camera' && pub.track);
+              
+              if (localVideoTrack && localVideoTrack.track) {
+                try {
+                  localVideoTrack.track.attach(el);
+                  console.log('✅ Attached LOCAL camera track to own video element immediately');
+                  
+                  // Also emit event to notify track is ready
+                  console.log('📡 Local video track attached and ready for publishing');
+                } catch (attachError) {
+                  console.error('❌ Failed to attach local camera:', attachError);
+                }
+              } else {
+                console.log('⚠️ Local video track not ready yet, will attach on trackPublished event');
+              }
+            }
             
             console.log('🎬 Video element created:', {
               participantId: participant._id,
@@ -582,14 +603,14 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             }
           }}
           autoPlay
-          muted={!isLocalParticipant} // Mute remote participants, unmute local
+          muted={true} // Always mute to prevent feedback, local video is for visual only
           playsInline
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'cover',
-            backgroundColor: '#1f2937',
-            borderRadius: isMainStage ? '10px' : '6px',
+            objectFit: isScreenSharing ? 'contain' : 'cover',
+            backgroundColor: isScreenSharing ? '#000000' : '#1f2937',
+            borderRadius: isScreenSharing ? '0' : (isMainStage ? '10px' : '6px'),
             minWidth: '100%',
             minHeight: '100%'
           }}
@@ -830,11 +851,11 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                            mainStageParticipants.length <= 6 ? '1fr 1fr' :
                            mainStageParticipants.length <= 9 ? '1fr 1fr 1fr' :
                            '1fr 1fr 1fr 1fr',
-          gap: viewMode === 'speaker' ? '0' : '12px',
-          padding: viewMode === 'speaker' ? '0' : '8px',
-          backgroundColor: viewMode === 'speaker' ? 'transparent' : '#f8fafc',
-          borderRadius: viewMode === 'speaker' ? '0' : '12px',
-          boxShadow: viewMode === 'speaker' ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)'
+          gap: (viewMode === 'speaker' || screenShareMode) ? '0' : '12px',
+          padding: (viewMode === 'speaker' || screenShareMode) ? '0' : '8px',
+          backgroundColor: screenShareMode ? '#000000' : (viewMode === 'speaker' ? 'transparent' : '#f8fafc'),
+          borderRadius: (viewMode === 'speaker' || screenShareMode) ? '0' : '12px',
+          boxShadow: (viewMode === 'speaker' || screenShareMode) ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.1)'
         }}
       >
         {mainStageParticipants.map((participant, index) => (
@@ -843,10 +864,10 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             style={{
               height: '100%',
               minHeight: viewMode === 'speaker' ? '300px' : '200px',
-              margin: viewMode === 'speaker' ? '0' : '4px',
-              borderRadius: viewMode === 'speaker' ? '12px' : '8px',
+              margin: (viewMode === 'speaker' || screenShareMode) ? '0' : '4px',
+              borderRadius: screenShareMode ? '0' : (viewMode === 'speaker' ? '12px' : '8px'),
               overflow: 'hidden',
-              boxShadow: viewMode === 'speaker' ? '0 4px 12px rgba(0, 0, 0, 0.15)' : '0 2px 4px rgba(0, 0, 0, 0.1)'
+              boxShadow: screenShareMode ? 'none' : (viewMode === 'speaker' ? '0 4px 12px rgba(0, 0, 0, 0.15)' : '0 2px 4px rgba(0, 0, 0, 0.1)')
             }}
           >
             {renderParticipantVideo(participant, true)}

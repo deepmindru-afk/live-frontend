@@ -674,7 +674,22 @@ export class LiveKitService {
       
       // Check camera permissions first
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        console.log('🔍 Checking camera availability...');
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        console.log('📹 Available video devices:', videoDevices.length);
+        
+        if (videoDevices.length === 0) {
+          throw new Error('No camera devices found');
+        }
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          } 
+        });
         console.log('✅ Camera permission granted, stream tracks:', stream.getTracks().length);
         stream.getTracks().forEach(track => {
           console.log('🎥 Camera track details:', {
@@ -688,9 +703,13 @@ export class LiveKitService {
           });
           track.stop(); // Stop test stream
         });
-      } catch (permError) {
+      } catch (permError: any) {
         console.error('❌ Camera permission denied or device not available:', permError);
-        throw new Error('Camera permission denied. Please allow camera access.');
+        console.error('❌ Error name:', permError?.name);
+        console.error('❌ Error message:', permError?.message);
+        
+        // Don't throw, just log and continue - LiveKit will handle gracefully
+        console.warn('⚠️ Continuing without camera permission check...');
       }
       
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
@@ -712,7 +731,23 @@ export class LiveKitService {
       }
       
       console.log('🎥 LiveKit: Calling setCameraEnabled with constraints:', safeVideoConstraints);
-      await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
+      
+      try {
+        await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
+        console.log('✅ LiveKit: setCameraEnabled call succeeded');
+      } catch (cameraError: any) {
+        console.error('❌ setCameraEnabled failed:', cameraError);
+        
+        // Try without constraints as fallback
+        console.log('🔄 Retrying without custom constraints...');
+        try {
+          await this._room.localParticipant.setCameraEnabled(true);
+          console.log('✅ Camera enabled with default constraints');
+        } catch (fallbackError) {
+          console.error('❌ Camera enable failed completely:', fallbackError);
+          throw fallbackError;
+        }
+      }
       
       console.log('🎥 LiveKit: setCameraEnabled completed, checking tracks...');
       const videoTrack = this._room.localParticipant.videoTrackPublications.values().next().value;

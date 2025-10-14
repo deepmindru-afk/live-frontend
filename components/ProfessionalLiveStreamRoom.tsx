@@ -1459,25 +1459,55 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   const handleMicToggle = async () => {
     if (isLiveKitConnected) {
-      await liveKitToggleMicrophone();
-      setMicEnabled(!micEnabled);
+      try {
+        console.log('🎤 Attempting to toggle microphone via LiveKit...', { currentState: micEnabled });
+        await liveKitToggleMicrophone();
+        setMicEnabled(!micEnabled);
+        console.log('✅ Microphone toggled successfully via LiveKit', { newState: !micEnabled });
+      } catch (error: any) {
+        console.error('❌ Error toggling microphone via LiveKit:', error);
+        
+        // Show user-friendly error message
+        Swal.fire({
+          icon: 'error',
+          title: 'Microphone Error',
+          text: error?.message || 'Failed to toggle microphone. Please check microphone permissions.',
+          timer: 3000
+        });
+        
+        console.log('⚠️ Microphone state NOT changed due to error');
+      }
     } else {
       setMicEnabled(!micEnabled);
+      console.log('🎤 Microphone toggled (LiveKit not connected)');
     }
-    console.log('Mic toggled:', !micEnabled);
   };
 
   const handleCameraToggle = async () => {
     if (isLiveKitConnected) {
       try {
-        console.log('🎥 Attempting to toggle camera via LiveKit...');
+        console.log('🎥 Attempting to toggle camera via LiveKit...', { currentState: cameraEnabled });
         await liveKitToggleCamera();
         setCameraEnabled(!cameraEnabled);
-        console.log('✅ Camera toggled successfully via LiveKit');
-      } catch (error) {
+        console.log('✅ Camera toggled successfully via LiveKit', { newState: !cameraEnabled });
+      } catch (error: any) {
         console.error('❌ Error toggling camera via LiveKit:', error);
-        // Fallback to local state only
-        setCameraEnabled(!cameraEnabled);
+        console.error('❌ Error details:', {
+          message: error?.message,
+          name: error?.name,
+          stack: error?.stack
+        });
+        
+        // Show user-friendly error message
+        Swal.fire({
+          icon: 'error',
+          title: 'Camera Error',
+          text: error?.message || 'Failed to toggle camera. Please check camera permissions and try again.',
+          timer: 3000
+        });
+        
+        // Don't update state if operation failed
+        console.log('⚠️ Camera state NOT changed due to error');
       }
     } else {
       setCameraEnabled(!cameraEnabled);
@@ -1487,12 +1517,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   const handleScreenShareToggle = async () => {
     if (isLiveKitConnected) {
-      await liveKitToggleScreenShare();
-      setScreenSharing(!screenSharing);
+      try {
+        console.log('🖥️ Attempting to toggle screen share via LiveKit...', { currentState: screenSharing });
+        await liveKitToggleScreenShare();
+        setScreenSharing(!screenSharing);
+        console.log('✅ Screen share toggled successfully via LiveKit', { newState: !screenSharing });
+      } catch (error: any) {
+        console.error('❌ Error toggling screen share via LiveKit:', error);
+        
+        // Show user-friendly error message
+        Swal.fire({
+          icon: 'error',
+          title: 'Screen Share Error',
+          text: error?.message || 'Failed to toggle screen share. User may have cancelled or browser blocked it.',
+          timer: 3000
+        });
+        
+        console.log('⚠️ Screen share state NOT changed due to error');
+      }
     } else {
       setScreenSharing(!screenSharing);
+      console.log('🖥️ Screen share toggled (LiveKit not connected)');
     }
-    console.log('Screen share toggled:', !screenSharing);
   };
 
   // Speech synthesis function for recording announcements
@@ -2760,14 +2806,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           {/* Main Video Area */}
           <div style={{
             flex: 1,
-            backgroundColor: '#f3f4f6',
+            backgroundColor: queueState.screenShareMode ? '#000000' : '#f3f4f6',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
-            padding: isMobile ? '20px' : '40px',
-            paddingTop: isMobile ? '20px' : '40px',
+            padding: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
+            paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
             marginTop: '0'
           }}>
             {/* Toggle Thumbnail Panel Button - Desktop Only */}
@@ -2811,8 +2857,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </button>
             )}
             
-            {/* View Controls Toggle Button - Desktop Only */}
-            {!isMobile && (
+            {/* View Controls Toggle Button - Desktop Only, Hidden during screen share */}
+            {!isMobile && !queueState.screenShareMode && (
               <div 
                 data-view-controls
                 style={{

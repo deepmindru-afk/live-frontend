@@ -207,18 +207,31 @@ export const useWebSocketChat = ({
       }, 1000); // 1 second delay
       
           // Start heartbeat system - OPTIMIZED: Every 10 seconds for better performance
+          console.log('💓 Setting up heartbeat interval...');
+          
+          // Send immediate heartbeat
+          setTimeout(() => {
+            if (newSocket.connected && meetingId) {
+              console.log('💓 Sending INITIAL heartbeat...', { meetingId, socketId: newSocket.id });
+              newSocket.emit('HEARTBEAT', { meetingId });
+            }
+          }, 2000);
+          
           const heartbeatInterval = setInterval(() => {
-            if (newSocket.connected) {
-              console.log('💓 Sending heartbeat...', { meetingId, socketId: newSocket.id, connected: newSocket.connected });
+            if (newSocket.connected && meetingId) {
+              console.log('💓 Sending heartbeat...', { meetingId, socketId: newSocket.id, connected: newSocket.connected, timestamp: new Date().toISOString() });
               newSocket.emit('HEARTBEAT', { meetingId });
             } else {
-              console.log('❌ Socket not connected, clearing heartbeat interval');
-              clearInterval(heartbeatInterval);
+              console.log('❌ Socket not connected or no meetingId, heartbeat skipped', { 
+                connected: newSocket.connected, 
+                meetingId: !!meetingId 
+              });
             }
           }, 10000); // Every 10 seconds - OPTIMIZED: Reduced frequency for better performance
       
       // Store interval for cleanup
       (newSocket as any).heartbeatInterval = heartbeatInterval;
+      console.log('✅ Heartbeat interval created and stored');
     });
 
     newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
