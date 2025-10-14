@@ -3,6 +3,10 @@ import { Participant } from '../hooks/useParticipantQueue';
 import { LiveKitParticipant } from '../lib/livekit-service';
 import { Track } from 'livekit-client';
 
+// Track source constants from LiveKit
+const CAMERA_SOURCE = 'camera';
+const SCREEN_SHARE_SOURCE = 'screen_share';
+
 interface LiveKitParticipantQueueProps {
   // Original props
   participants: Participant[];
@@ -84,12 +88,15 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
 
     // Handle track subscription for remote participants
     const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
-      console.log('🎥 Track subscribed:', { 
+      console.log('🎥 Track subscribed EVENT:', { 
         participant: participant.identity, 
         trackKind: track.kind,
         trackSource: track.source,
+        trackSourceString: String(track.source),
         participantName: participant.name,
-        isLocal: participant.isLocal
+        isLocal: participant.isLocal,
+        isCameraTrack: track.source === 'camera',
+        isScreenShareTrack: track.source === 'screen_share'
       });
 
       // CRITICAL FIX: participant.identity is the user._id (set in backend token)
@@ -141,7 +148,12 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         }
       });
 
-      if (videoElement && track.kind === Track.Kind.Video) {
+      // Only attach CAMERA tracks (skip screen share)
+      const isScreenShare = track.source === SCREEN_SHARE_SOURCE || 
+                           track.source === 'screen_share' ||
+                           String(track.source).includes('screen');
+      
+      if (videoElement && track.kind === Track.Kind.Video && !isScreenShare) {
         try {
           // Ensure video element has valid dimensions to prevent WebRTC encoding issues
           if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
@@ -152,15 +164,18 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           
           track.attach(videoElement);
           trackRefs.current[participant.identity] = track;
-          console.log('✅ Video track attached to element for participant:', participant.identity);
+          console.log('✅ CAMERA track attached to element for participant:', participant.identity);
         } catch (error) {
           console.error('❌ Error attaching video track:', error);
         }
+      } else if (track.source === 'screen_share') {
+        console.log('🖥️ Screen share track detected, handled separately by main stage');
       } else {
         console.log('⚠️ Cannot attach track:', {
           hasVideoElement: !!videoElement,
           isVideoTrack: track.kind === Track.Kind.Video,
-          trackKind: track.kind
+          trackKind: track.kind,
+          trackSource: track.source
         });
       }
     };
@@ -266,18 +281,28 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       participantsValue: room && 'participants' in room ? room.participants : 'no participants'
     });
 
-    if (room && room.participants && Array.isArray(room.participants)) {
-      console.log('🔍 Processing participants:', room.participants.length);
-      room.participants.forEach((participant: any) => {
+    // CRITICAL FIX: room.participants is a Map in LiveKit, not an array!
+    if (room && room.participants) {
+      const participantsArray = Array.from(room.participants.values());
+      console.log('🔍 Processing participants:', participantsArray.length);
+      
+      participantsArray.forEach((participant: any) => {
         console.log('🔍 Processing participant:', {
           identity: participant.identity,
           hasTrackPublications: !!participant.trackPublications,
-          trackPublicationsType: typeof participant.trackPublications
+          trackPublicationsType: typeof participant.trackPublications,
+          trackPublicationsSize: participant.trackPublications?.size
         });
         
-        if (participant.trackPublications && Array.isArray(participant.trackPublications)) {
-          participant.trackPublications.forEach((publication: any) => {
-            if (publication.track && publication.kind === Track.Kind.Video) {
+        // CRITICAL FIX: trackPublications is a Map, not an array!
+        if (participant.trackPublications && participant.trackPublications.size > 0) {
+          const publications = Array.from(participant.trackPublications.values());
+          publications.forEach((publication: any) => {
+            const isScreenShare = publication.source === SCREEN_SHARE_SOURCE || 
+                                 publication.source === 'screen_share' ||
+                                 String(publication.source).includes('screen');
+            
+            if (publication.track && publication.kind === Track.Kind.Video && !isScreenShare) {
               // CRITICAL FIX: Use participant.identity (user._id) as primary lookup key
               let videoElement = videoRefs.current[participant.identity];
               
@@ -315,6 +340,8 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                 } catch (error) {
                   console.error('❌ Error attaching existing remote video track:', error);
                 }
+              } else {
+                console.log('⚠️ Video element not found for participant, will attach on trackSubscribed:', participant.identity);
               }
             }
           });
@@ -330,12 +357,29 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         hasLocalParticipant: !!room.localParticipant,
         localParticipantIdentity: room.localParticipant.identity,
         hasTrackPublications: !!room.localParticipant.trackPublications,
-        trackPublicationsType: typeof room.localParticipant.trackPublications
+        trackPublicationsType: typeof room.localParticipant.trackPublications,
+        trackPublicationsSize: room.localParticipant.trackPublications?.size
       });
       
-      if (room.localParticipant.trackPublications && Array.isArray(room.localParticipant.trackPublications)) {
-        room.localParticipant.trackPublications.forEach((publication: any) => {
-          if (publication.track && publication.kind === Track.Kind.Video) {
+      // CRITICAL FIX: trackPublications is a Map, not an array!
+      if (room.localParticipant.trackPublications && room.localParticipant.trackPublications.size > 0) {
+        const publications = Array.from(room.localParticipant.trackPublications.values());
+        console.log('🔍 Local participant publications:', publications.length);
+        
+        publications.forEach((publication: any) => {
+          console.log('🔍 Local publication:', {
+            kind: publication.kind,
+            source: publication.source,
+            hasTrack: !!publication.track,
+            trackSid: publication.trackSid
+          });
+          
+          // Only attach camera tracks, not screen share
+          const isScreenShare = publication.source === SCREEN_SHARE_SOURCE || 
+                               publication.source === 'screen_share' ||
+                               String(publication.source).includes('screen');
+          
+          if (publication.track && publication.kind === Track.Kind.Video && !isScreenShare) {
             // CRITICAL FIX: Use localParticipant.identity (user._id) as primary lookup key
             let videoElement = videoRefs.current[room.localParticipant.identity];
             
@@ -369,13 +413,26 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                 
                 publication.track.attach(videoElement);
                 trackRefs.current[room.localParticipant.identity] = publication.track;
-                console.log('✅ Local participant video track attached');
+                console.log('✅ Local participant video track attached to element');
               } catch (error) {
                 console.error('❌ Error attaching existing local video track:', error);
               }
+            } else {
+              console.log('❌ CRITICAL: Local video element NOT FOUND!', {
+                identity: room.localParticipant.identity,
+                name: room.localParticipant.name,
+                availableKeys: Object.keys(videoRefs.current),
+                participantsList: participants.map(p => ({
+                  id: p._id,
+                  userId: p.user?._id || p.userId,
+                  name: p.displayName
+                }))
+              });
             }
           }
         });
+      } else {
+        console.log('⚠️ Local participant has no track publications or size is 0');
       }
     } else {
       console.log('⚠️ No local participant found');
@@ -580,14 +637,17 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
               }
             }
             
-            console.log('🎬 Video element created:', {
+            console.log('🎬 Video element created and registered:', {
               participantId: participant._id,
               participantDisplayName: participant.displayName,
               userId: userId,
               liveKitIdentity: liveKitParticipant?.identity,
               primaryKey: primaryKey,
               hasElement: !!el,
-              currentKeys: Object.keys(videoRefs.current)
+              isLocalParticipant: isLocalParticipant,
+              allRegisteredKeys: Object.keys(videoRefs.current),
+              user_id: participant.user?._id,
+              participant_userId: participant.userId
             });
             
             // Create backup keys for different lookup scenarios
