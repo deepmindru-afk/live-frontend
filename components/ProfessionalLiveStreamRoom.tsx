@@ -143,6 +143,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [thumbnailPanelOpen, setThumbnailPanelOpen] = useState(true);
+  const [isPiPVisible, setIsPiPVisible] = useState(false);
+  const [isPageHidden, setIsPageHidden] = useState(false);
+  const mainVideoRef = useRef<HTMLVideoElement>(null);
   
   // LiveKit integration
   const {
@@ -792,6 +795,140 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Mobile fullscreen and immersive mode
+  useEffect(() => {
+    if (!isMobile) return;
+
+    // Set viewport meta for mobile optimization
+    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    const originalContent = viewportMeta?.getAttribute('content');
+    
+    if (viewportMeta) {
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
+    }
+
+    const enterFullscreen = async () => {
+      try {
+        // Request fullscreen for the document
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen().catch(() => {});
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen().catch(() => {});
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen().catch(() => {});
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen().catch(() => {});
+        }
+
+        // Try to hide address bar on mobile browsers
+        window.scrollTo(0, 1);
+        
+        // Lock screen orientation to landscape (optional)
+        if (screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock('landscape').catch(() => {});
+          } catch (e) {
+            console.log('Screen orientation lock not supported');
+          }
+        }
+      } catch (error) {
+        console.log('Fullscreen not supported or denied:', error);
+      }
+    };
+
+    // Prevent pull-to-refresh on mobile
+    const preventPullToRefresh = (e: TouchEvent) => {
+      if (e.touches.length > 1) return;
+      
+      const touch = e.touches[0];
+      if (touch.clientY > 50) return;
+      
+      e.preventDefault();
+    };
+
+    document.addEventListener('touchstart', preventPullToRefresh, { passive: false });
+    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
+
+    // Enter fullscreen after a short delay
+    const timer = setTimeout(() => {
+      enterFullscreen();
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('touchstart', preventPullToRefresh);
+      document.removeEventListener('touchmove', preventPullToRefresh);
+      
+      // Restore original viewport settings
+      if (viewportMeta && originalContent) {
+        viewportMeta.setAttribute('content', originalContent);
+      }
+      
+      // Exit fullscreen
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, [isMobile]);
+
+  // Picture-in-Picture mode for mobile (when app goes to background)
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('📱 Page hidden - activating PiP mode');
+        setIsPageHidden(true);
+        setIsPiPVisible(true);
+      } else {
+        console.log('📱 Page visible - deactivating PiP mode');
+        setIsPageHidden(false);
+        setIsPiPVisible(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isMobile]);
+
+  // Handle leaving meeting from PiP
+  const handleLeaveMeetingFromPiP = useCallback(async () => {
+    console.log('📱 Leaving meeting from PiP');
+    setIsPiPVisible(false);
+    
+    // Disconnect from LiveKit
+    if (liveKitDisconnect) {
+      await liveKitDisconnect();
+    }
+    
+    // Leave meeting
+    if (currentParticipant?._id) {
+      try {
+        await leaveMeeting({
+          variables: {
+            participantId: currentParticipant._id
+          }
+        });
+      } catch (error) {
+        console.error('Error leaving meeting:', error);
+      }
+    }
+    
+    // Redirect to dashboard or home
+    if (typeof window !== 'undefined') {
+      window.location.href = '/dashboard';
+    }
+  }, [currentParticipant, liveKitDisconnect]);
+
+  // Close PiP and return to room
+  const handleClosePiP = useCallback(() => {
+    setIsPiPVisible(false);
   }, []);
 
   // Initialize speech synthesis voices
@@ -1981,6 +2118,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           .mobile-stack { flex-direction: column !important; }
           .mobile-small { font-size: 14px !important; }
           .mobile-tiny { font-size: 12px !important; }
+          
+          /* Mobile immersive mode */
+          body {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          /* Hide browser chrome */
+          html {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+          }
+          
+          /* Prevent zoom on input focus */
+          input, textarea, select {
+            font-size: 16px !important;
+          }
+          
+          /* iOS Safari specific */
+          @supports (-webkit-touch-callout: none) {
+            body {
+              height: -webkit-fill-available;
+            }
+          }
           }
         `}</style>
         
@@ -1993,7 +2157,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           position: 'relative',
           overflow: 'hidden'
         }}>
-      {/* Header */}
+      {/* Mobile Picture-in-Picture Mode */}
+      {isPiPVisible && isMobile && (
+        <PictureInPicture
+          videoRef={mainVideoRef}
+          meetingId={actualMeetingId}
+          meetingTitle={meeting?.title || 'Live Stream'}
+          participantCount={participants.length}
+          onLeaveMeeting={handleLeaveMeetingFromPiP}
+          onBackToRoom={handleClosePiP}
+          isVisible={isPiPVisible}
+          onClose={handleClosePiP}
+        />
+      )}
+      
+      {/* Header - Hidden when PiP is active on mobile */}
           <div style={{
         position: 'fixed',
         top: 0,
@@ -2002,7 +2180,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           height: isMobile ? '56px' : '70px',
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #e5e7eb',
-        display: 'flex',
+        display: (isMobile && isPiPVisible) ? 'none' : 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
           padding: isMobile ? '0 12px' : '0 24px',
@@ -2317,11 +2495,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         </div>
       </div>
 
-        {/* Main Content */}
+        {/* Main Content - Hidden when PiP is active on mobile */}
       <div style={{
         flex: 1,
           paddingTop: isMobile ? '70px' : '70px',
-          display: 'flex',
+          display: (isMobile && isPiPVisible) ? 'none' : 'flex',
           flexDirection: 'column',
           backgroundColor: '#ffffff'
       }}>
@@ -3104,8 +3282,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         </div>
       </div>
 
-      {/* Sidebar */}
-      {sidebarOpen && (
+      {/* Sidebar - Hidden when PiP is active on mobile */}
+      {sidebarOpen && !(isMobile && isPiPVisible) && (
       <div style={{
           position: 'fixed',
           right: 0,

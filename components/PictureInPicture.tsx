@@ -125,7 +125,7 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          backgroundColor: isMobile ? 'rgba(0, 0, 0, 0.95)' : 'rgba(0, 0, 0, 0.3)',
           zIndex: 9998,
           pointerEvents: 'none'
         }}
@@ -136,82 +136,122 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
         ref={pipRef}
         style={{
           position: 'fixed',
-          left: position.x,
-          top: position.y,
-          width: isMobile ? '280px' : '300px',
-          height: isMobile ? '180px' : '200px',
-          backgroundColor: '#1a1a1a',
-          borderRadius: '12px',
-          border: '2px solid #3b82f6',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+          left: isMobile ? 0 : position.x,
+          top: isMobile ? 0 : position.y,
+          width: isMobile ? '100%' : '300px',
+          height: isMobile ? '100%' : '200px',
+          backgroundColor: '#000000',
+          borderRadius: isMobile ? '0' : '12px',
+          border: isMobile ? 'none' : '2px solid #3b82f6',
+          boxShadow: isMobile ? 'none' : '0 10px 25px rgba(0, 0, 0, 0.5)',
           zIndex: 9999,
           overflow: 'hidden',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          userSelect: 'none'
+          cursor: isMobile ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+          userSelect: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
       >
-        {/* Header */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '40px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 12px',
-            zIndex: 2
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                backgroundColor: '#ef4444',
-                borderRadius: '50%',
-                animation: 'pulse 2s infinite'
-              }}
-            />
-            <span
-              style={{
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: '600',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '150px'
-              }}
-            >
-              {meetingTitle}
-            </span>
-          </div>
-          
-          <button
-            onClick={onClose}
+        {/* Header - Different for mobile */}
+        {isMobile ? (
+          // Mobile: Minimal header with just X button at top right
+          <div
             style={{
-              background: 'none',
-              border: 'none',
-              color: 'white',
-              fontSize: '16px',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              zIndex: 10
             }}
           >
-            ✕
-          </button>
-        </div>
+            <button
+              onClick={onLeaveMeeting}
+              style={{
+                width: '48px',
+                height: '48px',
+                background: 'rgba(239, 68, 68, 0.9)',
+                border: 'none',
+                borderRadius: '50%',
+                color: 'white',
+                fontSize: '24px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          // Desktop: Full header
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '40px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 12px',
+              zIndex: 2
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#ef4444',
+                  borderRadius: '50%',
+                  animation: 'pulse 2s infinite'
+                }}
+              />
+              <span
+                style={{
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '150px'
+                }}
+              >
+                {meetingTitle}
+              </span>
+            </div>
+            
+            <button
+              onClick={onClose}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '16px',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Video Container */}
         <div
@@ -219,7 +259,7 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
             position: 'relative',
             width: '100%',
             height: '100%',
-            marginTop: '40px'
+            marginTop: isMobile ? '0' : '40px'
           }}
         >
           {videoRef.current && (
@@ -237,21 +277,22 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
             />
           )}
           
-          {/* Video overlay info */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '8px',
-              left: '8px',
-              right: '8px',
-              background: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: '6px',
-              padding: '4px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}
-          >
+          {/* Video overlay info - Hide on mobile */}
+          {!isMobile && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '8px',
+                left: '8px',
+                right: '8px',
+                background: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: '6px',
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
             <span
               style={{
                 color: 'white',
@@ -270,20 +311,22 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
             >
               ● Live
             </span>
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Control Buttons */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            right: '8px',
-            display: 'flex',
-            gap: '6px',
-            zIndex: 3
-          }}
-        >
+        {/* Control Buttons - Hide on mobile */}
+        {!isMobile && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '8px',
+              right: '8px',
+              display: 'flex',
+              gap: '6px',
+              zIndex: 3
+            }}
+          >
           <button
             onClick={onBackToRoom}
             style={{
@@ -326,7 +369,8 @@ const PictureInPicture: React.FC<PictureInPictureProps> = ({
           >
             <span>✕</span>
           </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <style jsx>{`
