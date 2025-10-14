@@ -171,6 +171,72 @@ export class LiveKitService {
       } else {
         console.log('🎤 LiveKit: Microphone disabled on connect');
       }
+      
+      // DIAGNOSTIC: Wait a moment for tracks to publish, then verify
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('🔍 DIAGNOSTIC: Checking all published tracks after connection...');
+      const allVideoTracks = Array.from(this._room.localParticipant.videoTrackPublications.values());
+      const allAudioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
+      
+      console.log('📊 DIAGNOSTIC: Published Tracks Summary:', {
+        videoTracksCount: allVideoTracks.length,
+        audioTracksCount: allAudioTracks.length,
+        videoTracks: allVideoTracks.map(pub => ({
+          sid: pub.trackSid,
+          kind: pub.kind,
+          source: pub.source,
+          isMuted: pub.isMuted,
+          hasTrack: !!pub.track,
+          trackEnabled: pub.track ? !pub.track.isMuted : false,
+          dimensions: pub.dimensions
+        })),
+        audioTracks: allAudioTracks.map(pub => ({
+          sid: pub.trackSid,
+          kind: pub.kind,
+          source: pub.source,
+          isMuted: pub.isMuted,
+          hasTrack: !!pub.track
+        }))
+      });
+      
+      if (options.enableCamera !== false && allVideoTracks.length === 0) {
+        console.error('❌ CRITICAL: Camera was enabled but NO video tracks published!');
+        console.error('❌ This means other participants will NOT see your video!');
+        console.error('❌ Possible causes: Camera permission denied, device busy, or browser restrictions');
+        
+        // FIX: Retry camera enable after a short delay
+        console.log('🔄 Attempting to re-enable camera...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+          await this._room.localParticipant.setCameraEnabled(false);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await this._room.localParticipant.setCameraEnabled(true, {
+            resolution: {
+              width: 1280,
+              height: 720,
+              frameRate: 30
+            }
+          });
+          console.log('✅ Camera re-enabled successfully');
+        } catch (retryError) {
+          console.error('❌ Camera retry failed:', retryError);
+        }
+      }
+      
+      if (options.enableMicrophone !== false && allAudioTracks.length === 0) {
+        console.error('❌ CRITICAL: Microphone was enabled but NO audio tracks published!');
+        
+        // FIX: Retry microphone enable
+        console.log('🔄 Attempting to re-enable microphone...');
+        try {
+          await this._room.localParticipant.setMicrophoneEnabled(false);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await this._room.localParticipant.setMicrophoneEnabled(true);
+          console.log('✅ Microphone re-enabled successfully');
+        } catch (retryError) {
+          console.error('❌ Microphone retry failed:', retryError);
+        }
+      }
 
       // CRITICAL FIX: Add local participant to participants map
       console.log('🔍 [LIVEKIT_SERVICE] Checking room state after connection:', {
@@ -606,6 +672,27 @@ export class LiveKitService {
     try {
       console.log('📹 LiveKit: Attempting to enable camera with validated constraints...');
       
+      // Check camera permissions first
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        console.log('✅ Camera permission granted, stream tracks:', stream.getTracks().length);
+        stream.getTracks().forEach(track => {
+          console.log('🎥 Camera track details:', {
+            id: track.id,
+            kind: track.kind,
+            label: track.label,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            settings: track.getSettings()
+          });
+          track.stop(); // Stop test stream
+        });
+      } catch (permError) {
+        console.error('❌ Camera permission denied or device not available:', permError);
+        throw new Error('Camera permission denied. Please allow camera access.');
+      }
+      
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
       // This ensures all values passed to RTCPeerConnection.addTransceiver are valid finite numbers
       const safeVideoConstraints = {
@@ -634,8 +721,20 @@ export class LiveKitService {
         trackSid: videoTrack?.trackSid,
         trackKind: videoTrack?.kind,
         isSubscribed: videoTrack?.isSubscribed,
-        isMuted: videoTrack?.isMuted
+        isMuted: videoTrack?.isMuted,
+        track: videoTrack?.track
       });
+      
+      // CRITICAL: Ensure track is actually published and visible to other participants
+      if (videoTrack && videoTrack.track) {
+        console.log('✅ LiveKit: Video track PUBLISHED and available to other participants:', {
+          sid: videoTrack.trackSid,
+          source: videoTrack.source,
+          dimensions: videoTrack.dimensions
+        });
+      } else {
+        console.error('❌ LiveKit: Video track NOT published - other participants will see black screen!');
+      }
       
       this.updateRoomState({ isCameraEnabled: true });
       console.log('✅ LiveKit: Camera enabled successfully');

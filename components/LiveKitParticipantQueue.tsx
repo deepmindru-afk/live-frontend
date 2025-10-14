@@ -427,8 +427,8 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   // Get thumbnail participants based on view mode
   const getThumbnailParticipants = () => {
     if (screenShareMode) {
-      // In screen share mode, show all other participants as thumbnails
-      return participants.filter(p => p._id !== screenShareParticipant?._id);
+      // In screen share mode, show ALL participants as thumbnails (including screen sharer's camera)
+      return participants;
     }
     
     if (viewMode === 'speaker') {

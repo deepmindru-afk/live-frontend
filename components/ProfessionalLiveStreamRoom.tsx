@@ -143,6 +143,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [thumbnailPanelOpen, setThumbnailPanelOpen] = useState(true);
+  
+  // Auto-open thumbnail panel when screen sharing starts
+  useEffect(() => {
+    if (queueState.screenShareMode) {
+      setThumbnailPanelOpen(true);
+    }
+  }, [queueState.screenShareMode]);
   const [isPiPVisible, setIsPiPVisible] = useState(false);
   const [isPageHidden, setIsPageHidden] = useState(false);
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -722,20 +729,58 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
     const room = liveKitService.room;
     
+    // CRITICAL FIX: Attach local participant's own camera to their thumbnail
+    const attachLocalVideoToThumbnail = () => {
+      if (room.localParticipant) {
+        const localVideoTrack = Array.from(room.localParticipant.videoTrackPublications.values())
+          .find(pub => pub.source === 'camera');
+        
+        if (localVideoTrack && localVideoTrack.track) {
+          const videoId = `thumbnail-${room.localParticipant.identity}`;
+          const videoElement = window.thumbnailVideoRefs?.[videoId];
+          
+          if (videoElement) {
+            console.log('🎥 Attaching LOCAL camera to thumbnail:', videoId);
+            localVideoTrack.track.attach(videoElement);
+            
+            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+            if (fallbackDiv) {
+              (fallbackDiv as HTMLElement).style.display = 'none';
+            }
+          } else {
+            console.log('⚠️ Local thumbnail video element not found yet:', videoId);
+          }
+        }
+      }
+    };
+    
+    // Try to attach local video immediately
+    setTimeout(() => attachLocalVideoToThumbnail(), 100);
+    setTimeout(() => attachLocalVideoToThumbnail(), 500);
+    setTimeout(() => attachLocalVideoToThumbnail(), 1000);
+    
     const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
       if (track.kind === 'video') {
         console.log('🎥 Thumbnail track subscribed:', { 
           participant: participant.identity, 
           participantName: participant.name,
-          trackSource: track.source
+          trackSource: track.source,
+          isLocal: participant.isLocal
         });
+
+        // Only attach CAMERA tracks to thumbnails, not screen share tracks
+        // Screen share tracks will be handled by LiveKitParticipantQueue in the main area
+        if (track.source === 'screen_share' || track.source === 'screen_share_audio') {
+          console.log('🎥 Skipping screen share track for thumbnails');
+          return;
+        }
 
         // Find the thumbnail video element for this participant
         const videoId = `thumbnail-${participant.identity}`;
         const videoElement = window.thumbnailVideoRefs?.[videoId];
         
         if (videoElement) {
-          console.log('🎥 Attaching thumbnail track to video element:', videoId);
+          console.log('🎥 Attaching camera track to thumbnail video element:', videoId);
           track.attach(videoElement);
           
           // Hide fallback avatar when video is attached
@@ -743,6 +788,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           if (fallbackDiv) {
             (fallbackDiv as HTMLElement).style.display = 'none';
           }
+        } else {
+          console.log('⚠️ Thumbnail video element not found, will retry...', videoId);
+          // Retry attachment after a short delay
+          setTimeout(() => {
+            const retryElement = window.thumbnailVideoRefs?.[videoId];
+            if (retryElement) {
+              console.log('🔄 Retry: Attaching camera track to thumbnail');
+              track.attach(retryElement);
+              const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
+              if (fallbackDiv) {
+                (fallbackDiv as HTMLElement).style.display = 'none';
+              }
+            }
+          }, 500);
         }
       }
     };
@@ -769,14 +828,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     };
 
+    // Handle track published events (for local and remote participants)
+    const handleTrackPublished = (publication: any, participant: any) => {
+      console.log('📡 Track published:', {
+        participant: participant.identity,
+        trackKind: publication.kind,
+        trackSource: publication.source,
+        isLocal: participant.isLocal
+      });
+      
+      // If it's a video track, try to attach it to thumbnail
+      if (publication.kind === 'video' && publication.track && publication.source === 'camera') {
+        setTimeout(() => attachLocalVideoToThumbnail(), 200);
+      }
+    };
+
     // Listen for track events
     room.on('trackSubscribed', handleTrackSubscribed);
     room.on('trackUnsubscribed', handleTrackUnsubscribed);
+    room.on('trackPublished', handleTrackPublished);
+
+    // Initial attachment for already published tracks
+    attachLocalVideoToThumbnail();
 
     // Cleanup
     return () => {
       room.off('trackSubscribed', handleTrackSubscribed);
       room.off('trackUnsubscribed', handleTrackUnsubscribed);
+      room.off('trackPublished', handleTrackPublished);
     };
   }, [liveKitService, isLiveKitConnected]);
   // Camera is enabled during initial connection in the connect() method
@@ -2503,8 +2582,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           flexDirection: 'column',
           backgroundColor: '#ffffff'
       }}>
-          {/* Participant Thumbnails Row - Only show in Main view */}
-          {viewMode === 'speaker' && (
+          {/* Participant Thumbnails Row - Show in speaker mode OR when screen sharing */}
+          {(viewMode === 'speaker' || queueState.screenShareMode) && (
             <div style={{
               height: thumbnailPanelOpen ? (isMobile ? '140px' : '140px') : (isMobile ? '0px' : '0px'),
               backgroundColor: '#ffffff',
