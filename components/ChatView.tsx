@@ -241,16 +241,27 @@ const ChatView: React.FC<ChatViewProps> = ({
         padding: '15px 0',
         borderTop: '1px solid #333'
       }}>
-        <div style={{
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'flex-end'
-        }}>
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSendMessage();
+          }}
+          style={{
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'flex-end'
+          }}
+        >
           <textarea
             value={newMessage}
             onChange={handleTyping}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder="Type your message... (Press Enter to send)"
             style={{
               flex: 1,
               backgroundColor: '#333',
@@ -261,12 +272,13 @@ const ChatView: React.FC<ChatViewProps> = ({
               fontSize: '14px',
               resize: 'none',
               minHeight: '40px',
-              maxHeight: '100px'
+              maxHeight: '100px',
+              outline: 'none'
             }}
             rows={1}
           />
           <button
-            onClick={handleSendMessage}
+            type="submit"
             disabled={!newMessage.trim()}
             style={{
               backgroundColor: newMessage.trim() ? '#007bff' : '#666',
@@ -276,12 +288,23 @@ const ChatView: React.FC<ChatViewProps> = ({
               padding: '8px 16px',
               cursor: newMessage.trim() ? 'pointer' : 'not-allowed',
               fontSize: '14px',
-              height: '40px'
+              height: '40px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (newMessage.trim()) {
+                e.currentTarget.style.backgroundColor = '#0056b3';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (newMessage.trim()) {
+                e.currentTarget.style.backgroundColor = '#007bff';
+              }
             }}
           >
             Send
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

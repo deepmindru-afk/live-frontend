@@ -778,12 +778,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           if (videoElement) {
             try {
-              console.log('🎥 Attaching LOCAL camera to thumbnail:', videoId);
-              localVideoTrack.track.attach(videoElement);
-              
-              const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-              if (fallbackDiv) {
-                (fallbackDiv as HTMLElement).style.display = 'none';
+            console.log('🎥 Attaching LOCAL camera to thumbnail:', videoId);
+            localVideoTrack.track.attach(videoElement);
+            
+            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+            if (fallbackDiv) {
+              (fallbackDiv as HTMLElement).style.display = 'none';
               }
               console.log('✅ Local camera track successfully attached to thumbnail');
             } catch (attachError) {
@@ -858,13 +858,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         if (videoElement) {
           try {
-            console.log('🎥 Attaching camera track to thumbnail video element:', videoId);
-            track.attach(videoElement);
-            
-            // Hide fallback avatar when video is attached
-            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-            if (fallbackDiv) {
-              (fallbackDiv as HTMLElement).style.display = 'none';
+          console.log('🎥 Attaching camera track to thumbnail video element:', videoId);
+          track.attach(videoElement);
+          
+          // Hide fallback avatar when video is attached
+          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+          if (fallbackDiv) {
+            (fallbackDiv as HTMLElement).style.display = 'none';
             }
             
             console.log('✅ Camera track successfully attached to thumbnail');
@@ -884,10 +884,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             if (retryElement) {
               console.log('🔄 Retry: Attaching camera track to thumbnail');
               try {
-                track.attach(retryElement);
-                const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
-                if (fallbackDiv) {
-                  (fallbackDiv as HTMLElement).style.display = 'none';
+              track.attach(retryElement);
+              const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
+              if (fallbackDiv) {
+                (fallbackDiv as HTMLElement).style.display = 'none';
                 }
                 console.log('✅ Retry successful: Camera track attached to thumbnail');
               } catch (retryError) {
@@ -2328,7 +2328,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             50% { opacity: 0.3; }
             100% { opacity: 1; }
           }
-          
+        
           /* Custom scrollbar for participant thumbnails */
           .participant-thumbnails::-webkit-scrollbar {
             height: 4px;
@@ -2707,9 +2707,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </>
             )}
             
-            {/* Toggle Thumbnail Panel Arrow - Works on both Mobile and Desktop */}
+            {/* Toggle Thumbnail Panel Arrow */}
             <button
-              onClick={() => setThumbnailPanelOpen(!thumbnailPanelOpen)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setThumbnailPanelOpen(!thumbnailPanelOpen);
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setThumbnailPanelOpen(!thumbnailPanelOpen);
+              }}
               style={{
                 backgroundColor: 'transparent',
                 border: 'none',
@@ -2718,7 +2730,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 justifyContent: 'center',
                 cursor: 'pointer',
                 padding: '8px',
-                transition: 'all 0.2s ease'
+                minWidth: isMobile ? '44px' : 'auto',
+                minHeight: isMobile ? '44px' : 'auto',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+                zIndex: 1001
               }}
             >
               <svg 
@@ -2727,7 +2743,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 viewBox="0 0 24 24" 
                 fill="none"
                 stroke="#374151"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{
@@ -2754,28 +2770,126 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           {thumbnailPanelOpen && (
             <div 
               className="participant-thumbnails"
+              onMouseEnter={() => {
+                const leftArrow = document.querySelector('.scroll-arrow-left') as HTMLElement;
+                const rightArrow = document.querySelector('.scroll-arrow-right') as HTMLElement;
+                if (leftArrow) leftArrow.style.opacity = '1';
+                if (rightArrow) rightArrow.style.opacity = '1';
+              }}
+              onMouseLeave={() => {
+                const leftArrow = document.querySelector('.scroll-arrow-left') as HTMLElement;
+                const rightArrow = document.querySelector('.scroll-arrow-right') as HTMLElement;
+                if (leftArrow) leftArrow.style.opacity = '0';
+                if (rightArrow) rightArrow.style.opacity = '0';
+              }}
               style={{
                 height: isMobile ? '120px' : '140px',
                 width: '100%',
-                backgroundColor: '#ffffff',
+              backgroundColor: '#ffffff',
                 borderTop: !isMobile ? '1px solid #e5e7eb' : 'none',
                 borderBottom: isMobile ? '1px solid #e5e7eb' : 'none',
-                display: 'flex',
-                alignItems: 'center',
+              display: 'flex',
+              alignItems: 'center',
                 padding: isMobile ? '0 12px' : '0 24px',
                 gap: isMobile ? '12px' : '14px',
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                marginTop: '0',
-                transition: 'all 0.3s ease-in-out',
+                overflowX: isMobile ? 'auto' : 'hidden',
+              overflowY: 'hidden',
+              marginTop: '0',
+              transition: 'all 0.3s ease-in-out',
                 position: 'relative',
-                scrollbarWidth: 'thin',
+                scrollbarWidth: isMobile ? 'none' : 'thin',
                 scrollbarColor: '#cbd5e1 transparent',
+                WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
                 flexDirection: 'row', // Always horizontal for better desktop layout
                 minWidth: 'auto',
                 maxWidth: '100%'
               }}>
-              {participantsWithHandRaise.map((participant) => (
+              {/* Desktop Hover Arrows */}
+              {!isMobile && (
+                <>
+                  {/* Left Arrow */}
+                  <div 
+                    className="scroll-arrow scroll-arrow-left"
+                    style={{
+                      position: 'absolute',
+                      left: '0',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '40px',
+                      height: '40px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      opacity: 0,
+                      transition: 'opacity 0.3s ease',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = '1';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                    onClick={() => {
+                      const container = document.querySelector('.participant-thumbnails');
+                      if (container) {
+                        container.scrollBy({ left: -200, behavior: 'smooth' });
+                      }
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2">
+                      <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                  </div>
+
+                  {/* Right Arrow */}
+                  <div 
+                    className="scroll-arrow scroll-arrow-right"
+                    style={{
+                      position: 'absolute',
+                      right: '0',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '40px',
+                      height: '40px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      opacity: 0,
+                      transition: 'opacity 0.3s ease',
+                      zIndex: 10,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = '1';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                    onClick={() => {
+                      const container = document.querySelector('.participant-thumbnails');
+                      if (container) {
+                        container.scrollBy({ left: 200, behavior: 'smooth' });
+                      }
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </div>
+                </>
+              )}
+
+              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant) => (
                 <div
                   key={participant._id}
                   onClick={() => setSelectedParticipant(participant)}
@@ -2962,25 +3076,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </div>
               ))}
               
-              {/* Scroll indicator for mobile */}
-              {isMobile && participantsWithHandRaise.length > 2 && (
-                <div style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  color: 'white',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontSize: '10px',
-                  fontWeight: '500',
-                  pointerEvents: 'none',
-                  zIndex: 10
-                }}>
-                  ← Scroll →
-                </div>
-              )}
             </div>
           )}
           
@@ -3223,26 +3318,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
             {/* Selected Participant Indicator */}
             {selectedParticipant && (
-              <div style={{
-                position: 'absolute',
-                top: '20px',
-                left: '20px',
+            <div style={{
+              position: 'absolute',
+              top: '20px',
+              left: '20px',
                 backgroundColor: '#3b82f6',
                 border: '2px solid #2563eb',
-                borderRadius: '8px',
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
                 color: 'white',
-                zIndex: 1000,
+              zIndex: 1000,
                 boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-              }}>
+            }}>
                 👤 {selectedParticipant.displayName || 'Selected Participant'}
-              </div>
+            </div>
             )}
+            
+
 
             {/* LiveKit Connection Status */}
             <div style={{
@@ -3384,7 +3481,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             height: isMobile ? '70px' : '80px',
             backgroundColor: '#ffffff',
             borderTop: '1px solid #e5e7eb',
-            display: 'flex',
+          display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: isMobile ? '0 12px' : '0 24px',

@@ -50,13 +50,17 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
         type: 'chat'
       };
       
-      // Prevent duplicate messages
+      // Prevent duplicate messages and keep welcome message at top
       setMessages(prev => {
         const exists = prev.find(msg => msg._id === newMsg._id || 
           (msg.text === newMsg.text && msg.displayName === newMsg.displayName && 
            Math.abs(new Date(msg.createdAt).getTime() - new Date(newMsg.createdAt).getTime()) < 5000));
         if (exists) return prev;
-        return [...prev, newMsg];
+        
+        // Keep welcome message at the top
+        const welcomeMsg = prev.find(msg => msg._id === 'welcome');
+        const otherMessages = prev.filter(msg => msg._id !== 'welcome');
+        return welcomeMsg ? [welcomeMsg, ...otherMessages, newMsg] : [...prev, newMsg];
       });
     },
     onParticipantJoined: (participant) => {
@@ -85,7 +89,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
         // Merge previous messages with current messages, avoiding duplicates
         const existingIds = new Set(prev.map(m => m._id));
         const newPreviousMessages = previousMessages.filter(msg => !existingIds.has(msg._id));
-        return [...newPreviousMessages, ...prev];
+        
+        // Keep welcome message at the top
+        const welcomeMsg = prev.find(msg => msg._id === 'welcome');
+        const otherMessages = prev.filter(msg => msg._id !== 'welcome');
+        return welcomeMsg ? [welcomeMsg, ...newPreviousMessages, ...otherMessages] : [...newPreviousMessages, ...prev];
       });
     }
   }, [webSocketMessages]);
@@ -99,7 +107,14 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
       createdAt: new Date().toISOString(),
       type: 'system'
     };
-    setMessages([welcomeMessage]);
+    // Always keep welcome message at the top
+    setMessages(prev => {
+      const hasWelcome = prev.find(msg => msg._id === 'welcome');
+      if (!hasWelcome) {
+        return [welcomeMessage, ...prev];
+      }
+      return prev;
+    });
     setIsConnected(wsConnected);
   }, [wsConnected]);
 
@@ -135,7 +150,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
             createdAt: new Date().toISOString(),
             type: 'join'
           };
-          setMessages(prev => [...prev, joinMsg]);
+          setMessages(prev => {
+            const welcomeMsg = prev.find(msg => msg._id === 'welcome');
+            const otherMessages = prev.filter(msg => msg._id !== 'welcome');
+            return welcomeMsg ? [welcomeMsg, ...otherMessages, joinMsg] : [...prev, joinMsg];
+          });
         });
 
         // Check for left participants (actually left - not just disappeared from array due to heartbeat updates)
@@ -155,7 +174,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
             createdAt: new Date().toISOString(),
             type: 'leave'
           };
-          setMessages(prev => [...prev, leaveMsg]);
+          setMessages(prev => {
+            const welcomeMsg = prev.find(msg => msg._id === 'welcome');
+            const otherMessages = prev.filter(msg => msg._id !== 'welcome');
+            return welcomeMsg ? [welcomeMsg, ...otherMessages, leaveMsg] : [...prev, leaveMsg];
+          });
         });
         
         // Update previous participants for next comparison
@@ -241,7 +264,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
           createdAt: new Date().toISOString(),
           type: 'chat'
         };
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          const welcomeMsg = prev.find(msg => msg._id === 'welcome');
+          const otherMessages = prev.filter(msg => msg._id !== 'welcome');
+          return welcomeMsg ? [welcomeMsg, ...otherMessages, message] : [...prev, message];
+        });
         console.log('📤 Message added locally (WebSocket not available):', messageText);
       }
     } catch (error) {
