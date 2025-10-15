@@ -736,19 +736,64 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           .find(pub => pub.source === 'camera');
         
         if (localVideoTrack && localVideoTrack.track) {
-          const videoId = `thumbnail-${room.localParticipant.identity}`;
-          const videoElement = window.thumbnailVideoRefs?.[videoId];
+          // Try multiple lookup strategies for local participant
+          let videoElement = null;
+          let videoId = null;
+          
+          // Strategy 1: Use local participant identity (user._id)
+          videoId = `thumbnail-${room.localParticipant.identity}`;
+          videoElement = window.thumbnailVideoRefs?.[videoId];
+          
+          // Strategy 2: Find local participant in participants list and use their ID
+          if (!videoElement) {
+            const localParticipant = participants.find(p => 
+              (p.user?._id === room.localParticipant.identity) || 
+              (p.userId === room.localParticipant.identity)
+            );
+            if (localParticipant) {
+              const userId = localParticipant.user?._id || localParticipant.userId || localParticipant._id;
+              videoId = `thumbnail-${userId}`;
+              videoElement = window.thumbnailVideoRefs?.[videoId];
+            }
+          }
+          
+          // Strategy 3: Try participant._id as fallback
+          if (!videoElement) {
+            const localParticipant = participants.find(p => 
+              (p.user?._id === room.localParticipant.identity) || 
+              (p.userId === room.localParticipant.identity)
+            );
+            if (localParticipant) {
+              videoId = `thumbnail-${localParticipant._id}`;
+              videoElement = window.thumbnailVideoRefs?.[videoId];
+            }
+          }
+          
+          console.log('🔍 Local thumbnail video element lookup:', {
+            localParticipantIdentity: room.localParticipant.identity,
+            videoId: videoId,
+            hasVideoElement: !!videoElement,
+            allThumbnailKeys: Object.keys(window.thumbnailVideoRefs || {})
+          });
           
           if (videoElement) {
-            console.log('🎥 Attaching LOCAL camera to thumbnail:', videoId);
-            localVideoTrack.track.attach(videoElement);
-            
-            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-            if (fallbackDiv) {
-              (fallbackDiv as HTMLElement).style.display = 'none';
+            try {
+              console.log('🎥 Attaching LOCAL camera to thumbnail:', videoId);
+              localVideoTrack.track.attach(videoElement);
+              
+              const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+              if (fallbackDiv) {
+                (fallbackDiv as HTMLElement).style.display = 'none';
+              }
+              console.log('✅ Local camera track successfully attached to thumbnail');
+            } catch (attachError) {
+              console.error('❌ Failed to attach local camera track to thumbnail:', attachError);
             }
           } else {
-            console.log('⚠️ Local thumbnail video element not found yet:', videoId);
+            console.log('⚠️ Local thumbnail video element not found yet:', {
+              localParticipantIdentity: room.localParticipant.identity,
+              availableKeys: Object.keys(window.thumbnailVideoRefs || {})
+            });
           }
         }
       }
@@ -775,30 +820,78 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           return;
         }
 
-        // Find the thumbnail video element for this participant
-        const videoId = `thumbnail-${participant.identity}`;
-        const videoElement = window.thumbnailVideoRefs?.[videoId];
+        // Try multiple video element lookup strategies
+        let videoElement = null;
+        let videoId = null;
+        
+        // Strategy 1: Use participant.identity (user._id)
+        videoId = `thumbnail-${participant.identity}`;
+        videoElement = window.thumbnailVideoRefs?.[videoId];
+        
+        // Strategy 2: Try to find by matching participant in our participants list
+        if (!videoElement) {
+          const matchingParticipant = participants.find(p => 
+            (p.user?._id === participant.identity) || 
+            (p.userId === participant.identity) ||
+            (p._id === participant.identity)
+          );
+          if (matchingParticipant) {
+            const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+            videoId = `thumbnail-${userId}`;
+            videoElement = window.thumbnailVideoRefs?.[videoId];
+          }
+        }
+        
+        // Strategy 3: Try participant._id as fallback
+        if (!videoElement) {
+          videoId = `thumbnail-${participant._id}`;
+          videoElement = window.thumbnailVideoRefs?.[videoId];
+        }
+        
+        console.log('🔍 Thumbnail video element lookup:', {
+          participantIdentity: participant.identity,
+          participantName: participant.name,
+          videoId: videoId,
+          hasVideoElement: !!videoElement,
+          allThumbnailKeys: Object.keys(window.thumbnailVideoRefs || {})
+        });
         
         if (videoElement) {
-          console.log('🎥 Attaching camera track to thumbnail video element:', videoId);
-          track.attach(videoElement);
-          
-          // Hide fallback avatar when video is attached
-          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-          if (fallbackDiv) {
-            (fallbackDiv as HTMLElement).style.display = 'none';
+          try {
+            console.log('🎥 Attaching camera track to thumbnail video element:', videoId);
+            track.attach(videoElement);
+            
+            // Hide fallback avatar when video is attached
+            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
+            if (fallbackDiv) {
+              (fallbackDiv as HTMLElement).style.display = 'none';
+            }
+            
+            console.log('✅ Camera track successfully attached to thumbnail');
+          } catch (attachError) {
+            console.error('❌ Failed to attach camera track to thumbnail:', attachError);
           }
         } else {
-          console.log('⚠️ Thumbnail video element not found, will retry...', videoId);
-          // Retry attachment after a short delay
+          console.log('⚠️ Thumbnail video element not found for participant:', {
+            participantIdentity: participant.identity,
+            participantName: participant.name,
+            availableKeys: Object.keys(window.thumbnailVideoRefs || {})
+          });
+          
+          // Retry after a short delay
           setTimeout(() => {
             const retryElement = window.thumbnailVideoRefs?.[videoId];
             if (retryElement) {
               console.log('🔄 Retry: Attaching camera track to thumbnail');
-              track.attach(retryElement);
-              const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
-              if (fallbackDiv) {
-                (fallbackDiv as HTMLElement).style.display = 'none';
+              try {
+                track.attach(retryElement);
+                const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
+                if (fallbackDiv) {
+                  (fallbackDiv as HTMLElement).style.display = 'none';
+                }
+                console.log('✅ Retry successful: Camera track attached to thumbnail');
+              } catch (retryError) {
+                console.error('❌ Retry failed:', retryError);
               }
             }
           }, 500);
@@ -2236,6 +2329,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             50% { opacity: 0.3; }
             100% { opacity: 1; }
           }
+          
+          /* Custom scrollbar for participant thumbnails */
+          .participant-thumbnails::-webkit-scrollbar {
+            height: 4px;
+          }
+          
+          .participant-thumbnails::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          
+          .participant-thumbnails::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 2px;
+          }
+          
+          .participant-thumbnails::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+          }
+          
+          /* Smooth scrolling */
+          .participant-thumbnails {
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+          }
         
         @media (max-width: 768px) {
           .mobile-hidden { display: none !important; }
@@ -2622,37 +2739,43 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
         {/* Main Content - Hidden when PiP is active on mobile */}
       <div style={{
-        flex: 1,
+        height: '100vh',
           paddingTop: isMobile ? '70px' : '70px',
           display: (isMobile && isPiPVisible) ? 'none' : 'flex',
           flexDirection: 'column',
-          backgroundColor: '#ffffff'
+          backgroundColor: '#ffffff',
+          overflow: 'hidden'
       }}>
-          {/* Participant Thumbnails Row - Show in speaker mode OR when screen sharing */}
-          {(viewMode === 'speaker' || queueState.screenShareMode) && (
-            <div style={{
-              height: thumbnailPanelOpen ? (isMobile ? '140px' : '140px') : (isMobile ? '0px' : '0px'),
-              backgroundColor: '#ffffff',
-              borderBottom: thumbnailPanelOpen ? '1px solid #e5e7eb' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              padding: thumbnailPanelOpen ? (isMobile ? '0 12px' : '0 24px') : '0',
-              gap: isMobile ? '10px' : '14px',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              marginTop: '0',
-              transition: 'all 0.3s ease-in-out',
-              position: 'relative'
-            }}>
-              {thumbnailPanelOpen && participantsWithHandRaise.map((participant) => (
+          {/* Participant Thumbnails Row - Always show on mobile, conditional on desktop */}
+          {(isMobile || viewMode === 'speaker' || queueState.screenShareMode || thumbnailPanelOpen) && (
+            <div 
+              className="participant-thumbnails"
+              style={{
+                height: isMobile ? '120px' : (thumbnailPanelOpen ? '140px' : '0px'),
+                backgroundColor: '#ffffff',
+                borderBottom: (isMobile || thumbnailPanelOpen) ? '1px solid #e5e7eb' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                padding: (isMobile || thumbnailPanelOpen) ? (isMobile ? '0 12px' : '0 24px') : '0',
+                gap: isMobile ? '12px' : '14px',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                marginTop: '0',
+                transition: 'all 0.3s ease-in-out',
+                position: 'relative',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#cbd5e1 transparent'
+              }}>
+              {(isMobile || thumbnailPanelOpen) && participantsWithHandRaise.map((participant) => (
                 <div
                   key={participant._id}
                   onClick={() => setSelectedParticipant(participant)}
                   style={{
-                    minWidth: isMobile ? '120px' : '120px',
-                    height: isMobile ? '120px' : '120px',
+                    minWidth: isMobile ? '100px' : '120px',
+                    width: isMobile ? '100px' : '120px',
+                    height: isMobile ? '100px' : '120px',
                     backgroundColor: '#1f2937',
-                    borderRadius: isMobile ? '12px' : '10px',
+                    borderRadius: isMobile ? '8px' : '10px',
                     border: participant.role === 'HOST' ? '2px solid #10b981' : '2px solid #e5e7eb',
                     display: 'flex',
                     alignItems: 'center',
@@ -2660,7 +2783,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     cursor: 'pointer',
                     position: 'relative',
                     transition: 'all 0.3s ease',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    flexShrink: 0
                   }}
                 >
                   {/* Video Element */}
@@ -2668,9 +2792,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     ref={el => {
                       if (el) {
                         // Store video element for LiveKit track attachment
-                        const videoId = `thumbnail-${participant._id}`;
+                        // Use user._id as primary key (LiveKit identity), fallback to participant._id
+                        const userId = participant.user?._id || participant.userId || participant._id;
+                        const videoId = `thumbnail-${userId}`;
                         if (!window.thumbnailVideoRefs) window.thumbnailVideoRefs = {};
                         window.thumbnailVideoRefs[videoId] = el;
+                        
+                        // Also register with participant._id as backup
+                        const backupVideoId = `thumbnail-${participant._id}`;
+                        window.thumbnailVideoRefs[backupVideoId] = el;
+                        
+                        console.log('🎬 Thumbnail video element registered:', {
+                          participantId: participant._id,
+                          participantName: participant.displayName,
+                          userId: userId,
+                          videoId: videoId,
+                          backupVideoId: backupVideoId,
+                          allKeys: Object.keys(window.thumbnailVideoRefs)
+                        });
                       }
                     }}
                     autoPlay
@@ -2680,7 +2819,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
-                      borderRadius: isMobile ? '10px' : '8px'
+                      borderRadius: isMobile ? '6px' : '8px',
+                      backgroundColor: '#374151'
                     }}
                   />
                   
@@ -2696,13 +2836,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: '#374151',
-                    borderRadius: isMobile ? '10px' : '8px'
+                    borderRadius: isMobile ? '6px' : '8px'
                   }}>
-                    <div style={{ fontSize: isMobile ? '28px' : '26px', marginBottom: '6px' }}>
-                      {participant.role === 'HOST' ? '👨‍🏫' : '👨‍🎓'}
+                    <div style={{ 
+                      fontSize: isMobile ? '24px' : '26px', 
+                      marginBottom: isMobile ? '4px' : '6px',
+                      fontWeight: 'bold'
+                    }}>
+                      {(participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).charAt(0)?.toUpperCase() || 'U'}
                     </div>
                     <div style={{ 
-                      fontSize: isMobile ? '11px' : '12px', 
+                      fontSize: isMobile ? '10px' : '11px', 
                       fontWeight: '500', 
                       textAlign: 'center',
                       color: '#f3f4f6',
@@ -2710,7 +2854,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       maxWidth: '90%'
                     }}>
                       {isMobile ? 
-                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 8) :
+                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 6) :
                         (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
                       }
                     </div>
@@ -2800,12 +2944,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   </div>
                 </div>
               ))}
+              
+              {/* Scroll indicator for mobile */}
+              {isMobile && participantsWithHandRaise.length > 2 && (
+                <div style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '10px',
+                  fontWeight: '500',
+                  pointerEvents: 'none',
+                  zIndex: 10
+                }}>
+                  ← Scroll →
+                </div>
+              )}
             </div>
           )}
           
           {/* Main Video Area */}
           <div style={{
-            flex: 1,
+            height: isMobile ? 'calc(100vh - 330px)' : 'calc(100vh - 180px)',
             backgroundColor: queueState.screenShareMode ? '#000000' : '#f3f4f6',
             display: 'flex',
             flexDirection: 'column',
@@ -2814,7 +2978,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             position: 'relative',
             padding: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
             paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
-            marginTop: '0'
+            marginTop: '0',
+            overflow: 'hidden'
           }}>
             {/* Toggle Thumbnail Panel Button - Desktop Only */}
             {!isMobile && viewMode === 'speaker' && (
@@ -3072,12 +3237,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               borderRadius: '8px',
               fontSize: '12px',
               zIndex: 1000,
-              maxWidth: '300px'
+              maxWidth: '400px'
             }}>
               <div>GraphQL: {participants.length} participants</div>
               <div>Queue: {queueState.participants.length} participants</div>
               <div>LiveKit: {liveKitParticipants.size} participants</div>
-              <div>Mode: {isLiveKitConnected && liveKitParticipants.size > 0 ? 'LiveKit' : 'Fallback'}</div>
+         <div>Mode: {isLiveKitConnected && liveKitParticipants.size > 0 ? 'LiveKit' : 'Fallback'}</div>
+         <div>Camera: {cameraEnabled ? 'ON' : 'OFF'}</div>
+         <div>Mic: {micEnabled ? 'ON' : 'OFF'}</div>
+         <div>Thumbnails: {Object.keys(window.thumbnailVideoRefs || {}).length} registered</div>
+              {participants.length > 0 && (
+                <div style={{ marginTop: '8px', fontSize: '10px' }}>
+                  <div>Participants:</div>
+                  {participants.map(p => (
+                    <div key={p._id} style={{ marginLeft: '8px' }}>
+                      {p.displayName}: {p.cameraState} {p.micState}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Hand raise count - Host Only */}
@@ -3195,11 +3373,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             height: isMobile ? '70px' : '80px',
             backgroundColor: '#ffffff',
             borderTop: '1px solid #e5e7eb',
-          display: 'flex',
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: isMobile ? '0 12px' : '0 24px',
-            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)'
+            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
+            position: 'relative',
+            zIndex: 1000,
+            flexShrink: 0
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '16px' }}>
               {/* Participant Count */}

@@ -514,7 +514,16 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   const getUserIdFromParticipant = (participant: Participant): string | null => {
     // LiveKit identity is set to user._id in backend token generation
     // Priority: 1) user._id, 2) userId, 3) _id as fallback
-    return participant.user?._id || participant.userId || participant._id;
+    const userId = participant.user?._id || participant.userId || participant._id;
+    console.log('🔍 getUserIdFromParticipant:', {
+      participantId: participant._id,
+      participantName: participant.displayName,
+      user_id: participant.user?._id,
+      userId: participant.userId,
+      participant_id: participant._id,
+      result: userId
+    });
+    return userId;
   };
 
   // Helper function to find LiveKit participant by backend participant
@@ -616,6 +625,19 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             const primaryKey = userId || participant._id; // User ID is the LiveKit identity, fallback to _id
             videoRefs.current[primaryKey] = el;
             
+            console.log('🎬 Video element created and registered:', {
+              participantId: participant._id,
+              participantDisplayName: participant.displayName,
+              userId: userId,
+              liveKitIdentity: liveKitParticipant?.identity,
+              primaryKey: primaryKey,
+              hasElement: !!el,
+              isLocalParticipant: isLocalParticipant,
+              allRegisteredKeys: Object.keys(videoRefs.current),
+              user_id: participant.user?._id,
+              participant_userId: participant.userId
+            });
+            
             // IMMEDIATE FIX: If this is local participant and we have their video track, attach it NOW
             if (el && isLocalParticipant && liveKitService?.room?.localParticipant) {
               const roomLocalParticipant = liveKitService.room.localParticipant;
@@ -636,19 +658,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                 console.log('⚠️ Local video track not ready yet, will attach on trackPublished event');
               }
             }
-            
-            console.log('🎬 Video element created and registered:', {
-              participantId: participant._id,
-              participantDisplayName: participant.displayName,
-              userId: userId,
-              liveKitIdentity: liveKitParticipant?.identity,
-              primaryKey: primaryKey,
-              hasElement: !!el,
-              isLocalParticipant: isLocalParticipant,
-              allRegisteredKeys: Object.keys(videoRefs.current),
-              user_id: participant.user?._id,
-              participant_userId: participant.userId
-            });
             
             // Create backup keys for different lookup scenarios
             // This ensures compatibility with track subscription handlers
@@ -782,6 +791,52 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             }}
           >
             📷
+          </div>
+        )}
+        
+        {/* Fallback Avatar - Show when camera is off or no video */}
+        {(participant.isCameraOff || !liveKitParticipant?.isCameraEnabled) && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              textAlign: 'center'
+            }}
+          >
+            <div
+              style={{
+                width: isMainStage ? '80px' : '60px',
+                height: isMainStage ? '80px' : '60px',
+                backgroundColor: participant.role === 'HOST' ? '#3b82f6' : '#6b7280',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: isMainStage ? '32px' : '24px',
+                fontWeight: 'bold',
+                marginBottom: '8px'
+              }}
+            >
+              {participant.displayName?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <div
+              style={{
+                fontSize: isMainStage ? '14px' : '12px',
+                fontWeight: '500',
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                padding: '4px 8px',
+                borderRadius: '4px'
+              }}
+            >
+              {participant.displayName}
+            </div>
           </div>
         )}
         
