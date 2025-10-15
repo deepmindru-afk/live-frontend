@@ -39,4 +39,27 @@ a {
   html {
     color-scheme: dark;
   }
+  
+  /* FIX: Prevent dark mode from affecting form inputs */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
+    color: #333 !important;
+    background: #fff !important;
+  }
+  
+  input[type="text"]::placeholder,
+  input[type="email"]::placeholder,
+  input[type="password"]::placeholder,
+  input[type="number"]::placeholder,
+  input[type="tel"]::placeholder,
+  input[type="url"]::placeholder,
+  textarea::placeholder {
+    color: #999 !important;
+  }
 }

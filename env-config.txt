@@ -1,14 +1,20 @@
 # GraphQL Configuration
-NEXT_PUBLIC_GRAPHQL_URL=http://localhost:3007/graphql
-NEXT_PUBLIC_GRAPHQL_ENDPOINT=http://localhost:3007/graphql
+NEXT_PUBLIC_GRAPHQL_URL=https://api.hrdeedu.co.kr/graphql
+NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://api.hrdeedu.co.kr/graphql
 
-# WebSocket Configuration
-NEXT_PUBLIC_WS_URL=ws://localhost:3007/graphql
+# Backend Configuration (CRITICAL for WebSocket chat)
+NEXT_PUBLIC_BACKEND_URL=https://api.hrdeedu.co.kr
 
-# LiveKit Configuration
-NEXT_PUBLIC_LIVEKIT_URL=https://your-livekit-server.com
-NEXT_PUBLIC_LIVEKIT_API_KEY=your-livekit-api-key
+# WebSocket Configuration (Socket.IO for chat/signaling)
+NEXT_PUBLIC_WS_URL=wss://api.hrdeedu.co.kr/signaling
+NEXT_PUBLIC_SIGNALING_WS=wss://api.hrdeedu.co.kr/signaling
+
+# LiveKit Configuration (WebRTC for video)
+NEXT_PUBLIC_LIVEKIT_URL=wss://livekit1.hrdeedu.co.kr
 
 # Application Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=https://live.hrdeedu.co.kr
+
+# Environment
+NODE_ENV=production
 

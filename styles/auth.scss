@@ -93,20 +93,23 @@
         transition: all 0.3s ease;
         background: #fff;
         box-sizing: border-box;
+        color: #333 !important; // FIX: Force dark text color
 
         &:focus {
           outline: none;
           border-color: #4A90E2;
           box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+          color: #333 !important; // FIX: Ensure text stays dark on focus
         }
 
         &::placeholder {
-          color: #999;
+          color: #999 !important; // FIX: Force placeholder color
         }
 
         &.error {
           border-color: #e74c3c;
           box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+          color: #333 !important; // FIX: Keep text dark even on error
         }
       }
     }
