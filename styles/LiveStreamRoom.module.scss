@@ -956,8 +956,19 @@
   }
 }
 
-// Mobile Responsive Styles
-@media (max-width: 768px) {
+// Tablet Responsive Styles
+@media (max-width: 1024px) and (min-width: 481px) {
+  .main-teaching-area {
+    height: calc(100vh - 220px) !important;
+  }
+  
+  .control-panel {
+    height: 70px !important;
+  }
+}
+
+// Mobile Responsive Styles - Only for very small screens (phones)
+@media (max-width: 480px) {
   .main-content {
     margin-right: 0 !important;
     

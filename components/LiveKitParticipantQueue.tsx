@@ -681,7 +681,12 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             backgroundColor: isScreenSharing ? '#000000' : '#1f2937',
             borderRadius: isScreenSharing ? '0' : (isMainStage ? '10px' : '6px'),
             minWidth: '100%',
-            minHeight: '100%'
+            minHeight: '100%',
+            // Performance optimizations for smooth video
+            transform: 'translateZ(0)', // Hardware acceleration
+            willChange: 'transform', // Optimize for animations
+            backfaceVisibility: 'hidden', // Prevent flickering
+            WebkitBackfaceVisibility: 'hidden', // Safari support
           }}
         />
         

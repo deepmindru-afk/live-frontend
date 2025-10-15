@@ -81,19 +81,19 @@ export class LiveKitService {
         adaptiveStream: true,
         dynacast: true,
         
-        // Explicit video capture settings to prevent invalid calculations
+        // Explicit video capture settings for better quality and performance
         videoCaptureDefaults: {
           resolution: {
-            width: 1280,  // Explicit width instead of preset to avoid calculation errors
-            height: 720,
+            width: 1920,  // Higher resolution for better quality
+            height: 1080,
             frameRate: 30,
           },
         },
         
         publishDefaults: {
-          // Explicit video encoding parameters - no simulcast to avoid scale calculation errors
+          // Explicit video encoding parameters for better quality
           videoEncoding: {
-            maxBitrate: 1_500_000,
+            maxBitrate: 3_000_000,  // Higher bitrate for better quality
             maxFramerate: 30,
           },
           
@@ -212,8 +212,8 @@ export class LiveKitService {
           await new Promise(resolve => setTimeout(resolve, 300));
           await this._room.localParticipant.setCameraEnabled(true, {
             resolution: {
-              width: 1280,
-              height: 720,
+              width: 1920,
+              height: 1080,
               frameRate: 30
             }
           });
@@ -858,12 +858,29 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🖥️ LiveKit: Starting screen share...');
+      
+      // Check if screen sharing is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Screen sharing is not supported in this browser');
+      }
+      
       await this._room.localParticipant.setScreenShareEnabled(true);
       this.updateRoomState({ isScreenSharing: true });
-      console.log('🖥️ LiveKit: Screen sharing started');
-    } catch (error) {
+      console.log('✅ LiveKit: Screen sharing started successfully');
+    } catch (error: any) {
       console.error('❌ LiveKit: Failed to start screen share', error);
-      throw error;
+      
+      // Provide more specific error messages
+      if (error.name === 'NotAllowedError') {
+        throw new Error('Screen sharing permission denied. Please allow screen sharing when prompted.');
+      } else if (error.name === 'NotSupportedError') {
+        throw new Error('Screen sharing is not supported in this browser or tab.');
+      } else if (error.name === 'AbortError') {
+        throw new Error('Screen sharing was cancelled by the user.');
+      } else {
+        throw new Error(`Screen sharing failed: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
