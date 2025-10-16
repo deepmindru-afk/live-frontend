@@ -253,9 +253,21 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     } catch (err: any) {
       console.error('❌ [useLiveKit] Failed to toggle microphone:', err);
       
-      // Don't set error state to prevent UI disruption
-      // The service handles graceful degradation internally
-      console.warn('⚠️ [useLiveKit] Microphone toggle failed, but continuing operation');
+      // Set error state for UI feedback
+      setError(err.message || 'Failed to toggle microphone');
+      
+      // Import and show SweetAlert error notification
+      import('sweetalert2').then(({ default: Swal }) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Microphone Error',
+          text: err.message || 'Failed to toggle microphone. Please check your microphone permissions and try again.',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#dc3545'
+        });
+      });
+      
+      throw err; // Re-throw so calling code knows it failed
     }
   }, [isMuted]);
 

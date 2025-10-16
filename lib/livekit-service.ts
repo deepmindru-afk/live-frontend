@@ -167,13 +167,19 @@ export class LiveKitService {
 
       if (options.enableMicrophone !== false) {
         console.log('🎤 LiveKit: Microphone was requested on connect - enabling...');
-        await this.enableMicrophone();
+        try {
+          await this.enableMicrophone();
+        } catch (micError: any) {
+          console.error('❌ LiveKit: Failed to enable microphone on connect:', micError.message);
+          // Don't throw - allow connection to continue without microphone
+          // User can try to enable it later via UI
+        }
       } else {
         console.log('🎤 LiveKit: Microphone disabled on connect');
       }
       
-      // DIAGNOSTIC: Wait a moment for tracks to publish, then verify
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // DIAGNOSTIC: Verify all tracks after a short delay
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('🔍 DIAGNOSTIC: Checking all published tracks after connection...');
       const allVideoTracks = Array.from(this._room.localParticipant.videoTrackPublications.values());
       const allAudioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
@@ -200,42 +206,11 @@ export class LiveKitService {
       });
       
       if (options.enableCamera !== false && allVideoTracks.length === 0) {
-        console.error('❌ CRITICAL: Camera was enabled but NO video tracks published!');
-        console.error('❌ This means other participants will NOT see your video!');
-        console.error('❌ Possible causes: Camera permission denied, device busy, or browser restrictions');
-        
-        // FIX: Retry camera enable after a short delay
-        console.log('🔄 Attempting to re-enable camera...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        try {
-          await this._room.localParticipant.setCameraEnabled(false);
-          await new Promise(resolve => setTimeout(resolve, 300));
-          await this._room.localParticipant.setCameraEnabled(true, {
-            resolution: {
-              width: 1920,
-              height: 1080,
-              frameRate: 30
-            }
-          });
-          console.log('✅ Camera re-enabled successfully');
-        } catch (retryError) {
-          console.error('❌ Camera retry failed:', retryError);
-        }
+        console.warn('⚠️ Camera was requested but no video tracks published. User can enable it manually.');
       }
       
       if (options.enableMicrophone !== false && allAudioTracks.length === 0) {
-        console.error('❌ CRITICAL: Microphone was enabled but NO audio tracks published!');
-        
-        // FIX: Retry microphone enable
-        console.log('🔄 Attempting to re-enable microphone...');
-        try {
-          await this._room.localParticipant.setMicrophoneEnabled(false);
-          await new Promise(resolve => setTimeout(resolve, 300));
-          await this._room.localParticipant.setMicrophoneEnabled(true);
-          console.log('✅ Microphone re-enabled successfully');
-        } catch (retryError) {
-          console.error('❌ Microphone retry failed:', retryError);
-        }
+        console.warn('⚠️ Microphone was requested but no audio tracks published. User can enable it manually.');
       }
 
       // CRITICAL FIX: Add local participant to participants map
@@ -820,11 +795,99 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🎤 LiveKit: Attempting to enable microphone...');
+      
+      // Check microphone permissions first
+      try {
+        console.log('🔍 Checking microphone availability...');
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+        console.log('🎤 Available audio devices:', audioDevices.length);
+        
+        if (audioDevices.length === 0) {
+          throw new Error('No microphone devices found');
+        }
+        
+        // Test microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        });
+        console.log('✅ Microphone permission granted, stream tracks:', stream.getTracks().length);
+        stream.getTracks().forEach(track => {
+          console.log('🎤 Microphone track details:', {
+            id: track.id,
+            kind: track.kind,
+            label: track.label,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            settings: track.getSettings()
+          });
+          track.stop(); // Stop test stream
+        });
+      } catch (permError: any) {
+        console.error('❌ Microphone permission denied or device not available:', permError);
+        console.error('❌ Error name:', permError?.name);
+        console.error('❌ Error message:', permError?.message);
+        
+        // Throw specific error for better user feedback
+        if (permError.name === 'NotAllowedError') {
+          throw new Error('Microphone permission denied. Please allow microphone access in your browser settings.');
+        } else if (permError.name === 'NotFoundError') {
+          throw new Error('No microphone found. Please connect a microphone device.');
+        } else if (permError.name === 'NotReadableError') {
+          throw new Error('Microphone is already in use by another application. Please close other apps using your microphone.');
+        } else {
+          throw new Error(`Microphone access failed: ${permError.message}`);
+        }
+      }
+      
+      console.log('🎤 LiveKit: Calling setMicrophoneEnabled...');
       await this._room.localParticipant.setMicrophoneEnabled(true);
+      
+      // Wait for track to be published
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Verify audio track was actually published
+      const audioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
+      console.log('🎤 Audio tracks after enable:', {
+        count: audioTracks.length,
+        tracks: audioTracks.map(pub => ({
+          sid: pub.trackSid,
+          kind: pub.kind,
+          source: pub.source,
+          isMuted: pub.isMuted,
+          hasTrack: !!pub.track
+        }))
+      });
+      
+      if (audioTracks.length === 0) {
+        console.error('❌ CRITICAL: Microphone enabled but NO audio tracks published!');
+        // Retry once
+        console.log('🔄 Retrying microphone enable...');
+        await this._room.localParticipant.setMicrophoneEnabled(false);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await this._room.localParticipant.setMicrophoneEnabled(true);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const retryAudioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
+        if (retryAudioTracks.length === 0) {
+          throw new Error('Failed to publish audio track. Please check your microphone settings and try again.');
+        }
+        console.log('✅ Microphone enabled successfully after retry');
+      } else {
+        console.log('✅ Microphone enabled and audio track published');
+      }
+      
       this.updateRoomState({ isMuted: false });
-      console.log('🎤 LiveKit: Microphone enabled');
-    } catch (error) {
+      console.log('✅ LiveKit: Microphone enabled successfully');
+    } catch (error: any) {
       console.error('❌ LiveKit: Failed to enable microphone', error);
+      this.updateRoomState({ isMuted: true });
       throw error;
     }
   }

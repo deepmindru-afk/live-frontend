@@ -551,7 +551,10 @@ const MemberDashboard: React.FC = () => {
               📋 출석 현황
             </button>
             <button
-              onClick={handleLogoutClick}
+              onClick={() => {
+                setActiveTab('meetings'); // Close the menu first
+                handleLogoutClick(); // Then show logout confirmation
+              }}
               className="mobile-logout-btn"
             >
               로그아웃

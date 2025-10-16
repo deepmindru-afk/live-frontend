@@ -84,8 +84,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [isRecording, setIsRecording] = useState(false);
   const [recordingPaused, setRecordingPaused] = useState(false);
   const [isLive, setIsLive] = useState(false);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
+  // Read audio/video preferences from prejoin page (stored in sessionStorage)
+  const getPrejoinPreference = (key: string, defaultValue: boolean): boolean => {
+    try {
+      const stored = sessionStorage.getItem(key);
+      if (stored !== null) {
+        const value = stored === 'true';
+        console.log(`🎬 Reading prejoin preference ${key}:`, value);
+        // Clear after reading so it doesn't persist across sessions
+        sessionStorage.removeItem(key);
+        return value;
+      }
+    } catch (error) {
+      console.warn('Failed to read sessionStorage:', error);
+    }
+    return defaultValue;
+  };
+
+  const [micEnabled, setMicEnabled] = useState(() => getPrejoinPreference('prejoin_audio_enabled', true));
+  const [cameraEnabled, setCameraEnabled] = useState(() => getPrejoinPreference('prejoin_video_enabled', true));
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');

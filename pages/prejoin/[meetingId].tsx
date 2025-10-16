@@ -471,6 +471,17 @@ const PrejoinPage = () => {
     try {
       console.log('🔍 PREJOIN: Joining meeting with ID:', meetingId);
       
+      // Store audio/video preferences for the LiveKit room
+      const audioVideoPreferences = {
+        enableMicrophone: isMicOn,
+        enableCamera: isVideoOn
+      };
+      console.log('🎬 PREJOIN: Storing audio/video preferences:', audioVideoPreferences);
+      
+      // Store in sessionStorage so livestream page can read them
+      sessionStorage.setItem('prejoin_audio_enabled', String(isMicOn));
+      sessionStorage.setItem('prejoin_video_enabled', String(isVideoOn));
+      
       // Check user authentication and role
       const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
       let userRole = 'MEMBER';
