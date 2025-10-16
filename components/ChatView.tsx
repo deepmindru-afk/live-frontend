@@ -32,7 +32,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         offset: 0
       }
     },
-    pollInterval: 2000
+    // PERFORMANCE FIX: Removed pollInterval - WebSocket provides real-time chat updates
+    fetchPolicy: 'cache-first' // Only fetch initially, WebSocket handles updates
   });
 
   // GraphQL Mutations
@@ -57,7 +58,17 @@ const ChatView: React.FC<ChatViewProps> = ({
     if (!socket) return;
 
     const handleNewMessage = (message: any) => {
-      setMessages(prev => [...prev, message]);
+      // PERFORMANCE FIX: Add deduplication to prevent duplicate messages from WebSocket + polling
+      setMessages(prev => {
+        // Check if message already exists by _id
+        const exists = prev.some(m => m._id === message._id);
+        if (exists) {
+          console.log('[CHAT] Duplicate message detected, skipping:', message._id);
+          return prev;
+        }
+        // New message, add it
+        return [...prev, message];
+      });
     };
 
     const handleUserTyping = (data: any) => {

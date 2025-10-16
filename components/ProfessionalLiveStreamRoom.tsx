@@ -235,8 +235,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 2000,
-    fetchPolicy: 'cache-and-network',
+    pollInterval: 30000, // PERFORMANCE FIX: Reduced from 2s to 30s - WebSocket handles real-time updates
+    fetchPolicy: 'cache-first', // PERFORMANCE FIX: Changed to cache-first to reduce redundant requests
     notifyOnNetworkStatusChange: false,
     errorPolicy: 'all'
   });
@@ -244,27 +244,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const { data: participantsData, loading: participantsLoading, error: participantsError, refetch: refetchParticipants } = useQuery(GET_PARTICIPANTS_BY_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId,
-    pollInterval: 1500,
+    pollInterval: 15000, // PERFORMANCE FIX: Reduced from 1.5s to 15s - WebSocket provides real-time updates
     errorPolicy: 'ignore',
-    fetchPolicy: 'network-only', // FIXED: Always fetch from network to ensure all users see same count
+    fetchPolicy: 'cache-first', // PERFORMANCE FIX: Changed to cache-first, WebSocket ensures fresh data
     notifyOnNetworkStatusChange: false
   });
 
   const { data: waitingData, loading: waitingLoading, error: waitingError } = useQuery(GET_WAITING_PARTICIPANTS, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 2000,
+    pollInterval: 20000, // PERFORMANCE FIX: Reduced from 2s to 20s - WebSocket handles waiting room updates
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // PERFORMANCE FIX: Changed to reduce redundant requests
     notifyOnNetworkStatusChange: false
   });
 
   const { data: currentParticipantData, loading: currentParticipantLoading, error: currentParticipantError, refetch: refetchCurrentParticipant } = useQuery(GET_PARTICIPANT_BY_USER_MEETING, {
     variables: { meetingId: actualMeetingId },
     skip: !actualMeetingId || !isAuth,
-    pollInterval: 1000,
+    pollInterval: 20000, // CRITICAL PERFORMANCE FIX: Reduced from 1s to 20s (was causing 60 requests/min!)
     errorPolicy: 'ignore',
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // PERFORMANCE FIX: Changed to reduce redundant requests
     notifyOnNetworkStatusChange: false
   });
 
@@ -895,23 +895,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             availableKeys: Object.keys(window.thumbnailVideoRefs || {})
           });
           
-          // Retry after a short delay
-          setTimeout(() => {
+          // PERFORMANCE FIX: Better retry logic with multiple attempts
+          let retryCount = 0;
+          const maxRetries = 5;
+          const retryInterval = setInterval(() => {
+            retryCount++;
             const retryElement = window.thumbnailVideoRefs?.[videoId];
             if (retryElement) {
-              console.log('🔄 Retry: Attaching camera track to thumbnail');
+              console.log(`🔄 Retry ${retryCount}: Attaching camera track to thumbnail`);
               try {
-              track.attach(retryElement);
-              const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
-              if (fallbackDiv) {
-                (fallbackDiv as HTMLElement).style.display = 'none';
+                track.attach(retryElement);
+                const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
+                if (fallbackDiv) {
+                  (fallbackDiv as HTMLElement).style.display = 'none';
                 }
                 console.log('✅ Retry successful: Camera track attached to thumbnail');
+                clearInterval(retryInterval);
               } catch (retryError) {
-                console.error('❌ Retry failed:', retryError);
+                console.error(`❌ Retry ${retryCount} failed:`, retryError);
+                if (retryCount >= maxRetries) {
+                  clearInterval(retryInterval);
+                  console.error('❌ Max retries reached, giving up');
+                }
               }
+            } else if (retryCount >= maxRetries) {
+              clearInterval(retryInterval);
+              console.error('❌ Element never appeared, max retries reached');
             }
-          }, 500);
+          }, 300); // Retry every 300ms for up to 1.5 seconds
         }
       }
     };

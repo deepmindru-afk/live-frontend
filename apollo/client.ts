@@ -86,7 +86,9 @@ const cache = new InMemoryCache({
         getChatHistory: {
           keyArgs: ['meetingId'],
           merge(existing = [], incoming) {
-            return [...existing, ...incoming];
+            // PERFORMANCE FIX: Replace instead of append to prevent duplicate messages
+            // WebSocket provides real-time updates, so we don't need to append
+            return incoming;
           },
         },
         // Cache VODs
