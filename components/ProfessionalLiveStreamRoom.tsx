@@ -76,6 +76,40 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   role = 'HOST',
   userId = 'p1'
 }) => {
+  // AGGRESSIVE DEBUGGING: Track parent component renders
+  const parentRenderCountRef = useRef(0);
+  parentRenderCountRef.current += 1;
+  
+  // Track what's causing re-renders
+  const prevStateRef = useRef({
+    actualMeetingId: '',
+    participants: [],
+    liveKitParticipants: new Map(),
+    isLiveKitConnected: false
+  });
+  
+  console.log(`🏠 [PARENT RENDER] ProfessionalLiveStreamRoom #${parentRenderCountRef.current}`, {
+    propMeetingId,
+    role,
+    userId,
+    timestamp: new Date().toISOString()
+  });
+  
+  // DEBUG: Track what's causing re-renders (props vs internal state)
+  const prevPropsRef = useRef({ propMeetingId, role, userId });
+  useEffect(() => {
+    if (prevPropsRef.current.propMeetingId !== propMeetingId || 
+        prevPropsRef.current.role !== role || 
+        prevPropsRef.current.userId !== userId) {
+      console.log('🔄 [PROPS CHANGED] Parent props changed', {
+        parentRender: parentRenderCountRef.current,
+        oldProps: prevPropsRef.current,
+        newProps: { propMeetingId, role, userId }
+      });
+      prevPropsRef.current = { propMeetingId, role, userId };
+    }
+  }, [propMeetingId, role, userId]);
+  
   // State management
   const [actualMeetingId, setActualMeetingId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -113,10 +147,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [actualUserId, setActualUserId] = useState<string>('');
   const [currentParticipant, setCurrentParticipant] = useState<any>(null);
-  const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
+  // ✅ CRITICAL FIX: Store only participant ID to prevent reference issues
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  
+  // Derive the actual participant object from the current participants list
+  const selectedParticipant = useMemo(() => {
+    if (!selectedParticipantId) return null;
+    return queueState.participants.find(p => p._id === selectedParticipantId) || null;
+  }, [selectedParticipantId, queueState.participants]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
+  
+  // DEBUG: Track participants state changes
+  const prevParticipantsRef = useRef(participants);
+  
+  useEffect(() => {
+    if (prevParticipantsRef.current !== participants) {
+      console.log('🔄 [STATE CHANGE] participants changed', {
+        parentRender: parentRenderCountRef.current,
+        oldLength: prevParticipantsRef.current?.length,
+        newLength: participants?.length,
+        oldRef: prevParticipantsRef.current,
+        newRef: participants
+      });
+      prevParticipantsRef.current = participants;
+    }
+  }, [participants]);
   
   // Circuit breaker to prevent infinite loops
   const processingRef = useRef<Set<string>>(new Set());
@@ -125,31 +182,57 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Track render count (for monitoring only, won't block)
   renderCountRef.current += 1;
 
-  // Track what's causing participants to change (for debugging only)
-  const prevParticipantsRef = useRef(participants);
-  useEffect(() => {
-    if (prevParticipantsRef.current !== participants) {
-      prevParticipantsRef.current = participants;
-    }
-  }, [participants]);
 
   // Participant Queue System - Memoize participants to prevent infinite loop
+  // Use a ref to store the previous memoized value for deep comparison
+  const prevMemoizedRef = useRef<any[]>([]);
+  
   const memoizedParticipants = useMemo(() => {
-    return participants.map(p => ({
+    console.log('🔄 [MEMOIZED] memoizedParticipants recalculating', {
+      parentRender: parentRenderCountRef.current,
+      participantsLength: participants?.length,
+      participantsRef: participants
+    });
+    
+    const newMemoized = participants.map(p => ({
       _id: p._id,
       displayName: p.displayName,
       email: p.email || '',
       isMuted: p.micState === 'OFF',
       isCameraOff: p.cameraState === 'OFF',
-      joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z', // ✅ FIXED: Use static fallback
+      joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z',
       isHost: p.role === 'HOST',
       role: p.role,
       hasHandRaised: p.hasHandRaised || false,
       handRaisedAt: p.handRaisedAt,
       isSpeaking: false,
       audioLevel: 0,
-      lastActivity: '2024-01-01T00:00:00.000Z' // ✅ FIXED: Use static fallback
+      lastActivity: '2024-01-01T00:00:00.000Z'
     }));
+    
+    // Deep equality check - only return new array if data actually changed
+    if (prevMemoizedRef.current.length === newMemoized.length) {
+      let hasChanged = false;
+      for (let i = 0; i < newMemoized.length; i++) {
+        const prev = prevMemoizedRef.current[i];
+        const curr = newMemoized[i];
+        if (prev?._id !== curr._id || 
+            prev?.isMuted !== curr.isMuted || 
+            prev?.isCameraOff !== curr.isCameraOff ||
+            prev?.hasHandRaised !== curr.hasHandRaised) {
+          hasChanged = true;
+          break;
+        }
+      }
+      if (!hasChanged) {
+        console.log('✅ [MEMOIZED] memoizedParticipants unchanged, returning cached version');
+        return prevMemoizedRef.current; // Return same reference if data unchanged
+      }
+    }
+    
+    console.log('🔄 [MEMOIZED] memoizedParticipants changed, creating new array');
+    prevMemoizedRef.current = newMemoized;
+    return newMemoized;
   }, [participants]);
 
   const {
@@ -166,6 +249,58 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     analyzeAudioLevel,
     updateParticipantAudioLevel
   } = useParticipantQueue(memoizedParticipants);
+  
+  // DEBUG: Track if useParticipantQueue functions are changing
+  const prevQueueFunctionsRef = useRef({ addToQueue, removeFromQueue, updateQueueParticipant });
+  useEffect(() => {
+    if (prevQueueFunctionsRef.current.addToQueue !== addToQueue || 
+        prevQueueFunctionsRef.current.removeFromQueue !== removeFromQueue ||
+        prevQueueFunctionsRef.current.updateQueueParticipant !== updateQueueParticipant) {
+      console.log('🔄 [QUEUE FUNCTIONS] useParticipantQueue functions changed', {
+        parentRender: parentRenderCountRef.current,
+        addToQueueChanged: prevQueueFunctionsRef.current.addToQueue !== addToQueue,
+        removeFromQueueChanged: prevQueueFunctionsRef.current.removeFromQueue !== removeFromQueue,
+        updateQueueParticipantChanged: prevQueueFunctionsRef.current.updateQueueParticipant !== updateQueueParticipant
+      });
+      prevQueueFunctionsRef.current = { addToQueue, removeFromQueue, updateQueueParticipant };
+    }
+  }, [addToQueue, removeFromQueue, updateQueueParticipant]);
+  
+  // Memoize queueState properties to prevent unnecessary re-renders
+  const memoizedActiveSpeaker = useMemo(() => {
+    console.log('🔄 [MEMOIZED] activeSpeaker changed', {
+      parentRender: parentRenderCountRef.current,
+      activeSpeakerId: queueState.activeSpeaker?._id,
+      activeSpeakerRef: queueState.activeSpeaker
+    });
+    return queueState.activeSpeaker;
+  }, [queueState.activeSpeaker?._id]);
+  
+  const memoizedScreenShareMode = useMemo(() => {
+    console.log('🔄 [MEMOIZED] screenShareMode changed', {
+      parentRender: parentRenderCountRef.current,
+      screenShareMode: queueState.screenShareMode
+    });
+    return queueState.screenShareMode;
+  }, [queueState.screenShareMode]);
+  
+  const memoizedScreenShareParticipant = useMemo(() => {
+    console.log('🔄 [MEMOIZED] screenShareParticipant changed', {
+      parentRender: parentRenderCountRef.current,
+      screenShareParticipantId: queueState.screenShareParticipant?._id,
+      screenShareParticipantRef: queueState.screenShareParticipant
+    });
+    return queueState.screenShareParticipant;
+  }, [queueState.screenShareParticipant?._id]);
+  
+  // Memoize callback functions to prevent new function references on every render
+  const handleParticipantClick = useCallback((participant: any) => {
+    setSelectedParticipantId(participant._id);
+  }, []);
+  
+  const handleHandRaiseClick = useCallback((participant: any) => {
+    updateHandRaiseStatus(participant._id, false);
+  }, [updateHandRaiseStatus]);
 
   // Audio Level Detection
   const { detectSpeakingStatus, isSupported: audioSupported } = useAudioLevelDetection({
@@ -227,6 +362,44 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onError: (error) => {
     }
   });
+  
+  // DEBUG: Track LiveKit state changes
+  const prevLiveKitRef = useRef({
+    isLiveKitConnected: false,
+    liveKitParticipants: new Map(),
+    liveKitService: null as any
+  });
+  
+  useEffect(() => {
+    if (prevLiveKitRef.current.isLiveKitConnected !== isLiveKitConnected) {
+      console.log('🔄 [LIVEKIT STATE] isLiveKitConnected changed', {
+        parentRender: parentRenderCountRef.current,
+        old: prevLiveKitRef.current.isLiveKitConnected,
+        new: isLiveKitConnected
+      });
+      prevLiveKitRef.current.isLiveKitConnected = isLiveKitConnected;
+    }
+    
+    if (prevLiveKitRef.current.liveKitParticipants !== liveKitParticipants) {
+      console.log('🔄 [LIVEKIT STATE] liveKitParticipants changed', {
+        parentRender: parentRenderCountRef.current,
+        oldSize: prevLiveKitRef.current.liveKitParticipants?.size,
+        newSize: liveKitParticipants?.size,
+        oldRef: prevLiveKitRef.current.liveKitParticipants,
+        newRef: liveKitParticipants
+      });
+      prevLiveKitRef.current.liveKitParticipants = liveKitParticipants;
+    }
+    
+    if (prevLiveKitRef.current.liveKitService !== liveKitService) {
+      console.log('🔄 [LIVEKIT STATE] liveKitService changed', {
+        parentRender: parentRenderCountRef.current,
+        old: prevLiveKitRef.current.liveKitService,
+        new: liveKitService
+      });
+      prevLiveKitRef.current.liveKitService = liveKitService;
+    }
+  }, [isLiveKitConnected, liveKitParticipants, liveKitService]);
   
   // Debug: Track recording state changes
   useEffect(() => {
@@ -1057,91 +1230,130 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   }, [meetingError]);
 
   // Update participants data
+  // ✅ CRITICAL FIX: Use a ref to track the actual participant IDs to prevent infinite loops
+  const prevParticipantIdsRef = useRef<string>('');
+  
   useEffect(() => {
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
-      const previousParticipants = participants;
       
-      // ✅ CRITICAL FIX: Check if data actually changed before updating state
-      const hasChanged = 
-        participantsList.length !== previousParticipants.length ||
-        participantsList.some((p: any) => !previousParticipants.find((prev: any) => prev._id === p._id));
+      // Create a stable string representation of participant IDs
+      const currentParticipantIds = participantsList.map((p: any) => p._id).sort().join(',');
       
-      // ✅ CRITICAL FIX: Only update state if data actually changed
-      if (hasChanged) {
+      // Only process if the actual participant list changed (not just the object reference)
+      if (currentParticipantIds !== prevParticipantIdsRef.current) {
+        console.log('🔄 [USEEFFECT] participants data ACTUALLY changed', {
+          parentRender: parentRenderCountRef.current,
+          oldIds: prevParticipantIdsRef.current,
+          newIds: currentParticipantIds
+        });
+        
+        prevParticipantIdsRef.current = currentParticipantIds;
+        
+        const previousParticipants = participants;
+        
+        // Update state with new participants
         setParticipants(participantsList);
-      }
-      
-      // Note: Queue will be automatically updated via useEffect in useParticipantQueue hook
 
-      // Check for new participants (joined)
-      if (previousParticipants.length > 0) {
-        const newParticipants = participantsList.filter((newP: any) => 
-          !previousParticipants.find((oldP: any) => oldP._id === newP._id)
-        );
-        
-        if (newParticipants.length > 0) {
-          console.log('➕ [NEW PARTICIPANTS JOINED]', {
-            count: newParticipants.length,
-            participants: newParticipants.map((p: any) => ({ id: p._id, name: p.displayName, userId: p.user?._id })),
-            timestamp: new Date().toISOString()
+        // Check for new participants (joined)
+        if (previousParticipants.length > 0) {
+          const newParticipants = participantsList.filter((newP: any) => 
+            !previousParticipants.find((oldP: any) => oldP._id === newP._id)
+          );
+          
+          if (newParticipants.length > 0) {
+            console.log('➕ [NEW PARTICIPANTS JOINED]', {
+              count: newParticipants.length,
+              participants: newParticipants.map((p: any) => ({ id: p._id, name: p.displayName, userId: p.user?._id })),
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          newParticipants.forEach((participant: any) => {
+            addToQueue({
+              _id: participant._id,
+              displayName: participant.displayName,
+              email: participant.email || '',
+              isMuted: participant.micState === 'OFF',
+              isCameraOff: participant.cameraState === 'OFF',
+              joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z',
+              isHost: participant.role === 'HOST',
+              role: participant.role,
+              hasHandRaised: participant.hasHandRaised || false,
+              handRaisedAt: participant.handRaisedAt
+            });
+          });
+
+          // Check for left participants
+          const leftParticipants = previousParticipants.filter((oldP: any) => 
+            !participantsList.find((newP: any) => newP._id === oldP._id)
+          );
+          
+          if (leftParticipants.length > 0) {
+            console.log('➖ [PARTICIPANTS LEFT]', {
+              count: leftParticipants.length,
+              participants: leftParticipants.map((p: any) => ({ id: p._id, name: p.displayName })),
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          leftParticipants.forEach((participant: any) => {
+            removeFromQueue(participant._id);
+          });
+        } else if (participantsList.length > 0) {
+          // Initial load - add all participants
+          participantsList.forEach((participant: any) => {
+            addToQueue({
+              _id: participant._id,
+              displayName: participant.displayName,
+              email: participant.email || '',
+              isMuted: participant.micState === 'OFF',
+              isCameraOff: participant.cameraState === 'OFF',
+              joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z',
+              isHost: participant.role === 'HOST',
+              role: participant.role,
+              hasHandRaised: participant.hasHandRaised || false,
+              handRaisedAt: participant.handRaisedAt
+            });
           });
         }
-        
-        newParticipants.forEach((participant: any) => {
-          addToQueue({
-            _id: participant._id,
-            displayName: participant.displayName,
-            email: participant.email || '',
-            isMuted: participant.micState === 'OFF',
-            isCameraOff: participant.cameraState === 'OFF',
-            joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z', // ✅ FIXED: Use static fallback
-            isHost: participant.role === 'HOST',
-            role: participant.role,
-            hasHandRaised: participant.hasHandRaised || false,
-            handRaisedAt: participant.handRaisedAt
-          });
-        });
-
-        // Check for left participants
-        const leftParticipants = previousParticipants.filter((oldP: any) => 
-          !participantsList.find((newP: any) => newP._id === oldP._id)
-        );
-        
-        if (leftParticipants.length > 0) {
-          console.log('➖ [PARTICIPANTS LEFT]', {
-            count: leftParticipants.length,
-            participants: leftParticipants.map((p: any) => ({ id: p._id, name: p.displayName })),
-            timestamp: new Date().toISOString()
-          });
-        }
-        
-        leftParticipants.forEach((participant: any) => {
-          removeFromQueue(participant._id);
-        });
       }
     }
-  }, [participantsData, addToQueue, removeFromQueue, updateQueueParticipant]);
+  }, [participantsData, addToQueue, removeFromQueue]);
   
   // ✅ FIXED: Removed participants from dependency array to prevent infinite loop
 
   // Audio level detection and speaking status monitoring
+  // ✅ CRITICAL FIX: Use a ref to track previous audio levels to prevent unnecessary updates
+  const previousAudioLevelsRef = useRef<Map<string, { audioLevel: number, isSpeaking: boolean }>>(new Map());
+  
   useEffect(() => {
-    if (!audioSupported || queueState.participants.length === 0) return;
+    if (!audioSupported) return;
 
     const monitorAudioLevels = async () => {
+      // Get current participants from queueState (read from ref, not dependency)
+      const currentParticipants = queueState.participants;
+      
+      if (currentParticipants.length === 0) return;
+      
       try {
         // Get participants with audio streams (mock for now)
-        const participantsWithStreams = queueState.participants.map(p => ({
+        const participantsWithStreams = currentParticipants.map(p => ({
           _id: p._id,
           stream: undefined // In real implementation, this would be the actual MediaStream
         }));
 
         const speakingStatuses = await detectSpeakingStatus(participantsWithStreams);
         
-        // Update speaking status for each participant
+        // Update speaking status ONLY if it actually changed
         speakingStatuses.forEach(({ _id, audioLevel, isSpeaking }) => {
-          updateSpeakingStatus(_id, isSpeaking, audioLevel);
+          const previous = previousAudioLevelsRef.current.get(_id);
+          
+          // Only update if audio level or speaking status actually changed
+          if (!previous || previous.audioLevel !== audioLevel || previous.isSpeaking !== isSpeaking) {
+            previousAudioLevelsRef.current.set(_id, { audioLevel, isSpeaking });
+            updateSpeakingStatus(_id, isSpeaking, audioLevel);
+          }
         });
       } catch (error) {
       }
@@ -1149,7 +1361,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
     const interval = setInterval(monitorAudioLevels, 200); // Check every 200ms
     return () => clearInterval(interval);
-  }, [audioSupported, queueState.participants, detectSpeakingStatus, updateSpeakingStatus]);
+  }, [audioSupported, detectSpeakingStatus, updateSpeakingStatus]); // ✅ REMOVED queueState.participants from deps
 
   // Update waiting participants data
   useEffect(() => {
@@ -1718,7 +1930,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     setHandRaised(false);
   }, []);
 
-  const handleKickParticipant = async (participantId: string) => {
+  const handleKickParticipant = useCallback(async (participantId: string) => {
     try {
       
       // Refresh current participant data to ensure we have the latest role
@@ -1837,7 +2049,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       });
       }
     }
-  };
+  }, [refetchCurrentParticipant, participants, removeParticipant, socket, currentUser]);
+  
+  // Wrapper for onKickParticipant callback that takes Participant object
+  const handleKickParticipantClick = useCallback((participant: any) => {
+    handleKickParticipant(participant._id);
+  }, [handleKickParticipant]);
 
   const handleHostLowerHand = async (participantId: string) => {
     try {
@@ -2568,7 +2785,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant) => (
                 <div
                   key={participant._id}
-                  onClick={() => setSelectedParticipant(participant)}
+                  onClick={() => setSelectedParticipantId(participant._id)}
                   style={{
                     minWidth: isMobile ? '100px' : '120px',
                     width: isMobile ? '100px' : '120px',
@@ -3065,29 +3282,52 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               return null;
             })()}
             {isLiveKitConnected && liveKitParticipants.size > 0 ? (
-            <LiveKitParticipantQueue
-              participants={memoizedParticipants}
-              activeSpeaker={queueState.activeSpeaker}
-              screenShareMode={queueState.screenShareMode}
-              screenShareParticipant={queueState.screenShareParticipant}
-              selectedParticipant={selectedParticipant}
-              onParticipantClick={(participant) => {
-                setSelectedParticipant(participant);
-              }}
-              onHandRaiseClick={(participant) => {
-                updateHandRaiseStatus(participant._id, false);
-              }}
-              onKickParticipant={(participant) => {
-                handleKickParticipant(participant._id);
-              }}
-              isHost={isHost}
-              viewMode={viewMode}
-              maxThumbnails={6}
-              liveKitParticipants={liveKitParticipants}
-              localParticipant={liveKitLocalParticipant}
-              liveKitService={liveKitService}
-              isLiveKitConnected={isLiveKitConnected}
-            />
+            (() => {
+              // AGGRESSIVE DEBUGGING: Log every time we're about to render LiveKitParticipantQueue
+              console.log('🎯 [PARENT RENDER] About to render LiveKitParticipantQueue with props:', {
+                participantsLength: memoizedParticipants?.length,
+                participantsRef: memoizedParticipants,
+                activeSpeakerId: memoizedActiveSpeaker?._id,
+                activeSpeakerRef: memoizedActiveSpeaker,
+                screenShareMode: memoizedScreenShareMode,
+                screenShareParticipantId: memoizedScreenShareParticipant?._id,
+                screenShareParticipantRef: memoizedScreenShareParticipant,
+                selectedParticipantId: selectedParticipant?._id,
+                selectedParticipantRef: selectedParticipant,
+                onParticipantClickRef: handleParticipantClick,
+                onHandRaiseClickRef: handleHandRaiseClick,
+                onKickParticipantRef: handleKickParticipantClick,
+                isHost,
+                viewMode,
+                maxThumbnails: 6,
+                liveKitParticipantsSize: liveKitParticipants?.size,
+                liveKitParticipantsRef: liveKitParticipants,
+                localParticipantId: liveKitLocalParticipant?.identity,
+                localParticipantRef: liveKitLocalParticipant,
+                liveKitServiceRef: liveKitService,
+                isLiveKitConnected
+              });
+              
+              return (
+                <LiveKitParticipantQueue
+                  participants={memoizedParticipants}
+                  activeSpeaker={memoizedActiveSpeaker}
+                  screenShareMode={memoizedScreenShareMode}
+                  screenShareParticipant={memoizedScreenShareParticipant}
+                  selectedParticipant={selectedParticipant}
+                  onParticipantClick={handleParticipantClick}
+                  onHandRaiseClick={handleHandRaiseClick}
+                  onKickParticipant={handleKickParticipantClick}
+                  isHost={isHost}
+                  viewMode={viewMode}
+                  maxThumbnails={6}
+                  liveKitParticipants={liveKitParticipants}
+                  localParticipant={liveKitLocalParticipant}
+                  liveKitService={liveKitService}
+                  isLiveKitConnected={isLiveKitConnected}
+                />
+              );
+            })()
             ) : (
               <ParticipantQueue
                 participants={queueState.participants}
@@ -3096,7 +3336,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 screenShareParticipant={queueState.screenShareParticipant}
                 selectedParticipant={selectedParticipant}
                 onParticipantClick={(participant) => {
-                  setSelectedParticipant(participant);
+                  setSelectedParticipantId(participant._id);
                 }}
                 onHandRaiseClick={(participant) => {
                   updateHandRaiseStatus(participant._id, false);

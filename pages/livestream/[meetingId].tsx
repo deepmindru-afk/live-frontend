@@ -5,14 +5,14 @@ import ProfessionalLiveStreamRoom from '../../components/ProfessionalLiveStreamR
 const LiveStreamRoomPage: React.FC = () => {
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
-  const [meetingId, setMeetingId] = useState<string>('');
+
+  // CRITICAL FIX: Derive meetingId directly from router.query instead of storing in state
+  // This prevents infinite re-render loops caused by router.query updates
+  const meetingId = router.query.meetingId as string;
 
   useEffect(() => {
     setIsClient(true);
-    if (router.query.meetingId) {
-      setMeetingId(router.query.meetingId as string);
-    }
-  }, [router.query.meetingId]);
+  }, []);
 
   if (!isClient || !meetingId) {
     return (

@@ -91,7 +91,27 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     const handleRoomStateChanged = (roomState: LiveKitRoomState) => {
       setIsConnected(roomState.isConnected);
       setConnectionState(roomState.connectionState);
-      setParticipants(new Map(roomState.participants));
+      
+      // ✅ CRITICAL FIX: Only update participants Map if it actually changed
+      // This prevents infinite re-renders caused by creating new Map references
+      setParticipants(prev => {
+        // Check if the Map has actually changed
+        if (prev.size !== roomState.participants.size) {
+          return new Map(roomState.participants);
+        }
+        
+        // Check if any participant has changed
+        let hasChanged = false;
+        for (const [key, value] of roomState.participants) {
+          if (prev.get(key) !== value) {
+            hasChanged = true;
+            break;
+          }
+        }
+        
+        return hasChanged ? new Map(roomState.participants) : prev;
+      });
+      
       setLocalParticipant(roomState.localParticipant);
       setIsMuted(roomState.isMuted);
       setIsCameraEnabled(roomState.isCameraEnabled);
