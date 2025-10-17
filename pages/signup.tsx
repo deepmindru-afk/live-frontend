@@ -89,16 +89,11 @@ const SignupPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🚀 SIGNUP FORM: Form submitted!');
-    console.log('🚀 SIGNUP FORM: Form data:', formData);
-    console.log('🚀 SIGNUP FORM: Confirm password:', confirmPassword);
     
     if (!validateForm()) {
-      console.log('🚀 SIGNUP FORM: Validation failed');
       return;
     }
 
-    console.log('🚀 SIGNUP FORM: Validation passed, calling handleSignup');
     setIsLoading(true);
     
     try {
@@ -108,10 +103,8 @@ const SignupPage: React.FC = () => {
         email: formData.email,
         password: formData.password,
       };
-      console.log('🚀 SIGNUP FORM: Sending data:', signupData);
       
       const success = await handleSignup(signupData);
-      console.log('🚀 SIGNUP FORM: handleSignup result:', success);
       if (success) {
         // Get user data and redirect
         const user = await getCurrentUser();
@@ -122,7 +115,6 @@ const SignupPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('🚀 SIGNUP FORM: Signup error:', error);
       
       // Handle different types of errors with SweetAlert
       let errorMessage = '회원가입 중 오류가 발생했습니다.';

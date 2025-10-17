@@ -20,23 +20,15 @@ class SocketClient {
     });
 
     this.socket.on('connect', () => {
-      console.log('🔌 Connected to Socket.IO server with ID:', this.socket?.id);
-      console.log('🔌 Socket connected status:', this.socket?.connected);
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('🔌 Disconnected from Socket.IO server. Reason:', reason);
-      console.log('🔌 Socket connected status:', this.socket?.connected);
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('🔌 Socket.IO connection error:', error);
-      console.log('🔌 Socket connected status:', this.socket?.connected);
     });
 
     this.socket.on('error', (error) => {
-      console.error('🔌 Socket.IO error:', error);
-      console.log('🔌 Socket connected status:', this.socket?.connected);
     });
 
     return this.socket;
@@ -56,30 +48,25 @@ class SocketClient {
   // Chat methods
   joinRoom(meetingId: string) {
     if (this.socket) {
-      console.log('🔌 Joining room:', meetingId);
       this.socket.emit('JOIN_ROOM', { meetingId, roomName: meetingId });
     } else {
-      console.error('❌ Socket not connected, cannot join room');
     }
   }
 
   leaveRoom(meetingId: string) {
     if (this.socket) {
-      console.log('🔌 Leaving room:', meetingId);
       this.socket.emit('LEAVE_ROOM', { roomName: meetingId });
     }
   }
 
   sendChatMessage(meetingId: string, message: string, replyToMessageId?: string) {
     if (this.socket) {
-      console.log('📤 Sending chat message:', { meetingId, message, replyToMessageId });
       this.socket.emit('CHAT_SEND', {
         roomName: meetingId,
         message,
         replyToMessageId,
       });
     } else {
-      console.error('❌ Socket not connected, cannot send message');
     }
   }
 

@@ -61,16 +61,13 @@ const LiveKitIntegration: React.FC<LiveKitIntegrationProps> = ({
   };
 
   const handleConnected = () => {
-    console.log('✅ LiveKit Integration: Connected');
     setConnectionError(null);
   };
 
   const handleDisconnected = () => {
-    console.log('🔌 LiveKit Integration: Disconnected');
   };
 
   const handleError = (error: Error) => {
-    console.error('❌ LiveKit Integration: Error', error);
     setConnectionError(error.message);
   };
 

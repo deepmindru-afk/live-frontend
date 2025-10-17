@@ -104,7 +104,6 @@ const Dashboard: React.FC = () => {
 
   const testBackendConnection = async () => {
     try {
-      console.log('🔍 BACKEND TEST: Testing backend connection...');
       
       // Test with a simple query that should exist
       const result = await enhancedMakeGraphQLRequest(`
@@ -113,16 +112,13 @@ const Dashboard: React.FC = () => {
         }
       `);
       
-      console.log('🔍 BACKEND TEST: Backend is reachable:', result);
       
     } catch (error) {
-      console.error('🔍 BACKEND TEST: Backend connection failed:', error);
     }
   };
 
   const fetchMeetings = async () => {
     try {
-      console.log('📊 DASHBOARD: Fetching meetings from backend...');
       
       const result = await enhancedMakeGraphQLRequest(GET_MY_MEETINGS, {
         input: {
@@ -131,7 +127,6 @@ const Dashboard: React.FC = () => {
         }
       });
       
-      console.log('📊 DASHBOARD: Backend response:', result);
       
       if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
         const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => ({
@@ -149,14 +144,11 @@ const Dashboard: React.FC = () => {
         }));
         
         setMeetings(meetings);
-        console.log('📊 DASHBOARD: Successfully loaded meetings from backend:', meetings.length);
       } else {
-        console.warn('📊 DASHBOARD: No meetings found in response');
         setMeetings([]);
       }
       
     } catch (error) {
-      console.error('📊 DASHBOARD: Error fetching meetings:', error);
       setMeetings([]);
     }
   };
@@ -173,8 +165,6 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      console.log('🏠 CREATE MEETING: Creating meeting with title:', newMeetingTitle);
-      console.log('🏠 CREATE MEETING: Schedule:', meetingSchedule);
 
       // Validate and format the date
       let formattedSchedule = null;
@@ -185,9 +175,7 @@ const Dashboard: React.FC = () => {
             throw new Error('Invalid date format');
           }
           formattedSchedule = date.toISOString();
-          console.log('🏠 CREATE MEETING: Formatted schedule:', formattedSchedule);
         } catch (dateError) {
-          console.error('🏠 CREATE MEETING: Date validation error:', dateError);
           await Swal.fire({
             icon: 'error',
             title: '날짜 오류',
@@ -200,7 +188,6 @@ const Dashboard: React.FC = () => {
 
       // Try to create meeting via GraphQL first
       try {
-        console.log('🏠 CREATE MEETING: Attempting GraphQL request...');
         const result = await enhancedMakeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
@@ -210,7 +197,6 @@ const Dashboard: React.FC = () => {
           }
         });
 
-        console.log('🏠 CREATE MEETING: GraphQL response received:', result);
 
         if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
@@ -239,11 +225,9 @@ const Dashboard: React.FC = () => {
           setNewMeetingTitle('');
           setMeetingSchedule('');
 
-          console.log('🏠 CREATE MEETING: Meeting created via GraphQL:', newMeeting);
           return;
         }
       } catch (graphqlError) {
-        console.warn('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
       }
 
       // If GraphQL fails, show error
@@ -255,7 +239,6 @@ const Dashboard: React.FC = () => {
       });
 
     } catch (error: unknown) {
-      console.error('🏠 CREATE MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -268,7 +251,6 @@ const Dashboard: React.FC = () => {
 
   const handleStartMeeting = async (meetingId: string) => {
     try {
-      console.log('▶️ START MEETING: Starting meeting:', meetingId);
       
       // Try to start meeting via GraphQL first
       try {
@@ -289,14 +271,12 @@ const Dashboard: React.FC = () => {
             confirmButtonText: '확인'
           });
 
-          console.log('▶️ START MEETING: Meeting started via GraphQL, navigating to prejoin:', meetingId);
           
           // Navigate to prejoin room
           router.push(`/prejoin/${meetingId}`);
           return;
         }
       } catch (graphqlError) {
-        console.warn('▶️ START MEETING: GraphQL request failed, falling back to local update:', graphqlError);
       }
       
       // Fallback to local state update if GraphQL fails
@@ -313,13 +293,11 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
 
-      console.log('▶️ START MEETING: Mock meeting started, navigating to prejoin:', meetingId);
       
       // Navigate to prejoin room even for mock service
       router.push(`/prejoin/${meetingId}`);
 
     } catch (error: unknown) {
-      console.error('▶️ START MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -332,7 +310,6 @@ const Dashboard: React.FC = () => {
 
   const handleEndMeeting = async (meetingId: string) => {
     try {
-      console.log('⏹️ END MEETING: Ending meeting:', meetingId);
       
       // Try to end meeting via GraphQL first
       try {
@@ -353,11 +330,9 @@ const Dashboard: React.FC = () => {
             confirmButtonText: '확인'
           });
 
-          console.log('⏹️ END MEETING: Meeting ended via GraphQL:', meetingId);
           return;
         }
       } catch (graphqlError) {
-        console.warn('⏹️ END MEETING: GraphQL request failed, falling back to local update:', graphqlError);
       }
       
       // Fallback to local state update if GraphQL fails
@@ -374,10 +349,8 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
 
-      console.log('⏹️ END MEETING: Mock meeting ended:', meetingId);
 
     } catch (error: unknown) {
-      console.error('⏹️ END MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -398,7 +371,6 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
     } catch (error) {
-      console.error('Copy failed:', error);
       await Swal.fire({
         icon: 'error',
         title: '복사 실패',
@@ -429,7 +401,6 @@ const Dashboard: React.FC = () => {
         setVods(result.vods);
       }
     } catch (error) {
-      console.warn('Failed to load VODs:', error);
       setVods([]);
     }
   };
@@ -454,12 +425,10 @@ const Dashboard: React.FC = () => {
   };
 
   const handleFileUpload = () => {
-    console.log('📁 FILE UPLOAD: Opening file upload modal');
     setShowUploadModal(true);
   };
 
   const handleURLUpload = () => {
-    console.log('🔗 URL UPLOAD: Opening URL upload modal');
     setShowURLModal(true);
   };
 
@@ -471,13 +440,10 @@ const Dashboard: React.FC = () => {
   };
 
   const uploadFile = async () => {
-    console.log('📁 UPLOAD FILE: Starting file upload');
     if (!selectedFile) {
-      console.log('📁 UPLOAD FILE: No file selected');
       return;
     }
 
-    console.log('📁 UPLOAD FILE: Selected file:', selectedFile.name);
 
     try {
       const result = await enhancedMakeGraphQLRequest(UPLOAD_VOD_FILE, {
@@ -485,7 +451,6 @@ const Dashboard: React.FC = () => {
         title: selectedFile.name
       });
 
-      console.log('📁 UPLOAD FILE: GraphQL result:', result);
 
       if (result.uploadVODFile && result.uploadVODFile.success) {
         await Swal.fire({
@@ -501,7 +466,6 @@ const Dashboard: React.FC = () => {
         loadVODs();
       }
     } catch (error) {
-      console.error('📁 UPLOAD FILE: Upload error:', error);
       await Swal.fire({
         icon: 'error',
         title: '업로드 실패',
@@ -512,11 +476,8 @@ const Dashboard: React.FC = () => {
   };
 
   const uploadFromURL = async () => {
-    console.log('🔗 UPLOAD URL: Starting URL upload');
-    console.log('🔗 UPLOAD URL: Title:', urlTitle, 'URL:', urlInput);
     
     if (!urlInput.trim() || !urlTitle.trim()) {
-      console.log('🔗 UPLOAD URL: Missing title or URL');
       await Swal.fire({
         icon: 'warning',
         title: '입력 오류',
@@ -532,7 +493,6 @@ const Dashboard: React.FC = () => {
         title: urlTitle
       });
 
-      console.log('🔗 UPLOAD URL: GraphQL result:', result);
 
       if (result.createVODFromURL && result.createVODFromURL.success) {
         await Swal.fire({
@@ -549,7 +509,6 @@ const Dashboard: React.FC = () => {
         loadVODs();
       }
     } catch (error) {
-      console.error('🔗 UPLOAD URL: Upload error:', error);
       await Swal.fire({
         icon: 'error',
         title: '등록 실패',
@@ -561,14 +520,11 @@ const Dashboard: React.FC = () => {
 
   const handleVODMenuClick = (vodId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    console.log('👤 VOD MENU: Clicking VOD menu for:', vodId);
     const vod = vods.find(v => v._id === vodId);
     if (vod) {
-      console.log('👤 VOD MENU: Found VOD:', vod.title);
       setSelectedVOD(vod);
       setShowVODMenu(vodId);
     } else {
-      console.log('👤 VOD MENU: VOD not found for ID:', vodId);
     }
   };
 
@@ -578,14 +534,11 @@ const Dashboard: React.FC = () => {
   };
 
   const deleteVOD = async (vodId: string) => {
-    console.log('🗑️ DELETE VOD: Starting delete for VOD ID:', vodId);
     const vod = vods.find(v => v._id === vodId);
     if (!vod) {
-      console.log('🗑️ DELETE VOD: VOD not found for ID:', vodId);
       return;
     }
 
-    console.log('🗑️ DELETE VOD: Found VOD:', vod.title);
 
     const result = await Swal.fire({
       title: 'VOD 삭제',
@@ -598,10 +551,8 @@ const Dashboard: React.FC = () => {
     });
 
     if (result.isConfirmed) {
-      console.log('🗑️ DELETE VOD: User confirmed deletion');
       try {
         const deleteResult = await enhancedMakeGraphQLRequest(DELETE_VOD, { id: vodId });
-        console.log('🗑️ DELETE VOD: GraphQL result:', deleteResult);
         
         await Swal.fire({
           icon: 'success',
@@ -613,7 +564,6 @@ const Dashboard: React.FC = () => {
         
         loadVODs();
       } catch (error) {
-        console.error('🗑️ DELETE VOD: Delete error:', error);
         await Swal.fire({
           icon: 'error',
           title: '삭제 실패',
@@ -622,7 +572,6 @@ const Dashboard: React.FC = () => {
         });
       }
     } else {
-      console.log('🗑️ DELETE VOD: User cancelled deletion');
     }
     closeVODMenu();
   };
@@ -1020,7 +969,5 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
-
 
 

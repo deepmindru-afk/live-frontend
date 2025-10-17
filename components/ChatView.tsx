@@ -63,7 +63,6 @@ const ChatView: React.FC<ChatViewProps> = ({
         // Check if message already exists by _id
         const exists = prev.some(m => m._id === message._id);
         if (exists) {
-          console.log('[CHAT] Duplicate message detected, skipping:', message._id);
           return prev;
         }
         // New message, add it
@@ -73,7 +72,6 @@ const ChatView: React.FC<ChatViewProps> = ({
 
     const handleUserTyping = (data: any) => {
       // Handle typing indicators if needed
-      console.log('User typing:', data);
     };
 
     socket.on('NEW_MESSAGE', handleNewMessage);
@@ -89,7 +87,6 @@ const ChatView: React.FC<ChatViewProps> = ({
     if (!newMessage.trim() || !socket) return;
 
     try {
-      console.log('[CHAT] Sending message:', newMessage);
       
       // Send message via WebSocket
       socket.emit('SEND_MESSAGE', {
@@ -103,7 +100,6 @@ const ChatView: React.FC<ChatViewProps> = ({
       socket.emit('TYPING_STOP', { meetingId });
       setIsTyping(false);
     } catch (error) {
-      console.error('❌ Error sending message:', error);
     }
   };
 
@@ -144,7 +140,6 @@ const ChatView: React.FC<ChatViewProps> = ({
         }
       });
     } catch (error) {
-      console.error('❌ Error deleting message:', error);
     }
   };
 

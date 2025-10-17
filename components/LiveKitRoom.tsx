@@ -43,24 +43,19 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
     enableCamera: true,
     enableMicrophone: true,
     onConnected: () => {
-      console.log('✅ LiveKit Room: Connected');
       onConnected?.();
     },
     onDisconnected: () => {
-      console.log('🔌 LiveKit Room: Disconnected');
       onDisconnected?.();
     },
     onError: (error) => {
-      console.error('❌ LiveKit Room: Error', error);
       setConnectionError(error.message);
       onError?.(error);
     },
     onParticipantConnected: (participant) => {
-      console.log('👤 LiveKit Room: Participant joined', participant.identity);
       onParticipantJoined?.(participant);
     },
     onParticipantDisconnected: (participantId) => {
-      console.log('👋 LiveKit Room: Participant left', participantId);
       setParticipantTracks(prev => {
         const newMap = new Map(prev);
         newMap.delete(participantId);
@@ -69,7 +64,6 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
       onParticipantLeft?.(participantId);
     },
     onTrackSubscribed: (track, publication, participant) => {
-      console.log('🎵 LiveKit Room: Track subscribed', { track, participant: participant.identity });
       
       setParticipantTracks(prev => {
         const newMap = new Map(prev);
@@ -86,7 +80,6 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
       });
     },
     onTrackUnsubscribed: (track, publication, participant) => {
-      console.log('🔇 LiveKit Room: Track unsubscribed', { track, participant: participant.identity });
       
       setParticipantTracks(prev => {
         const newMap = new Map(prev);
@@ -141,7 +134,6 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
     try {
       await toggleMicrophone();
     } catch (error) {
-      console.error('Failed to toggle microphone:', error);
       setConnectionError('Failed to toggle microphone');
     }
   }, [toggleMicrophone]);
@@ -150,7 +142,6 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
     try {
       await toggleCamera();
     } catch (error) {
-      console.error('Failed to toggle camera:', error);
       setConnectionError('Failed to toggle camera');
     }
   }, [toggleCamera]);
@@ -159,7 +150,6 @@ const LiveKitRoom: React.FC<LiveKitRoomProps> = ({
     try {
       await toggleScreenShare();
     } catch (error) {
-      console.error('Failed to toggle screen share:', error);
       setConnectionError('Failed to toggle screen share');
     }
   }, [toggleScreenShare]);

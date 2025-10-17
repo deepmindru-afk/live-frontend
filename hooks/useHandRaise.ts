@@ -70,14 +70,12 @@ export const useHandRaise = ({
 
   // Reset hand raise state when participant changes
   useEffect(() => {
-    console.log('✋ Resetting hand raise state for participant:', participantId);
     setMyHandRaised(false);
     setRaisedHands([]);
   }, [participantId]);
 
   // Reset hand raise state when meeting changes
   useEffect(() => {
-    console.log('✋ Resetting hand raise state for meeting:', meetingId);
     setMyHandRaised(false);
     setRaisedHands([]);
   }, [meetingId]);
@@ -86,33 +84,22 @@ export const useHandRaise = ({
   const raiseHand = useCallback((reason?: string) => {
     const now = Date.now();
     if (now - lastActionTime.current < actionDebounceMs) {
-      console.log('✋ Action debounced, too soon since last action');
       return;
     }
     lastActionTime.current = now;
 
-    console.log('✋ raiseHand called:', { 
-      socket: !!socket, 
-      isConnected, 
-      participantId, 
-      meetingId, 
-      reason 
-    });
     
     if (!socket || !isConnected) {
-      console.error('✋ WebSocket not connected:', { socket: !!socket, isConnected });
       onError?.('Not connected to server');
       return;
     }
 
     if (!participantId) {
-      console.error('✋ No participant ID:', { participantId });
       onError?.('No participant ID available');
       return;
     }
 
     setIsLoading(true);
-    console.log('✋ Raising hand:', { meetingId, participantId, reason });
     
     socket.emit('RAISE_HAND', {
       meetingId,
@@ -125,7 +112,6 @@ export const useHandRaise = ({
   const lowerHand = useCallback((reason?: string) => {
     const now = Date.now();
     if (now - lastActionTime.current < actionDebounceMs) {
-      console.log('✋ Action debounced, too soon since last action');
       return;
     }
     lastActionTime.current = now;
@@ -141,7 +127,6 @@ export const useHandRaise = ({
     }
 
     setIsLoading(true);
-    console.log('✋ Lowering hand:', { meetingId, participantId, reason });
     
     socket.emit('LOWER_HAND', {
       meetingId,
@@ -163,7 +148,6 @@ export const useHandRaise = ({
     }
 
     setIsLoading(true);
-    console.log('✋ Host lowering hand:', { meetingId, targetParticipantId, reason });
     
     socket.emit('HOST_LOWER_HAND', {
       meetingId,
@@ -185,7 +169,6 @@ export const useHandRaise = ({
     }
 
     setIsLoading(true);
-    console.log('✋ Host lowering all hands:', { meetingId, reason });
     
     socket.emit('LOWER_ALL_HANDS', {
       meetingId,
@@ -199,21 +182,16 @@ export const useHandRaise = ({
 
     // Hand raised event
     const handleHandRaised = (info: HandRaiseInfo) => {
-      console.log('✋ Hand raised event received:', info);
-      console.log('✋ Current participantId:', participantId);
-      console.log('✋ Is this my hand?', info.participantId === participantId);
       
       setRaisedHands(prev => {
         // Remove any existing entry for this participant
         const filtered = prev.filter(hand => hand.participantId !== info.participantId);
         const newHands = [...filtered, info];
-        console.log('✋ Updated raised hands:', newHands);
         return newHands;
       });
       
       // Update my hand status if it's my hand
       if (info.participantId === participantId) {
-        console.log('✋ Updating my hand status to raised');
         setMyHandRaised(true);
       }
       
@@ -222,19 +200,14 @@ export const useHandRaise = ({
 
     // Hand lowered event
     const handleHandLowered = (info: HandLowerInfo) => {
-      console.log('✋ Hand lowered event received:', info);
-      console.log('✋ Current participantId:', participantId);
-      console.log('✋ Is this my hand?', info.participantId === participantId);
       
       setRaisedHands(prev => {
         const newHands = prev.filter(hand => hand.participantId !== info.participantId);
-        console.log('✋ Updated raised hands after lower:', newHands);
         return newHands;
       });
       
       // Update my hand status if it's my hand
       if (info.participantId === participantId) {
-        console.log('✋ Updating my hand status to lowered');
         setMyHandRaised(false);
       }
       
@@ -243,7 +216,6 @@ export const useHandRaise = ({
 
     // Hand lowered by host event
     const handleHandLoweredByHost = (info: HandLoweredByHostInfo) => {
-      console.log('✋ Hand lowered by host event received:', info);
       setRaisedHands(prev => prev.filter(hand => hand.participantId !== info.participantId));
       
       // Update my hand status if it's my hand
@@ -256,7 +228,6 @@ export const useHandRaise = ({
 
     // All hands lowered event
     const handleAllHandsLowered = (info: AllHandsLoweredInfo) => {
-      console.log('✋ All hands lowered event received:', info);
       setRaisedHands([]);
       setMyHandRaised(false);
       
@@ -265,91 +236,62 @@ export const useHandRaise = ({
 
     // Success/Error events
     const handleHandRaiseSuccess = (result: any) => {
-      console.log('✋ Hand raise success:', result);
       setIsLoading(false);
       setMyHandRaised(true);
     };
 
     const handleHandRaiseError = (error: any) => {
-      console.error('✋ Hand raise error:', error);
-      console.error('✋ Error details:', {
-        message: error.message,
-        participantId: error.participantId,
-        currentParticipantId: participantId,
-        errorType: typeof error,
-        errorKeys: Object.keys(error)
-      });
       setIsLoading(false);
       
       // Handle different error types
       if (error.message && error.message.includes('already raised')) {
-        console.log('✋ Hand already raised, updating state');
         setMyHandRaised(true);
         // Don't show error modal for this case
       } else if (error.message && error.message.includes('permission')) {
-        console.log('✋ Permission error, resetting state');
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else {
-        console.log('✋ Other error, showing modal');
         onError?.(error.message || 'Failed to raise hand');
       }
     };
 
     const handleHandLowerSuccess = (result: any) => {
-      console.log('✋ Hand lower success:', result);
       setIsLoading(false);
       setMyHandRaised(false);
     };
 
     const handleHandLowerError = (error: any) => {
-      console.error('✋ Hand lower error:', error);
-      console.error('✋ Lower error details:', {
-        message: error.message,
-        participantId: error.participantId,
-        currentParticipantId: participantId,
-        errorType: typeof error,
-        errorKeys: Object.keys(error)
-      });
       setIsLoading(false);
       
       // Handle different error types
       if (error.message && error.message.includes('not raised')) {
-        console.log('✋ Hand not raised, updating state');
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else if (error.message && error.message.includes('only lower your own hand')) {
-        console.log('✋ Permission error - can only lower own hand, resetting state');
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else if (error.message && error.message.includes('permission')) {
-        console.log('✋ Permission error, resetting state');
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else {
-        console.log('✋ Other lower error, showing modal');
         onError?.(error.message || 'Failed to lower hand');
       }
     };
 
     const handleHostLowerHandSuccess = (result: any) => {
-      console.log('✋ Host lower hand success:', result);
       setIsLoading(false);
     };
 
     const handleHostLowerHandError = (error: any) => {
-      console.error('✋ Host lower hand error:', error);
       setIsLoading(false);
       onError?.(error.message || 'Failed to lower hand as host');
     };
 
     const handleLowerAllHandsSuccess = (result: any) => {
-      console.log('✋ Lower all hands success:', result);
       setIsLoading(false);
     };
 
     const handleLowerAllHandsError = (error: any) => {
-      console.error('✋ Lower all hands error:', error);
       setIsLoading(false);
       onError?.(error.message || 'Failed to lower all hands');
     };
@@ -387,7 +329,6 @@ export const useHandRaise = ({
 
   // Manual reset function
   const resetHandState = useCallback(() => {
-    console.log('✋ Manual reset of hand state');
     setMyHandRaised(false);
     setRaisedHands([]);
     setIsLoading(false);

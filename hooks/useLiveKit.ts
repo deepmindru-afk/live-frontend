@@ -72,19 +72,11 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
 
     // Define all event handlers
     const handleConnected = () => {
-      console.log('🔍 [useLiveKit] handleConnected called - LiveKit connection established');
-      console.log('🔍 [useLiveKit] Current state before update:', {
-        isConnected,
-        isConnecting,
-        participantsSize: participants.size,
-        participantsKeys: Array.from(participants.keys())
-      });
       
       setIsConnected(true);
       setIsConnecting(false);
       setError(null);
       
-      console.log('🔍 [useLiveKit] handleConnected completed - state updated');
       optionsRef.current.onConnected?.(service.state);
     };
 
@@ -108,19 +100,9 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     };
 
     const handleParticipantConnected = ({ participant }: { participant: LiveKitParticipant }) => {
-      console.log('🔍 [useLiveKit] handleParticipantConnected called:', {
-        participantIdentity: participant.identity,
-        participantName: participant.name,
-        currentParticipantsSize: participants.size
-      });
       
       setParticipants(prev => {
         const newMap = new Map(prev.set(participant.identity, participant));
-        console.log('🔍 [useLiveKit] Participants map updated:', {
-          newSize: newMap.size,
-          keys: Array.from(newMap.keys()),
-          participants: Array.from(newMap.entries()).map(([id, p]) => ({ id, name: p.name }))
-        });
         return newMap;
       });
       
@@ -176,14 +158,10 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
 
   // Initialize LiveKit service
   useEffect(() => {
-    console.log('🔌 useLiveKit: Initializing LiveKit service...');
     if (!liveKitServiceRef.current) {
-      console.log('🔌 useLiveKit: Creating new LiveKitService instance');
       liveKitServiceRef.current = new LiveKitService();
       cleanupListenersRef.current = setupEventListeners();
-      console.log('🔌 useLiveKit: LiveKitService created and event listeners setup');
     } else {
-      console.log('🔌 useLiveKit: LiveKitService already exists');
     }
 
     return () => {
@@ -201,14 +179,11 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
   }, [setupEventListeners]);
 
   const connect = useCallback(async (connectOptions?: Partial<LiveKitConnectionOptions>) => {
-    console.log('🔌 useLiveKit connect called with options:', connectOptions);
     
     if (!liveKitServiceRef.current) {
-      console.error('❌ LiveKit service not initialized');
       throw new Error('LiveKit service not initialized');
     }
 
-    console.log('🔌 LiveKit service exists, starting connection...');
     setIsConnecting(true);
     setError(null);
 
@@ -232,7 +207,6 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     try {
       await liveKitServiceRef.current.disconnect();
     } catch (err: any) {
-      console.error('Failed to disconnect from LiveKit:', err);
       setError(err.message);
     }
   }, []);
@@ -241,7 +215,6 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
-      console.log('🎤 [useLiveKit] Toggling microphone:', { isMuted, newState: !isMuted });
       
       if (isMuted) {
         await liveKitServiceRef.current.enableMicrophone();
@@ -249,9 +222,7 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
         await liveKitServiceRef.current.disableMicrophone();
       }
       
-      console.log('✅ [useLiveKit] Microphone toggled successfully');
     } catch (err: any) {
-      console.error('❌ [useLiveKit] Failed to toggle microphone:', err);
       
       // Set error state for UI feedback
       setError(err.message || 'Failed to toggle microphone');
@@ -275,7 +246,6 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
-      console.log('📹 [useLiveKit] Toggling camera:', { isCameraEnabled, newState: !isCameraEnabled });
       
       if (isCameraEnabled) {
         await liveKitServiceRef.current.disableCamera();
@@ -283,13 +253,10 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
         await liveKitServiceRef.current.enableCamera();
       }
       
-      console.log('✅ [useLiveKit] Camera toggled successfully');
     } catch (err: any) {
-      console.error('❌ [useLiveKit] Failed to toggle camera:', err);
       
       // Don't set error state to prevent UI disruption
       // The service handles graceful degradation internally
-      console.warn('⚠️ [useLiveKit] Camera toggle failed, but continuing operation');
     }
   }, [isCameraEnabled]);
 
@@ -297,7 +264,6 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     if (!liveKitServiceRef.current) return;
 
     try {
-      console.log('🖥️ [useLiveKit] Toggling screen share:', { isScreenSharing, newState: !isScreenSharing });
       
       if (isScreenSharing) {
         await liveKitServiceRef.current.stopScreenShare();
@@ -305,13 +271,10 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
         await liveKitServiceRef.current.startScreenShare();
       }
       
-      console.log('✅ [useLiveKit] Screen share toggled successfully');
     } catch (err: any) {
-      console.error('❌ [useLiveKit] Failed to toggle screen share:', err);
       
       // Don't set error state to prevent UI disruption
       // The service handles graceful degradation internally
-      console.warn('⚠️ [useLiveKit] Screen share toggle failed, but continuing operation');
     }
   }, [isScreenSharing]);
 
@@ -321,7 +284,6 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     try {
       await liveKitServiceRef.current.sendData(data, topic);
     } catch (err: any) {
-      console.error('Failed to send data:', err);
       setError(err.message);
     }
   }, []);

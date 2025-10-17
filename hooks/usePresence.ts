@@ -35,15 +35,9 @@ export const usePresence = ({
   // Send heartbeat every 10 seconds
   const startHeartbeat = useCallback(() => {
     if (!socket || !isConnected || !meetingId) {
-      console.warn('[PRESENCE] Cannot start heartbeat: missing requirements', {
-        socket: !!socket,
-        isConnected,
-        meetingId: !!meetingId
-      });
       return;
     }
 
-    console.log('[PRESENCE] Starting heartbeat system for meeting:', meetingId);
 
     // Clear any existing heartbeat
     if (heartbeatIntervalRef.current) {
@@ -63,7 +57,6 @@ export const usePresence = ({
 
   // Stop heartbeat system
   const stopHeartbeat = useCallback(() => {
-    console.log('[PRESENCE] Stopping heartbeat system');
 
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -81,12 +74,10 @@ export const usePresence = ({
   // Send heartbeat to server
   const sendHeartbeat = useCallback(() => {
     if (!socket || !isConnected || !meetingId) {
-      console.warn('[PRESENCE] Cannot send heartbeat: not connected');
       return;
     }
 
     try {
-      console.log('[PRESENCE] Sending heartbeat for meeting:', meetingId);
       socket.emit('HEARTBEAT', { meetingId });
       
       // Set up timeout to detect if heartbeat is not acknowledged
@@ -95,12 +86,10 @@ export const usePresence = ({
       }
 
       heartbeatTimeoutRef.current = setTimeout(() => {
-        console.warn('[PRESENCE] Heartbeat timeout - no acknowledgment received');
         onHeartbeatTimeout?.();
       }, 15000); // 15 second timeout for heartbeat acknowledgment
 
     } catch (error) {
-      console.error('[PRESENCE] Error sending heartbeat:', error);
       onError?.(`Failed to send heartbeat: ${(error as Error).message}`);
     }
   }, [socket, isConnected, meetingId, onHeartbeatTimeout, onError]);
@@ -108,18 +97,15 @@ export const usePresence = ({
   // Join meeting (send JOIN_MEETING event)
   const joinMeeting = useCallback(() => {
     if (!socket || !isConnected || !meetingId) {
-      console.warn('[PRESENCE] Cannot join meeting: not connected');
       return;
     }
 
     try {
-      console.log('[PRESENCE] Joining meeting:', meetingId);
       socket.emit('JOIN_MEETING', { meetingId });
       
       // Start heartbeat after joining
       startHeartbeat();
     } catch (error) {
-      console.error('[PRESENCE] Error joining meeting:', error);
       onError?.(`Failed to join meeting: ${(error as Error).message}`);
     }
   }, [socket, isConnected, meetingId, startHeartbeat, onError]);
@@ -127,18 +113,15 @@ export const usePresence = ({
   // Leave meeting (send LEAVE_MEETING event)
   const leaveMeeting = useCallback(() => {
     if (!socket || !isConnected || !meetingId) {
-      console.warn('[PRESENCE] Cannot leave meeting: not connected');
       return;
     }
 
     try {
-      console.log('[PRESENCE] Leaving meeting:', meetingId);
       socket.emit('LEAVE_MEETING', { meetingId });
       
       // Stop heartbeat when leaving
       stopHeartbeat();
     } catch (error) {
-      console.error('[PRESENCE] Error leaving meeting:', error);
       onError?.(`Failed to leave meeting: ${(error as Error).message}`);
     }
   }, [socket, isConnected, meetingId, stopHeartbeat, onError]);
@@ -148,7 +131,6 @@ export const usePresence = ({
     if (!socket) return;
 
     const handleMeetingJoinSuccess = (data: any) => {
-      console.log('[PRESENCE] Meeting join successful:', data);
       setLastHeartbeat(new Date());
       onPresenceUpdate?.({
         meetingId: data.meetingId,
@@ -159,7 +141,6 @@ export const usePresence = ({
     };
 
     const handleMeetingLeaveSuccess = (data: any) => {
-      console.log('[PRESENCE] Meeting leave successful:', data);
       onPresenceUpdate?.({
         meetingId: data.meetingId,
         userId: data.userId,
@@ -169,7 +150,6 @@ export const usePresence = ({
     };
 
     const handleHeartbeatAck = (data: any) => {
-      console.log('[PRESENCE] Heartbeat acknowledged:', data);
       setLastHeartbeat(new Date());
       
       // Clear heartbeat timeout since we got acknowledgment
@@ -187,7 +167,6 @@ export const usePresence = ({
     };
 
     const handleError = (data: any) => {
-      console.error('[PRESENCE] WebSocket error:', data);
       onError?.(data.message || 'WebSocket error occurred');
     };
 
@@ -216,10 +195,8 @@ export const usePresence = ({
   // Auto-start presence when socket connects
   useEffect(() => {
     if (isConnected && meetingId && userId && !isPresenceActive) {
-      console.log('[PRESENCE] Socket connected, starting presence system');
       joinMeeting();
     } else if (!isConnected && isPresenceActive) {
-      console.log('[PRESENCE] Socket disconnected, stopping presence system');
       stopHeartbeat();
     }
   }, [isConnected, meetingId, userId, isPresenceActive, joinMeeting, stopHeartbeat]);

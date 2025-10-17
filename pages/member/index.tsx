@@ -78,7 +78,6 @@ const MemberDashboard: React.FC = () => {
           router.push('/login');
         }
       } catch (error: any) {
-        console.error('❌ MEMBER DASHBOARD: Auth check error:', error);
         await showErrorAlert('Authentication Error', 'Failed to verify user. Please log in again.');
         router.push('/login');
       } finally {
@@ -90,10 +89,8 @@ const MemberDashboard: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
-      console.log('📊 MEMBER DASHBOARD: Fetching meetings...');
       
       if (!GET_MY_MEETINGS) {
-        console.error('📊 MEMBER DASHBOARD: GET_MY_MEETINGS query is undefined');
         setMeetings([]);
         return;
       }
@@ -132,7 +129,6 @@ const MemberDashboard: React.FC = () => {
         throw authError;
       }
       
-      console.log('📊 MEMBER DASHBOARD: Backend response:', result);
       
       if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
         const meetings = result.getMeetings.meetings.map((meeting: any) => ({
@@ -151,14 +147,11 @@ const MemberDashboard: React.FC = () => {
         
         setMeetings(meetings);
         setFilteredMeetings(meetings);
-        console.log('📊 MEMBER DASHBOARD: Successfully loaded meetings:', meetings.length);
       } else {
-        console.warn('📊 MEMBER DASHBOARD: No meetings found in response');
         setMeetings([]);
         setFilteredMeetings([]);
       }
     } catch (error: any) {
-      console.error('📊 MEMBER DASHBOARD: Error fetching meetings:', error);
       
       // Handle authentication errors specifically
       if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
@@ -254,36 +247,29 @@ const MemberDashboard: React.FC = () => {
           
           if (participantResult.getParticipantByUserAndMeeting) {
             const participantStatus = participantResult.getParticipantByUserAndMeeting.status;
-            console.log('🚪 User is already a participant with status:', participantStatus);
             
             if (participantStatus === 'WAITING') {
               // User is in waiting room, redirect to waiting page
-              console.log('🚪 User is in waiting room, redirecting to waiting page');
               router.push(`/waiting?meetingId=${meetingId}&code=${inviteCode}`);
               return;
             } else if (participantStatus === 'ADMITTED') {
               // User is already admitted, go to prejoin
-              console.log('🚪 User is already admitted, redirecting to prejoin');
               router.push(`/prejoin/${meetingId}`);
               return;
             } else if (participantStatus === 'LEFT') {
               // User was previously in meeting but left, allow rejoin
-              console.log('🚪 User was previously LEFT, allowing rejoin');
               // Continue with normal join process below
             }
           }
         } catch (participantError) {
-          console.log('🚪 User is not a participant yet, continuing with join process');
         }
         
         // User is new or not found, go to prejoin
-        console.log('🚪 User is new or not found, redirecting to prejoin');
         router.push(`/prejoin/${meetingId}`);
       } else {
         throw new Error(meetingResult.joinMeetingByCode?.message || '미팅 참여에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('Join meeting error:', error);
       
       // Handle authentication errors specifically
       if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
@@ -337,7 +323,6 @@ const MemberDashboard: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Update profile error:', error);
       await Swal.fire({
         icon: 'error',
         title: '업데이트 실패',
@@ -372,7 +357,6 @@ const MemberDashboard: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Image upload error:', error);
       await Swal.fire({
         icon: 'error',
         title: '업로드 실패',
@@ -411,7 +395,6 @@ const MemberDashboard: React.FC = () => {
           setUser(userData);
         }
       } catch (error) {
-        console.error('Delete image error:', error);
         await Swal.fire({
           icon: 'error',
           title: '삭제 실패',

@@ -68,11 +68,9 @@ export class LiveKitService {
 
   async connect(options: LiveKitConnectionOptions): Promise<void> {
     try {
-      console.log('🔌 LiveKit: Starting connection...', options);
 
       // Get LiveKit token from backend
       const tokenResponse = await this.getLiveKitToken(options);
-      console.log('🎫 LiveKit: Token received', { hasToken: !!tokenResponse.token });
 
       // Create room instance with safe, validated video encoding configuration
       // FIX: Prevent "scaleResolutionDownBy non-finite value" error in RTCPeerConnection.addTransceiver
@@ -108,35 +106,9 @@ export class LiveKitService {
       this.setupRoomEventListeners();
 
       // Connect to room
-      console.log('🔗 LiveKit: Connecting to room...', {
-        wsUrl: tokenResponse.wsUrl,
-        roomName: options.roomName,
-        hasToken: !!tokenResponse.token,
-        tokenType: typeof tokenResponse.token,
-        tokenPreview: tokenResponse.token.substring(0, 50) + '...'
-      });
 
       await this._room.connect(tokenResponse.wsUrl, tokenResponse.token);
       
-      console.log('✅ LiveKit: Connected to room successfully', {
-        roomName: this._room.name,
-        roomState: this._room.state,
-        localParticipant: this._room.localParticipant?.identity
-      });
-      console.log('✅ LiveKit: Connected to room');
-      console.log('🔍 [LIVEKIT_SERVICE] Connection completed - checking room state:', {
-        hasRoom: !!this._room,
-        roomName: this._room?.name,
-        numParticipants: this._room?.numParticipants || 0,
-        hasLocalParticipant: !!this._room?.localParticipant,
-        localParticipantIdentity: this._room?.localParticipant?.identity,
-        localParticipantName: this._room?.localParticipant?.name,
-        roomState: {
-          isConnected: this.roomState.isConnected,
-          participantsSize: this.roomState.participants.size,
-          participantsKeys: Array.from(this.roomState.participants.keys())
-        }
-      });
 
       // Initialize local participant
       const localParticipant = this._room.localParticipant;
@@ -152,81 +124,37 @@ export class LiveKitService {
       this.roomState.localParticipant = localParticipantData;
 
       // Enable media tracks
-      console.log('🎬 LiveKit: Checking initial media settings...', {
-        enableCamera: options.enableCamera,
-        enableMicrophone: options.enableMicrophone,
-        enableScreenShare: options.enableScreenShare
-      });
 
       if (options.enableCamera !== false) {
-        console.log('📹 LiveKit: Camera was requested on connect - enabling...');
         await this.enableCamera();
       } else {
-        console.log('📹 LiveKit: Camera disabled on connect');
       }
 
       if (options.enableMicrophone !== false) {
-        console.log('🎤 LiveKit: Microphone was requested on connect - enabling...');
         try {
           await this.enableMicrophone();
         } catch (micError: any) {
-          console.error('❌ LiveKit: Failed to enable microphone on connect:', micError.message);
           // Don't throw - allow connection to continue without microphone
           // User can try to enable it later via UI
         }
       } else {
-        console.log('🎤 LiveKit: Microphone disabled on connect');
       }
       
       // DIAGNOSTIC: Verify all tracks after a short delay
       await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('🔍 DIAGNOSTIC: Checking all published tracks after connection...');
       const allVideoTracks = Array.from(this._room.localParticipant.videoTrackPublications.values());
       const allAudioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
       
-      console.log('📊 DIAGNOSTIC: Published Tracks Summary:', {
-        videoTracksCount: allVideoTracks.length,
-        audioTracksCount: allAudioTracks.length,
-        videoTracks: allVideoTracks.map(pub => ({
-          sid: pub.trackSid,
-          kind: pub.kind,
-          source: pub.source,
-          isMuted: pub.isMuted,
-          hasTrack: !!pub.track,
-          trackEnabled: pub.track ? !pub.track.isMuted : false,
-          dimensions: pub.dimensions
-        })),
-        audioTracks: allAudioTracks.map(pub => ({
-          sid: pub.trackSid,
-          kind: pub.kind,
-          source: pub.source,
-          isMuted: pub.isMuted,
-          hasTrack: !!pub.track
-        }))
-      });
       
       if (options.enableCamera !== false && allVideoTracks.length === 0) {
-        console.warn('⚠️ Camera was requested but no video tracks published. User can enable it manually.');
       }
       
       if (options.enableMicrophone !== false && allAudioTracks.length === 0) {
-        console.warn('⚠️ Microphone was requested but no audio tracks published. User can enable it manually.');
       }
 
       // CRITICAL FIX: Add local participant to participants map
-      console.log('🔍 [LIVEKIT_SERVICE] Checking room state after connection:', {
-        hasRoom: !!this._room,
-        hasLocalParticipant: !!this._room?.localParticipant,
-        localParticipantIdentity: this._room?.localParticipant?.identity,
-        numParticipants: this._room?.numParticipants || 0
-      });
       
       if (this._room?.localParticipant) {
-        console.log('🔍 [LIVEKIT_SERVICE] Adding local participant to participants map:', {
-          identity: this._room.localParticipant.identity,
-          name: this._room.localParticipant.name,
-          isLocal: true
-        });
         
         // CRITICAL FIX: Validate local participant before adding
         if (this._room.localParticipant.identity) {
@@ -241,22 +169,14 @@ export class LiveKitService {
           };
           
           this.roomState.participants.set(this._room.localParticipant.identity, localLiveKitParticipant);
-          console.log('🔍 [LIVEKIT_SERVICE] Local participant added to map:', {
-            size: this.roomState.participants.size,
-            keys: Array.from(this.roomState.participants.keys())
-          });
         } else {
-          console.warn('⚠️ [LIVEKIT_SERVICE] Local participant missing identity, skipping addition');
         }
       }
 
       this.updateRoomState({ isConnected: true });
-      console.log('✅ LiveKit: Room state updated to connected');
       this.emit('connected', { room: this.room, options });
-      console.log('✅ LiveKit: Connected event emitted');
 
     } catch (error: any) {
-      console.error('❌ LiveKit: Connection failed', error);
       this.updateRoomState({ error: error.message });
       this.emit('error', error);
       throw error;
@@ -265,7 +185,6 @@ export class LiveKitService {
 
   private async getLiveKitToken(options: LiveKitConnectionOptions): Promise<{ wsUrl: string; token: string }> {
     try {
-      console.log('🎫 LiveKit: Requesting token for room:', options.roomName);
       
       const { data } = await apolloClient.mutate({
         mutation: CREATE_LIVEKIT_TOKEN,
@@ -275,28 +194,15 @@ export class LiveKitService {
       });
 
       const responseData = data as any;
-      console.log('🎫 LiveKit: Received token response:', {
-        hasData: !!data,
-        hasToken: !!responseData?.createLivekitToken,
-        tokenType: typeof responseData?.createLivekitToken,
-        tokenRaw: responseData?.createLivekitToken
-      });
 
       if (!responseData?.createLivekitToken) {
         throw new Error('Failed to get LiveKit token - no token in response');
       }
 
       const parsed = JSON.parse(responseData.createLivekitToken);
-      console.log('🎫 LiveKit: Parsed token data:', {
-        hasWsUrl: !!parsed.wsUrl,
-        hasToken: !!parsed.token,
-        wsUrl: parsed.wsUrl,
-        tokenType: typeof parsed.token
-      });
 
       return parsed;
     } catch (error: any) {
-      console.error('❌ LiveKit: Token generation failed', error);
       throw new Error(`Token generation failed: ${error.message}`);
     }
   }
@@ -307,26 +213,12 @@ export class LiveKitService {
     this.roomListenersSetup = true;
 
     this._room.on(RoomEvent.Connected, () => {
-      console.log('✅ LiveKit: RoomEvent.Connected fired!');
-      console.log('🔍 [LIVEKIT_SERVICE] Room object structure after connection:', {
-        hasRoom: !!this._room,
-        roomName: this._room?.name,
-        numParticipants: this._room?.numParticipants || 0,
-        hasLocalParticipant: !!this._room?.localParticipant,
-        localParticipantIdentity: this._room?.localParticipant?.identity,
-        roomKeys: this._room ? Object.keys(this._room) : [],
-        roomPrototype: this._room ? Object.getPrototypeOf(this._room) : null
-      });
       
-      console.log('🔍 [LIVEKIT_SERVICE] About to update room state...');
       this.updateRoomState({ isConnected: true, connectionState: ConnectionState.Connected });
-      console.log('🔍 [LIVEKIT_SERVICE] Room state updated, emitting roomConnected event...');
       this.emit('roomConnected', { room: this.room });
-      console.log('🔍 [LIVEKIT_SERVICE] roomConnected event emitted');
     });
 
     this._room.on(RoomEvent.Disconnected, (reason) => {
-      console.log('🔌 LiveKit: Room disconnected', reason);
       this.updateRoomState({ 
         isConnected: false, 
         connectionState: ConnectionState.Disconnected,
@@ -338,97 +230,69 @@ export class LiveKitService {
     this._room.on(RoomEvent.ParticipantConnected, (participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant || !participant.identity) {
-        console.warn('⚠️ LiveKit: ParticipantConnected event received with invalid participant');
         return;
       }
-      console.log('👤 LiveKit: ParticipantConnected event fired:', {
-        participantIdentity: participant.identity,
-        participantName: participant.name,
-        isLocal: participant.isLocal,
-        roomName: this._room?.name || 'unknown',
-        currentParticipantsCount: this._room?.numParticipants || 0,
-        hasRoom: !!this._room,
-        roomType: typeof this._room
-      });
       this.handleParticipantConnected(participant as RemoteParticipant | LocalParticipant);
     });
 
     this._room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant || !participant.identity) {
-        console.warn('⚠️ LiveKit: ParticipantDisconnected event received with invalid participant');
         return;
       }
-      console.log('👋 LiveKit: Participant disconnected', participant.identity);
       this.handleParticipantDisconnected(participant as RemoteParticipant | LocalParticipant);
     });
 
     this._room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant || !participant.identity) {
-        console.warn('⚠️ LiveKit: TrackSubscribed event received with invalid participant');
         return;
       }
-      console.log('🎵 LiveKit: Track subscribed', { track, participant: participant.identity });
       this.handleTrackSubscribed(track, publication, participant);
     });
 
     this._room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant || !participant.identity) {
-        console.warn('⚠️ LiveKit: TrackUnsubscribed event received with invalid participant');
         return;
       }
-      console.log('🔇 LiveKit: Track unsubscribed', { track, participant: participant.identity });
       this.handleTrackUnsubscribed(track, publication, participant);
     });
 
     this._room.on(RoomEvent.ConnectionStateChanged, (state) => {
-      console.log('🔄 LiveKit: Connection state changed', state);
       this.handleConnectionStateChanged(state);
     });
 
     this._room.on(RoomEvent.TrackMuted, (publication, participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant || !participant.identity) {
-        console.warn('⚠️ LiveKit: TrackMuted event received with invalid participant');
         return;
       }
-      console.log('🔇 LiveKit: Track muted', { participant: participant.identity, track: publication.kind });
       this.handleTrackMuted(publication, participant as RemoteParticipant | LocalParticipant);
     });
 
     this._room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
       // CRITICAL FIX: Add null checks before accessing participant properties
       if (!participant) {
-        console.warn('⚠️ LiveKit: TrackUnmuted event received with undefined participant');
         return;
       }
       
-      console.log('🔊 LiveKit: Track unmuted', { 
-        participant: participant.identity || 'unknown', 
-        track: publication?.kind || 'unknown' 
-      });
       this.handleTrackUnmuted(publication, participant as RemoteParticipant | LocalParticipant);
     });
 
     this._room.on(RoomEvent.ParticipantMetadataChanged, (metadata, participant) => {
-      console.log('📝 LiveKit: Participant metadata changed', { participant: participant.identity || 'unknown', metadata });
       this.handleParticipantMetadataChanged(metadata || '', participant as RemoteParticipant | LocalParticipant);
     });
 
     this._room.on(RoomEvent.TrackPublished, (publication, participant) => {
-      console.log('📡 LiveKit: Track published', { participant: participant.identity, track: publication.kind });
       this.emit('trackPublished', { publication, participant });
     });
 
     this._room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
-      console.log('📡 LiveKit: Track unpublished', { participant: participant.identity, track: publication.kind });
       this.emit('trackUnpublished', { publication, participant });
     });
 
     this._room.on(RoomEvent.DataReceived, (payload, participant) => {
-      console.log('📨 LiveKit: Data received', { participant: participant?.identity, payload });
       this.emit('dataReceived', { payload, participant });
     });
   }
@@ -436,21 +300,9 @@ export class LiveKitService {
   private handleParticipantConnected(participant: RemoteParticipant | LocalParticipant) {
     // CRITICAL FIX: Validate participant before processing
     if (!participant || !participant.identity) {
-      console.warn('⚠️ [LIVEKIT_SERVICE] handleParticipantConnected: Invalid participant received', {
-        participant: participant,
-        hasIdentity: !!participant?.identity,
-        hasName: !!participant?.name
-      });
       return;
     }
 
-    console.log('🔍 [LIVEKIT_SERVICE] handleParticipantConnected called:', {
-      participantIdentity: participant.identity,
-      participantName: participant.name,
-      isLocal: participant.isLocal,
-      isMuted: participant.isMicrophoneEnabled === false,
-      isCameraEnabled: participant.isCameraEnabled
-    });
 
     const liveKitParticipant: LiveKitParticipant = {
       identity: participant.identity,
@@ -462,22 +314,14 @@ export class LiveKitService {
       connectionQuality: Number(participant.connectionQuality) || 0,
     };
 
-    console.log('🔍 [LIVEKIT_SERVICE] Created LiveKit participant:', liveKitParticipant);
 
     // CRITICAL FIX: Only add valid participants to the map
     if (liveKitParticipant.identity && liveKitParticipant.name) {
       this.roomState.participants.set(participant.identity, liveKitParticipant);
-      console.log('🔍 [LIVEKIT_SERVICE] Participants map after adding:', {
-        size: this.roomState.participants.size,
-        keys: Array.from(this.roomState.participants.keys()),
-        participants: Array.from(this.roomState.participants.entries()).map(([id, p]) => ({ id, name: p.name }))
-      });
 
       this.updateRoomState({});
       this.emit('participantConnected', { participant: liveKitParticipant });
-      console.log('🔍 [LIVEKIT_SERVICE] participantConnected event emitted');
     } else {
-      console.warn('⚠️ [LIVEKIT_SERVICE] Skipping participant with missing identity or name:', liveKitParticipant);
     }
   }
 
@@ -497,11 +341,6 @@ export class LiveKitService {
     
     try {
       this.isHandlingTrackSubscribed = true;
-      console.log('🎵 Track subscribed event:', {
-        trackKind: track.kind,
-        participantIdentity: participant?.identity || 'unknown',
-        hasParticipant: !!participant
-      });
       this.emit('trackSubscribed', { track, publication, participant });
     } finally {
       this.isHandlingTrackSubscribed = false;
@@ -567,27 +406,16 @@ export class LiveKitService {
   private handleTrackUnmuted(publication: any, participant: RemoteParticipant | LocalParticipant) {
     // CRITICAL FIX: Add null checks for participant to prevent "cannot read properties of undefined" errors
     if (!participant) {
-      console.warn('⚠️ LiveKit: handleTrackUnmuted called with undefined participant');
       return;
     }
 
     if (!participant.identity) {
-      console.warn('⚠️ LiveKit: handleTrackUnmuted called with participant missing identity', {
-        participant: participant,
-        hasIdentity: 'identity' in participant,
-        participantKeys: Object.keys(participant)
-      });
       return;
     }
 
     const participantId = participant.identity;
     const participantData = this.roomState.participants.get(participantId);
     
-    console.log('🔊 LiveKit: Track unmuted', { 
-      participant: participantId, 
-      track: publication?.kind || 'unknown',
-      hasParticipantData: !!participantData
-    });
     
     if (participantData) {
       if (publication.kind === Track.Kind.Audio) {
@@ -618,7 +446,6 @@ export class LiveKitService {
 
   async disconnect(): Promise<void> {
     if (this._room) {
-      console.log('🔌 LiveKit: Disconnecting...');
       await this._room.disconnect();
       this._room = null;
       this.roomListenersSetup = false;
@@ -645,14 +472,11 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('📹 LiveKit: Attempting to enable camera with validated constraints...');
       
       // Check camera permissions first
       try {
-        console.log('🔍 Checking camera availability...');
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        console.log('📹 Available video devices:', videoDevices.length);
         
         if (videoDevices.length === 0) {
           throw new Error('No camera devices found');
@@ -665,26 +489,12 @@ export class LiveKitService {
             frameRate: { ideal: 30 }
           } 
         });
-        console.log('✅ Camera permission granted, stream tracks:', stream.getTracks().length);
         stream.getTracks().forEach(track => {
-          console.log('🎥 Camera track details:', {
-            id: track.id,
-            kind: track.kind,
-            label: track.label,
-            enabled: track.enabled,
-            muted: track.muted,
-            readyState: track.readyState,
-            settings: track.getSettings()
-          });
           track.stop(); // Stop test stream
         });
       } catch (permError: any) {
-        console.error('❌ Camera permission denied or device not available:', permError);
-        console.error('❌ Error name:', permError?.name);
-        console.error('❌ Error message:', permError?.message);
         
         // Don't throw, just log and continue - LiveKit will handle gracefully
-        console.warn('⚠️ Continuing without camera permission check...');
       }
       
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
@@ -705,61 +515,31 @@ export class LiveKitService {
         throw new Error('Invalid video resolution constraints');
       }
       
-      console.log('🎥 LiveKit: Calling setCameraEnabled with constraints:', safeVideoConstraints);
       
       try {
         await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
-        console.log('✅ LiveKit: setCameraEnabled call succeeded');
       } catch (cameraError: any) {
-        console.error('❌ setCameraEnabled failed:', cameraError);
         
         // Try without constraints as fallback
-        console.log('🔄 Retrying without custom constraints...');
         try {
           await this._room.localParticipant.setCameraEnabled(true);
-          console.log('✅ Camera enabled with default constraints');
         } catch (fallbackError) {
-          console.error('❌ Camera enable failed completely:', fallbackError);
           throw fallbackError;
         }
       }
       
-      console.log('🎥 LiveKit: setCameraEnabled completed, checking tracks...');
       const videoTrack = this._room.localParticipant.videoTrackPublications.values().next().value;
-      console.log('🎥 LiveKit: Video track after enable:', {
-        hasTrack: !!videoTrack,
-        trackSid: videoTrack?.trackSid,
-        trackKind: videoTrack?.kind,
-        isSubscribed: videoTrack?.isSubscribed,
-        isMuted: videoTrack?.isMuted,
-        track: videoTrack?.track
-      });
       
       // CRITICAL: Ensure track is actually published and visible to other participants
       if (videoTrack && videoTrack.track) {
-        console.log('✅ LiveKit: Video track PUBLISHED and available to other participants:', {
-          sid: videoTrack.trackSid,
-          source: videoTrack.source,
-          dimensions: videoTrack.dimensions
-        });
       } else {
-        console.error('❌ LiveKit: Video track NOT published - other participants will see black screen!');
       }
       
       this.updateRoomState({ isCameraEnabled: true });
-      console.log('✅ LiveKit: Camera enabled successfully');
     } catch (error: any) {
-      console.error('❌ LiveKit: Failed to enable camera', error);
-      console.error('❌ Error details:', {
-        name: error?.name,
-        message: error?.message,
-      });
       
       // Check if it's the specific WebRTC encoding error
       if (error?.message && error.message.includes('scaleResolutionDownBy')) {
-        console.error('🔍 WebRTC encoding error: scaleResolutionDownBy received non-finite value');
-        console.error('🔍 This indicates the browser received NaN, Infinity, or invalid number in RTCRtpEncodingParameters');
-        console.error('🔍 Possible causes: VideoPreset calculation errors, invalid track dimensions, or browser bugs');
       }
       
       throw error;
@@ -770,7 +550,6 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('📹 LiveKit: Attempting to disable camera gracefully...');
       
       // Gracefully disable camera without stopping the entire stream
       await this._room.localParticipant.setCameraEnabled(false);
@@ -778,16 +557,13 @@ export class LiveKitService {
       // Update state after successful disable
       this.updateRoomState({ isCameraEnabled: false });
       
-      console.log('✅ LiveKit: Camera disabled gracefully - stream continues');
     } catch (error) {
-      console.error('❌ LiveKit: Failed to disable camera', error);
       
       // Even if disable fails, don't stop the entire stream
       // Just update the state to reflect the intended state
       this.updateRoomState({ isCameraEnabled: false });
       
       // Don't rethrow the error to prevent stream interruption
-      console.warn('⚠️ LiveKit: Camera disable failed, but continuing stream');
     }
   }
 
@@ -795,14 +571,11 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🎤 LiveKit: Attempting to enable microphone...');
       
       // Check microphone permissions first
       try {
-        console.log('🔍 Checking microphone availability...');
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(device => device.kind === 'audioinput');
-        console.log('🎤 Available audio devices:', audioDevices.length);
         
         if (audioDevices.length === 0) {
           throw new Error('No microphone devices found');
@@ -816,23 +589,10 @@ export class LiveKitService {
             autoGainControl: true
           } 
         });
-        console.log('✅ Microphone permission granted, stream tracks:', stream.getTracks().length);
         stream.getTracks().forEach(track => {
-          console.log('🎤 Microphone track details:', {
-            id: track.id,
-            kind: track.kind,
-            label: track.label,
-            enabled: track.enabled,
-            muted: track.muted,
-            readyState: track.readyState,
-            settings: track.getSettings()
-          });
           track.stop(); // Stop test stream
         });
       } catch (permError: any) {
-        console.error('❌ Microphone permission denied or device not available:', permError);
-        console.error('❌ Error name:', permError?.name);
-        console.error('❌ Error message:', permError?.message);
         
         // Throw specific error for better user feedback
         if (permError.name === 'NotAllowedError') {
@@ -846,7 +606,6 @@ export class LiveKitService {
         }
       }
       
-      console.log('🎤 LiveKit: Calling setMicrophoneEnabled...');
       await this._room.localParticipant.setMicrophoneEnabled(true);
       
       // Wait for track to be published
@@ -854,21 +613,9 @@ export class LiveKitService {
       
       // Verify audio track was actually published
       const audioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
-      console.log('🎤 Audio tracks after enable:', {
-        count: audioTracks.length,
-        tracks: audioTracks.map(pub => ({
-          sid: pub.trackSid,
-          kind: pub.kind,
-          source: pub.source,
-          isMuted: pub.isMuted,
-          hasTrack: !!pub.track
-        }))
-      });
       
       if (audioTracks.length === 0) {
-        console.error('❌ CRITICAL: Microphone enabled but NO audio tracks published!');
         // Retry once
-        console.log('🔄 Retrying microphone enable...');
         await this._room.localParticipant.setMicrophoneEnabled(false);
         await new Promise(resolve => setTimeout(resolve, 300));
         await this._room.localParticipant.setMicrophoneEnabled(true);
@@ -878,15 +625,11 @@ export class LiveKitService {
         if (retryAudioTracks.length === 0) {
           throw new Error('Failed to publish audio track. Please check your microphone settings and try again.');
         }
-        console.log('✅ Microphone enabled successfully after retry');
       } else {
-        console.log('✅ Microphone enabled and audio track published');
       }
       
       this.updateRoomState({ isMuted: false });
-      console.log('✅ LiveKit: Microphone enabled successfully');
     } catch (error: any) {
-      console.error('❌ LiveKit: Failed to enable microphone', error);
       this.updateRoomState({ isMuted: true });
       throw error;
     }
@@ -896,7 +639,6 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🎤 LiveKit: Attempting to disable microphone gracefully...');
       
       // Gracefully disable microphone without stopping the entire stream
       await this._room.localParticipant.setMicrophoneEnabled(false);
@@ -904,16 +646,13 @@ export class LiveKitService {
       // Update state after successful disable
       this.updateRoomState({ isMuted: true });
       
-      console.log('✅ LiveKit: Microphone disabled gracefully - stream continues');
     } catch (error) {
-      console.error('❌ LiveKit: Failed to disable microphone', error);
       
       // Even if disable fails, don't stop the entire stream
       // Just update the state to reflect the intended state
       this.updateRoomState({ isMuted: true });
       
       // Don't rethrow the error to prevent stream interruption
-      console.warn('⚠️ LiveKit: Microphone disable failed, but continuing stream');
     }
   }
 
@@ -921,7 +660,6 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🖥️ LiveKit: Starting screen share...');
       
       // Check if screen sharing is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -930,9 +668,7 @@ export class LiveKitService {
       
       await this._room.localParticipant.setScreenShareEnabled(true);
       this.updateRoomState({ isScreenSharing: true });
-      console.log('✅ LiveKit: Screen sharing started successfully');
     } catch (error: any) {
-      console.error('❌ LiveKit: Failed to start screen share', error);
       
       // Provide more specific error messages
       if (error.name === 'NotAllowedError') {
@@ -951,7 +687,6 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🖥️ LiveKit: Attempting to stop screen share gracefully...');
       
       // Gracefully stop screen share without stopping the entire stream
       await this._room.localParticipant.setScreenShareEnabled(false);
@@ -959,16 +694,13 @@ export class LiveKitService {
       // Update state after successful stop
       this.updateRoomState({ isScreenSharing: false });
       
-      console.log('✅ LiveKit: Screen share stopped gracefully - stream continues');
     } catch (error) {
-      console.error('❌ LiveKit: Failed to stop screen share', error);
       
       // Even if stop fails, don't stop the entire stream
       // Just update the state to reflect the intended state
       this.updateRoomState({ isScreenSharing: false });
       
       // Don't rethrow the error to prevent stream interruption
-      console.warn('⚠️ LiveKit: Screen share stop failed, but continuing stream');
     }
   }
 
@@ -977,9 +709,7 @@ export class LiveKitService {
     
     try {
       await this._room.localParticipant.publishData(data, { topic });
-      console.log('📨 LiveKit: Data sent', { topic });
     } catch (error) {
-      console.error('❌ LiveKit: Failed to send data', error);
       throw error;
     }
   }
@@ -1008,7 +738,6 @@ export class LiveKitService {
   private emit(event: string, data: any): void {
     // Prevent infinite recursion in emit
     if (this.emitDepth >= this.MAX_EMIT_DEPTH) {
-      console.warn(`⚠️ LiveKit: Max emit depth (${this.MAX_EMIT_DEPTH}) reached for event: ${event}`);
       return;
     }
 
@@ -1024,7 +753,6 @@ export class LiveKitService {
           } catch (error: any) {
             // Simplified error logging to prevent recursion
             if (error && typeof error.message === 'string') {
-              console.warn(`⚠️ LiveKit event error: ${event}`, error.message);
             }
           }
         });

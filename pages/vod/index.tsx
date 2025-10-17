@@ -66,7 +66,6 @@ const VODPage: React.FC = () => {
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
       setUser(userData);
     } catch (error) {
-      console.error('Auth check error:', error);
       router.push('/login');
     } finally {
       setLoading(false);
@@ -83,7 +82,6 @@ const VODPage: React.FC = () => {
         setVods(result.getAllVods.vods);
       }
     } catch (error) {
-      console.warn('Failed to load VODs:', error);
       // Mock VOD data with new schema
       setVods([
         {
@@ -185,7 +183,6 @@ const VODPage: React.FC = () => {
         loadVODs();
       }
     } catch (error) {
-      console.error('Upload error:', error);
       await Swal.fire({
         icon: 'error',
         title: '업로드 실패',
@@ -233,7 +230,6 @@ const VODPage: React.FC = () => {
         loadVODs();
       }
     } catch (error) {
-      console.error('URL upload error:', error);
       await Swal.fire({
         icon: 'error',
         title: '등록 실패',
@@ -287,7 +283,6 @@ const VODPage: React.FC = () => {
         
         loadVODs();
       } catch (error) {
-        console.error('Delete error:', error);
         await Swal.fire({
           icon: 'error',
           title: '삭제 실패',
@@ -995,10 +990,5 @@ const VODPage: React.FC = () => {
 };
 
 export default VODPage;
-
-
-
-
-
 
 

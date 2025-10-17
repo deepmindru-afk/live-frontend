@@ -144,7 +144,6 @@ export const getMeetingById = async (meetingId: string): Promise<Meeting | null>
     const result = await makeGraphQLRequest(GET_MEETING_BY_ID, { meetingId });
     return result.getMeetingById || null;
   } catch (error: any) {
-    console.error('Error fetching meeting:', error);
     
     // Check if it's a permission error by parsing the error message
     let isPermissionError = false;
@@ -169,13 +168,11 @@ export const getMeetingById = async (meetingId: string): Promise<Meeting | null>
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock meeting due to permission restrictions');
       return {
         _id: meetingId,
         title: 'Demo Meeting',
@@ -203,7 +200,6 @@ export const startMeeting = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(START_MEETING, { meetingId });
     return result.startMeeting?.success || false;
   } catch (error) {
-    console.error('Error starting meeting:', error);
     throw error;
   }
 };
@@ -213,7 +209,6 @@ export const endMeeting = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(END_MEETING, { meetingId });
     return result.endMeeting?.success || false;
   } catch (error) {
-    console.error('Error ending meeting:', error);
     throw error;
   }
 };
@@ -223,7 +218,6 @@ export const lockRoom = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(LOCK_ROOM, { meetingId });
     return result.lockRoom?.success || false;
   } catch (error) {
-    console.error('Error locking room:', error);
     throw error;
   }
 };
@@ -233,7 +227,6 @@ export const unlockRoom = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(UNLOCK_ROOM, { meetingId });
     return result.unlockRoom?.success || false;
   } catch (error) {
-    console.error('Error unlocking room:', error);
     throw error;
   }
 };
@@ -244,7 +237,6 @@ export const getParticipantsByMeeting = async (meetingId: string): Promise<Parti
     const result = await makeGraphQLRequest(GET_PARTICIPANTS_BY_MEETING, { meetingId });
     return result.getParticipantsByMeeting || [];
   } catch (error: any) {
-    console.error('Error fetching participants:', error);
     
     // Check if it's a permission error by parsing the error message
     let isPermissionError = false;
@@ -271,13 +263,11 @@ export const getParticipantsByMeeting = async (meetingId: string): Promise<Parti
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('❌ Permission error: Cannot access participants for this meeting');
       return [];
     }
     
@@ -290,7 +280,6 @@ export const getWaitingParticipants = async (meetingId: string): Promise<Partici
     const result = await makeGraphQLRequest(GET_WAITING_PARTICIPANTS, { meetingId });
     return result.getWaitingParticipants || [];
   } catch (error: any) {
-    console.error('Error fetching waiting participants:', error);
     
     // Check if it's a permission error by parsing the error message
     let isPermissionError = false;
@@ -319,13 +308,11 @@ export const getWaitingParticipants = async (meetingId: string): Promise<Partici
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('❌ Permission error: Cannot access waiting participants for this meeting');
       return [];
     }
     
@@ -340,7 +327,6 @@ export const approveParticipant = async (participantId: string, reason?: string)
     });
     return result.approveParticipant?.success || false;
   } catch (error) {
-    console.error('Error approving participant:', error);
     throw error;
   }
 };
@@ -352,7 +338,6 @@ export const rejectParticipant = async (participantId: string, reason?: string):
     });
     return result.rejectParticipant?.success || false;
   } catch (error) {
-    console.error('Error rejecting participant:', error);
     throw error;
   }
 };
@@ -362,7 +347,6 @@ export const removeParticipant = async (participantId: string): Promise<boolean>
     const result = await makeGraphQLRequest(REMOVE_PARTICIPANT, { participantId });
     return result.removeParticipant?.success || false;
   } catch (error) {
-    console.error('Error removing participant:', error);
     throw error;
   }
 };
@@ -378,7 +362,6 @@ export const transferHost = async (meetingId: string, newHostId: string, reason?
     });
     return result.transferHost?.success || false;
   } catch (error) {
-    console.error('Error transferring host:', error);
     throw error;
   }
 };
@@ -396,7 +379,6 @@ export const forceMute = async (meetingId: string, participantId: string, reason
     });
     return result.forceMute?.success || false;
   } catch (error) {
-    console.error('Error force muting participant:', error);
     throw error;
   }
 };
@@ -413,7 +395,6 @@ export const forceCameraOff = async (meetingId: string, participantId: string, r
     });
     return result.forceCameraOff?.success || false;
   } catch (error) {
-    console.error('Error force turning off camera:', error);
     throw error;
   }
 };
@@ -435,7 +416,6 @@ export const forceScreenShareControl = async (
     });
     return result.forceScreenShareControl?.success || false;
   } catch (error) {
-    console.error('Error force screen share control:', error);
     throw error;
   }
 };
@@ -451,7 +431,6 @@ export const getRaisedHands = async (meetingId: string): Promise<any> => {
     if (error.message && (error.message.includes('Only the meeting host can view participants') || 
                          error.message.includes('You can only view your own meetings') ||
                          error.message.includes('You must be the host or a participant in this meeting to view participants'))) {
-      console.log('🎭 MOCK: Creating mock raised hands data due to permission restrictions');
       return {
         raisedHands: [],
         totalRaisedHands: 0,
@@ -459,7 +438,6 @@ export const getRaisedHands = async (meetingId: string): Promise<any> => {
         timestamp: new Date().toISOString()
       };
     }
-    console.error('Error fetching raised hands:', error);
     throw error;
   }
 };
@@ -475,7 +453,6 @@ export const hostLowerHand = async (meetingId: string, participantId: string, re
     });
     return result.hostLowerHand?.success || false;
   } catch (error) {
-    console.error('Error lowering hand:', error);
     throw error;
   }
 };
@@ -485,7 +462,6 @@ export const lowerAllHands = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(LOWER_ALL_HANDS, { meetingId });
     return result.lowerAllHands?.success || false;
   } catch (error) {
-    console.error('Error lowering all hands:', error);
     throw error;
   }
 };
@@ -498,7 +474,6 @@ export const getChatHistory = async (meetingId: string, limit: number = 50, offs
     });
     return result.getChatHistory?.messages || [];
   } catch (error: any) {
-    console.error('Error fetching chat history:', error);
     
     // Check if it's a permission error by parsing the error message
     let isPermissionError = false;
@@ -525,13 +500,11 @@ export const getChatHistory = async (meetingId: string, limit: number = 50, offs
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock chat messages due to permission restrictions');
       return [
         {
           _id: 'chat-msg-1',
@@ -595,7 +568,6 @@ export const deleteChatMessage = async (messageId: string, reason?: string): Pro
     });
     return result.deleteChatMessage?.success || false;
   } catch (error) {
-    console.error('Error deleting chat message:', error);
     throw error;
   }
 };
@@ -612,7 +584,6 @@ export const startMeetingRecording = async (
     });
     return result.startMeetingRecording?.success || false;
   } catch (error) {
-    console.error('Error starting recording:', error);
     throw error;
   }
 };
@@ -624,7 +595,6 @@ export const stopMeetingRecording = async (meetingId: string, reason?: string): 
     });
     return result.stopMeetingRecording?.success || false;
   } catch (error) {
-    console.error('Error stopping recording:', error);
     throw error;
   }
 };
@@ -636,7 +606,6 @@ export const pauseMeetingRecording = async (meetingId: string, reason?: string):
     });
     return result.pauseMeetingRecording?.success || false;
   } catch (error) {
-    console.error('Error pausing recording:', error);
     throw error;
   }
 };
@@ -648,7 +617,6 @@ export const resumeMeetingRecording = async (meetingId: string): Promise<boolean
     });
     return result.resumeMeetingRecording?.success || false;
   } catch (error) {
-    console.error('Error resuming recording:', error);
     throw error;
   }
 };
@@ -664,7 +632,6 @@ export const getRecordingInfo = async (meetingId: string): Promise<Recording | n
                          error.message.includes('You can only view your own meetings') ||
                          error.message.includes('Only the meeting host can view participants') ||
                          error.message.includes('You must be the host or a participant in this meeting to view participants'))) {
-      console.log('🎭 MOCK: Creating mock recording info due to permission restrictions');
       return {
         recordingId: 'mock-recording-id',
         status: 'STOPPED',
@@ -679,7 +646,6 @@ export const getRecordingInfo = async (meetingId: string): Promise<Recording | n
         downloadUrl: undefined
       };
     }
-    console.error('Error fetching recording info:', error);
     throw error;
   }
 };
@@ -717,13 +683,11 @@ export const getScreenShareStatus = async (meetingId: string): Promise<any> => {
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock screen share status due to permission restrictions');
       return {
         meetingId,
         participants: [],
@@ -731,7 +695,6 @@ export const getScreenShareStatus = async (meetingId: string): Promise<any> => {
         currentlySharingCount: 0
       };
     }
-    console.error('Error fetching screen share status:', error);
     throw error;
   }
 };
@@ -744,10 +707,8 @@ export const getActiveScreenSharers = async (meetingId: string): Promise<any[]> 
     if (error.message && (error.message.includes('Only the meeting host can view participants') || 
                          error.message.includes('You can only view your own meetings') ||
                          error.message.includes('You must be the host or a participant in this meeting to view participants'))) {
-      console.log('🎭 MOCK: Creating mock active screen sharers due to permission restrictions');
       return [];
     }
-    console.error('Error fetching active screen sharers:', error);
     throw error;
   }
 };
@@ -783,13 +744,11 @@ export const getParticipantStats = async (meetingId: string): Promise<any> => {
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock participant stats due to permission restrictions');
       return {
         totalParticipants: 0,
         currentlyOnline: 0,
@@ -798,7 +757,6 @@ export const getParticipantStats = async (meetingId: string): Promise<any> => {
         totalMeetingDuration: 0
       };
     }
-    console.error('Error fetching participant stats:', error);
     throw error;
   }
 };
@@ -833,13 +791,11 @@ export const getMeetingAttendance = async (meetingId: string): Promise<any> => {
             isPermissionError = hasPermissionError;
           }
         } catch (parseError) {
-          console.error('Error parsing GraphQL error:', parseError);
         }
       }
     }
     
     if (isPermissionError) {
-      console.log('🎭 MOCK: Creating mock meeting attendance due to permission restrictions');
       return {
         meetingId,
         totalParticipants: 0,
@@ -850,7 +806,6 @@ export const getMeetingAttendance = async (meetingId: string): Promise<any> => {
         participants: []
       };
     }
-    console.error('Error fetching meeting attendance:', error);
     throw error;
   }
 };
@@ -861,7 +816,6 @@ export const createLiveKitToken = async (meetingId: string): Promise<LiveKitToke
     const result = await makeGraphQLRequest(CREATE_LIVEKIT_TOKEN, { meetingId });
     return result.createLivekitToken || null;
   } catch (error) {
-    console.error('Error creating LiveKit token:', error);
     throw error;
   }
 };
@@ -871,7 +825,6 @@ export const endLiveKitRoom = async (meetingId: string): Promise<boolean> => {
     const result = await makeGraphQLRequest(END_LIVEKIT_ROOM, { meetingId });
     return result.endLivekitRoom?.success || false;
   } catch (error) {
-    console.error('Error ending LiveKit room:', error);
     throw error;
   }
 };
@@ -881,7 +834,6 @@ export const kickLiveKitParticipant = async (meetingId: string, identity: string
     const result = await makeGraphQLRequest(KICK_LIVEKIT_PARTICIPANT, { meetingId, identity });
     return result.kickLivekitParticipant?.success || false;
   } catch (error) {
-    console.error('Error kicking LiveKit participant:', error);
     throw error;
   }
 };

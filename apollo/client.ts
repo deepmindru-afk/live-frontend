@@ -24,7 +24,6 @@ const authLink = setContext((_, { headers }) => {
         },
       };
     } catch (error) {
-      console.warn('localStorage not available:', error);
       return { headers };
     }
   }
@@ -35,20 +34,11 @@ const authLink = setContext((_, { headers }) => {
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }: any) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path }: any) => {
-      console.error(
-        `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
-      );
+ 
     });
   }
 
   if (networkError) {
-    console.error(`[Network error]: ${networkError}`);
-    console.error(`[Network error details]:`, {
-      message: networkError.message,
-      statusCode: 'statusCode' in networkError ? networkError.statusCode : 'unknown',
-      operation: operation.operationName,
-      variables: operation.variables
-    });
     
     // Handle 401 errors (unauthorized)
     if ('statusCode' in networkError && networkError.statusCode === 401) {
@@ -58,14 +48,12 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }: 
           localStorage.removeItem('jwt');
           window.location.href = '/login';
         } catch (error) {
-          console.warn('localStorage not available:', error);
         }
       }
     }
     
     // Handle 400 errors (Bad Request)
     if ('statusCode' in networkError && networkError.statusCode === 400) {
-      console.error(`[GraphQL 400 Bad Request]: Check operation ${operation.operationName} with variables:`, operation.variables);
     }
   }
 });
@@ -127,7 +115,6 @@ export const setAuthToken = (token: string) => {
       // Reset Apollo Client cache to apply new token
       apolloClient.resetStore();
     } catch (error) {
-      console.warn('localStorage not available:', error);
     }
   }
 };
@@ -137,7 +124,6 @@ export const getAuthToken = (): string | null => {
     try {
       return localStorage.getItem('jwt');
     } catch (error) {
-      console.warn('localStorage not available:', error);
       return null;
     }
   }
@@ -150,7 +136,6 @@ export const clearAuthToken = () => {
       localStorage.removeItem('jwt');
       apolloClient.clearStore();
     } catch (error) {
-      console.warn('localStorage not available:', error);
     }
   }
 };

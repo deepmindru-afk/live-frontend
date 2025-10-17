@@ -37,11 +37,6 @@ const PrejoinPage = () => {
 
   // Debug logging
   useEffect(() => {
-    console.log('🔍 PREJOIN DEBUG:', {
-      meetingId,
-      isLoading,
-      meetingInfo
-    });
   }, [meetingId, isLoading, meetingInfo]);
 
   // Device testing functions
@@ -50,14 +45,12 @@ const PrejoinPage = () => {
     setDeviceError(null);
     
     try {
-      console.log('🎥 Starting device test...');
       
       // First, check what devices are available
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
       const videoInputs = devices.filter(device => device.kind === 'videoinput');
       
-      console.log('🔍 Available devices:', { audioInputs: audioInputs.length, videoInputs: videoInputs.length });
       
       // Check for missing devices
       const warnings = [];
@@ -84,14 +77,12 @@ const PrejoinPage = () => {
         audio: true
       });
       
-      console.log('🎥 Stream obtained:', stream);
       setLocalStream(stream);
       
       // Check if we actually got video and audio tracks
       const videoTracks = stream.getVideoTracks();
       const audioTracks = stream.getAudioTracks();
       
-      console.log('🎥 Stream tracks:', { video: videoTracks.length, audio: audioTracks.length });
       
       if (videoTracks.length === 0) {
         setDeviceError('Camera access denied or no camera available. Please check permissions and try again.');
@@ -107,33 +98,26 @@ const PrejoinPage = () => {
       
       // Set up video with proper event handling
       if (videoRef.current) {
-        console.log('🎥 Setting up video element...');
         videoRef.current.srcObject = stream;
         
         // Wait for video to load
         videoRef.current.onloadedmetadata = () => {
-          console.log('✅ Video metadata loaded successfully');
           videoRef.current?.play().then(() => {
-            console.log('✅ Video started playing');
             setIsVideoOn(true);
             setDeviceError(null); // Clear any previous errors
           }).catch((playError) => {
-            console.error('❌ Video play error:', playError);
             setDeviceError('Camera preview failed to play');
           });
         };
         
         videoRef.current.onerror = (error) => {
-          console.error('❌ Video error:', error);
           setDeviceError('Camera preview failed to load');
         };
         
         videoRef.current.oncanplay = () => {
-          console.log('✅ Video can play');
           setDeviceError(null); // Clear any previous errors
         };
       } else {
-        console.error('❌ Video ref not available');
         // Don't set error immediately, wait a bit for the ref to be available
         setTimeout(() => {
           if (!videoRef.current) {
@@ -146,14 +130,12 @@ const PrejoinPage = () => {
       if (audioRef.current) {
         audioRef.current.srcObject = stream;
         setIsMicOn(true);
-        console.log('🎤 Audio setup complete');
       }
       
       // Test speaker with a simple beep
       testSpeaker();
       
     } catch (error: any) {
-      console.error('❌ Device access error:', error);
       
       // Provide specific error messages based on the error type
       if (error.name === 'NotAllowedError') {
@@ -188,9 +170,7 @@ const PrejoinPage = () => {
       oscillator.stop(audioContext.currentTime + 0.1);
       
       setIsSpeakerOn(true);
-      console.log('🔊 Speaker test completed successfully');
     } catch (error) {
-      console.error('❌ Speaker test error:', error);
       // Don't set device error for speaker test failure as it's not critical
       // Just log it and continue
     }
@@ -243,14 +223,11 @@ const PrejoinPage = () => {
   // Ensure video element is properly set up
   useEffect(() => {
     if (localStream && videoRef.current) {
-      console.log('🎥 Re-attaching stream to video element');
       videoRef.current.srcObject = localStream;
       videoRef.current.play().then(() => {
-        console.log('✅ Video re-attached and playing');
         setIsVideoOn(true);
         setDeviceError(null);
       }).catch((error) => {
-        console.error('❌ Video re-attach error:', error);
         setDeviceError('Camera preview failed to play');
       });
     }
@@ -264,10 +241,6 @@ const PrejoinPage = () => {
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
         const videoInputs = devices.filter(device => device.kind === 'videoinput');
         
-        console.log('🔍 Device availability check:', { 
-          audioInputs: audioInputs.length, 
-          videoInputs: videoInputs.length 
-        });
         
         // Show warning if no devices are detected
         if (videoInputs.length === 0 && audioInputs.length === 0) {
@@ -278,7 +251,6 @@ const PrejoinPage = () => {
           setDeviceError('No microphone detected. You can still join with video only.');
         }
       } catch (error) {
-        console.error('❌ Device enumeration error:', error);
       }
     };
     
@@ -287,11 +259,9 @@ const PrejoinPage = () => {
 
   const fetchMeetingInfo = async () => {
     try {
-      console.log('🔍 PREJOIN: Fetching meeting info for ID:', meetingId);
       
       // Check if meetingId is a valid MongoDB ObjectId
       if (!isValidObjectId(meetingId as string)) {
-        console.log('🔍 PREJOIN: Invalid meeting ID format, redirecting to instructor dashboard');
         await Swal.fire({
           icon: 'error',
           title: 'Invalid Meeting ID',
@@ -336,7 +306,6 @@ const PrejoinPage = () => {
         throw authError;
       }
       
-      console.log('🔍 PREJOIN: Raw backend response:', result);
       
       if (result.getMeetingById) {
         // Check if required fields exist
@@ -353,13 +322,11 @@ const PrejoinPage = () => {
           inviteCode: result.getMeetingById.inviteCode || 'N/A'
         };
         
-        console.log('🔍 PREJOIN: Processed meeting data:', meeting);
         setMeetingInfo(meeting);
       } else {
         throw new Error('Meeting not found');
       }
     } catch (error: any) {
-      console.error('🔍 PREJOIN: Error fetching meeting info:', error);
       
       // Handle authentication errors specifically
       if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
@@ -408,18 +375,15 @@ const PrejoinPage = () => {
 
   const checkExistingParticipantStatus = async () => {
     try {
-      console.log('🔍 PREJOIN: Checking existing participant status...');
       
       // Get current user info
       const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
       if (!isAuthenticated()) {
-        console.log('🔍 PREJOIN: User not authenticated, skipping participant check');
         return;
       }
 
       const currentUser = await getCurrentUser();
       if (!currentUser) {
-        console.log('🔍 PREJOIN: No current user found, skipping participant check');
         return;
       }
 
@@ -432,11 +396,6 @@ const PrejoinPage = () => {
         const participant = participantResult.getParticipantByUserAndMeeting;
         const participantStatus = participant.status;
         
-        console.log('🔍 PREJOIN: Found existing participant:', {
-          status: participantStatus,
-          meetingId: meetingId,
-          userId: currentUser._id
-        });
 
         // If participant is already ADMITTED and meeting is LIVE, redirect to live room
         if (participantStatus === 'ADMITTED') {
@@ -446,18 +405,15 @@ const PrejoinPage = () => {
           });
 
           if (meetingResult.getMeetingById && meetingResult.getMeetingById.status === 'LIVE') {
-            console.log('🚀 PREJOIN: User is already ADMITTED and meeting is LIVE, redirecting to live room');
             router.push(`/livestream/${meetingId}`);
             return;
           }
         } else if (participantStatus === 'WAITING') {
-          console.log('🚀 PREJOIN: User is already in WAITING status, redirecting to waiting room');
           router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult?.getMeetingById?.inviteCode || ''}`);
           return;
         }
       }
     } catch (error) {
-      console.log('🔍 PREJOIN: Error checking existing participant status:', error);
       // Continue with normal flow if check fails
     }
   };
@@ -469,14 +425,12 @@ const PrejoinPage = () => {
     setJoinError(null);
 
     try {
-      console.log('🔍 PREJOIN: Joining meeting with ID:', meetingId);
       
       // Store audio/video preferences for the LiveKit room
       const audioVideoPreferences = {
         enableMicrophone: isMicOn,
         enableCamera: isVideoOn
       };
-      console.log('🎬 PREJOIN: Storing audio/video preferences:', audioVideoPreferences);
       
       // Store in sessionStorage so livestream page can read them
       sessionStorage.setItem('prejoin_audio_enabled', String(isMicOn));
@@ -492,7 +446,6 @@ const PrejoinPage = () => {
       }
       
       // CRITICAL FIX: Check backend meeting status first
-      console.log('🔍 PREJOIN: Checking backend meeting status...');
       const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
         meetingId: meetingId as string
       });
@@ -502,11 +455,8 @@ const PrejoinPage = () => {
       }
 
       const backendStatus = meetingResult.getMeetingById.status;
-      console.log('🔍 PREJOIN: Backend meeting status:', backendStatus);
-      console.log('🔍 PREJOIN: User role:', userRole);
 
       // Join the meeting and check participant status
-      console.log('🚀 PREJOIN: Calling JOIN_MEETING mutation...');
       
       const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
         input: {
@@ -516,50 +466,30 @@ const PrejoinPage = () => {
         } as JoinParticipantInput
       });
 
-      console.log('🔍 PREJOIN: Join meeting result:', joinResult);
 
       if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
-        console.log('✅ Successfully joined meeting:', joinResult.joinMeeting);
-        console.log('🔍 PREJOIN: Full participant object:', JSON.stringify(joinResult.joinMeeting, null, 2));
-        console.log('🔍 PREJOIN: Participant status:', joinResult.joinMeeting.status);
-        console.log('🔍 PREJOIN: Backend meeting status:', backendStatus);
         
         // CRITICAL FIX: Check participant status returned from backend
         const participantStatus = joinResult.joinMeeting.status;
         
         if (participantStatus === 'WAITING') {
           // Participant sent to waiting room, redirect to waiting page
-          console.log('🚀 PREJOIN: Participant sent to waiting room (status: WAITING), redirecting...');
           router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
         } else if (participantStatus === 'ADMITTED') {
           // Participant admitted directly, go to live room
-          console.log('🚀 PREJOIN: Participant admitted directly (status: ADMITTED), going to live room');
-          console.log('🔍 PREJOIN: Meeting status:', backendStatus, 'Participant status:', participantStatus);
           router.push(`/livestream/${meetingId}`);
         } else if (!participantStatus) {
           // If status is undefined, fallback to backend meeting status logic
-          console.log('⚠️ PREJOIN: Participant status is undefined, using backend meeting status as fallback');
-          console.log('🔍 PREJOIN: User role check - userRole:', userRole, 'backendStatus:', backendStatus);
           
           // CRITICAL FIX: Only allow non-hosts into live room if meeting is truly LIVE
           if (backendStatus === 'LIVE' && (userRole === 'TUTOR' || userRole === 'ADMIN')) {
             // Only hosts can join LIVE meetings directly
-            console.log('🚀 PREJOIN: Host joining LIVE meeting, going to live room');
             router.push(`/livestream/${meetingId}`);
           } else if ((userRole === 'TUTOR' || userRole === 'ADMIN') && (backendStatus === 'CREATED' || backendStatus === 'SCHEDULED')) {
             // Host can join even if meeting not started yet
-            console.log('🚀 PREJOIN: Host joining non-LIVE meeting, going to live room');
             router.push(`/livestream/${meetingId}`);
           } else {
             // Non-host participants should go to waiting room regardless of meeting status
-            console.log('🚀 PREJOIN: Non-host participant, going to waiting room');
-            console.log('🔍 PREJOIN: Redirect details:', {
-              backendStatus,
-              userRole,
-              meetingId,
-              inviteCode: meetingResult.getMeetingById.inviteCode,
-              hasRedirectedToWaiting
-            });
             
             // Prevent infinite redirect loop using localStorage with timestamp
             const redirectKey = `redirected_${meetingId}_anonymous`;
@@ -567,37 +497,23 @@ const PrejoinPage = () => {
             const now = Date.now();
             const REDIRECT_COOLDOWN = 30000; // 10 seconds cooldown
             
-            console.log('🔍 PREJOIN: Redirect check:', {
-              meetingId,
-              redirectKey,
-              lastRedirectTime,
-              timeSinceLastRedirect: lastRedirectTime ? now - parseInt(lastRedirectTime) : 'never',
-              cooldownPeriod: REDIRECT_COOLDOWN
-            });
             
             if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
               localStorage.setItem(redirectKey, now.toString());
-              console.log('🚀 PREJOIN: Redirecting to waiting room (cooldown period passed)');
               router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
             } else {
-              console.log('⚠️ PREJOIN: Redirect cooldown active, going to live room to prevent loop');
               // Clear the flag since we're going to live room
               localStorage.removeItem(redirectKey);
         router.push(`/livestream/${meetingId}`);
             }
           }
         } else {
-          console.error('❌ PREJOIN: Unknown participant status:', participantStatus);
-          console.error('❌ PREJOIN: Full participant object:', joinResult.joinMeeting);
           throw new Error('Unknown participant status: ' + participantStatus);
         }
       } else {
-        console.error('❌ PREJOIN: Failed to join meeting - no participant ID received');
-        console.error('❌ PREJOIN: Full join result:', joinResult);
         throw new Error('Failed to join meeting');
       }
     } catch (error: any) {
-      console.error('❌ Failed to join meeting:', error);
       setJoinError(error.message || 'Failed to join meeting');
     } finally {
       setIsJoining(false);
@@ -609,7 +525,6 @@ const PrejoinPage = () => {
     setJoinError(null);
 
     try {
-      console.log('🔍 PREJOIN: Creating new meeting');
       
       // Create meeting
       const createResult = await makeGraphQLRequest(CREATE_MEETING, {
@@ -621,32 +536,27 @@ const PrejoinPage = () => {
         } as CreateMeetingInput
       });
 
-      console.log('🔍 PREJOIN: Create meeting result:', createResult);
 
       if (!createResult.createMeeting || !createResult.createMeeting._id) {
         throw new Error('Failed to create meeting');
       }
 
       const newMeetingId = createResult.createMeeting._id;
-      console.log('✅ Meeting created:', newMeetingId);
 
       // Start meeting
       const startResult = await makeGraphQLRequest(START_MEETING, {
         meetingId: newMeetingId
       });
 
-      console.log('🔍 PREJOIN: Start meeting result:', startResult);
 
       if (!startResult.startMeeting || !startResult.startMeeting._id) {
         throw new Error('Failed to start meeting');
       }
 
-      console.log('✅ Meeting started');
 
       // Navigate to live room
       router.push(`/livestream/${newMeetingId}`);
     } catch (error: any) {
-      console.error('❌ Failed to create/start meeting:', error);
       setJoinError(error.message || 'Failed to create meeting');
     } finally {
       setIsJoining(false);
@@ -931,21 +841,16 @@ const PrejoinPage = () => {
                   objectFit: 'cover',
                   backgroundColor: '#000'
                 }}
-                onLoadStart={() => console.log('🎥 Video load started')}
-                onLoadedData={() => {
-                  console.log('🎥 Video data loaded');
-                  setDeviceError(null);
+                onLoadStart={() => {
+                  // Load start handler
                 }}
                 onCanPlay={() => {
-                  console.log('🎥 Video can play');
                   setDeviceError(null);
                 }}
                 onPlay={() => {
-                  console.log('🎥 Video playing');
                   setDeviceError(null);
                 }}
                 onError={(e) => {
-                  console.error('🎥 Video error:', e);
                   setDeviceError('Camera preview failed to load');
                 }}
               />

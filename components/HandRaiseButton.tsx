@@ -36,13 +36,10 @@ export const HandRaiseButton: React.FC<HandRaiseButtonProps> = ({
     participantId,
     isHost,
     onHandRaised: (info) => {
-      console.log('Hand raised:', info);
     },
     onHandLowered: (info) => {
-      console.log('Hand lowered:', info);
     },
     onError: (error) => {
-      console.error('Hand raise error:', error);
     },
   });
 

@@ -121,7 +121,6 @@ const AdminDashboard: React.FC = () => {
 
       setUser(userData);
     } catch (error) {
-      console.error('Auth check error:', error);
       router.push('/login');
     } finally {
       setLoading(false);
@@ -144,7 +143,6 @@ const AdminDashboard: React.FC = () => {
         await loadMeetingStats();
       }
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
     }
   };
 
@@ -178,38 +176,30 @@ const AdminDashboard: React.FC = () => {
         }));
         
         setMeetings(validMeetings);
-        console.log(`✅ ADMIN: Loaded ${validMeetings.length} valid meetings from backend`);
       } else {
-        console.warn('⚠️ ADMIN: No meetings data received from backend');
         setMeetings([]);
       }
     } catch (error) {
-      console.error('❌ ADMIN: Error loading meetings:', error);
       setMeetings([]);
     }
   };
 
   const loadMembers = async () => {
     try {
-      console.log('👥 ADMIN: Loading members from backend...');
       const result = await enhancedMakeGraphQLRequest(GET_MEMBERS);
 
       if (result.members) {
         setMembers(result.members);
-        console.log(`✅ ADMIN: Loaded ${result.members.length} members from backend`);
       } else {
-        console.warn('⚠️ ADMIN: No members data received from backend');
         setMembers([]);
       }
     } catch (error) {
-      console.error('❌ ADMIN: Error loading members:', error);
       setMembers([]);
     }
   };
 
   const loadMeetingStats = async () => {
     try {
-      console.log('📊 ADMIN: Loading meeting stats - using calculation method due to broken backend resolver');
       
       // Skip the broken getMeetingStats resolver entirely and calculate from meetings data
       const meetingsResult = await enhancedMakeGraphQLRequest(GET_ALL_MEETINGS_ADMIN, {
@@ -234,18 +224,10 @@ const AdminDashboard: React.FC = () => {
           averageMeetingDuration
         });
         
-        console.log('✅ ADMIN: Calculated meeting stats from meetings data:', {
-          totalMeetings,
-          activeMeetings,
-          scheduledMeetings,
-          completedMeetings,
-          totalParticipants
-        });
         return;
       }
       
       // If no meetings data, use fallback
-      console.warn('📊 ADMIN: No meetings data available, using fallback stats');
       setMeetingStats({
         totalMeetings: 0,
         activeMeetings: 0,
@@ -256,8 +238,6 @@ const AdminDashboard: React.FC = () => {
       });
       
     } catch (error) {
-      console.error('📊 ADMIN: Error loading meeting stats:', error);
-      console.warn('📊 ADMIN: Using fallback meeting stats due to error');
       
       // Final fallback data
       setMeetingStats({
@@ -278,7 +258,6 @@ const AdminDashboard: React.FC = () => {
         setVodStats(result.getVodStats);
       }
     } catch (error) {
-      console.error('Error loading VOD stats:', error);
       // Mock data
       setVodStats({
         totalVods: 89,
@@ -318,7 +297,6 @@ const AdminDashboard: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Error loading chat stats:', error);
       // Mock data
       setChatStats({
         totalMessages: 3456,
@@ -345,7 +323,6 @@ const AdminDashboard: React.FC = () => {
         setSelectedMeetingParticipants([]);
       }
     } catch (error) {
-      console.error('Error loading participants:', error);
       setSelectedMeetingParticipants([]);
     }
   };
@@ -368,7 +345,6 @@ const AdminDashboard: React.FC = () => {
         await Swal.fire('Deleted!', 'Meeting has been deleted.', 'success');
       }
     } catch (error) {
-      console.error('Error deleting meeting:', error);
       await Swal.fire('Error', 'Failed to delete meeting.', 'error');
     }
   };
@@ -379,7 +355,6 @@ const AdminDashboard: React.FC = () => {
       await loadMeetings();
       await Swal.fire('Success', 'Invite code has been rotated.', 'success');
     } catch (error) {
-      console.error('Error rotating invite code:', error);
       await Swal.fire('Error', 'Failed to rotate invite code.', 'error');
     }
   };
@@ -402,7 +377,6 @@ const AdminDashboard: React.FC = () => {
         await Swal.fire('Success', 'Meeting has been ended.', 'success');
       }
     } catch (error) {
-      console.error('Error force ending meeting:', error);
       await Swal.fire('Error', 'Failed to end meeting.', 'error');
     }
   };
@@ -422,7 +396,6 @@ const AdminDashboard: React.FC = () => {
       });
 
       if (result.isConfirmed) {
-        console.log(`🔄 ADMIN: Promoting user ${userId} from ${currentRole} to ${newRole}`);
         
         const response = await enhancedMakeGraphQLRequest(PROMOTE_USER_ROLE, {
           userId,
@@ -444,7 +417,6 @@ const AdminDashboard: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('❌ ADMIN: Error promoting user:', error);
       await Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -468,7 +440,6 @@ const AdminDashboard: React.FC = () => {
       });
 
       if (result.isConfirmed) {
-        console.log(`🗑️ ADMIN: Deleting user ${userId} (${userEmail})`);
         
         const response = await enhancedMakeGraphQLRequest(DELETE_MEMBER, {
           userId
@@ -489,7 +460,6 @@ const AdminDashboard: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('❌ ADMIN: Error deleting user:', error);
       await Swal.fire({
         icon: 'error',
         title: 'Error',

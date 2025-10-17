@@ -34,7 +34,6 @@ export const useAudioLevelDetection = (options: AudioLevelDetectionOptions = {})
       
       return true;
     } catch (error) {
-      console.warn('Audio context initialization failed:', error);
       return false;
     }
   }, [smoothingFactor]);
@@ -76,7 +75,6 @@ export const useAudioLevelDetection = (options: AudioLevelDetectionOptions = {})
         
         resolve(rms);
       } catch (error) {
-        console.warn('Audio analysis failed:', error);
         resolve(0);
       }
     });
@@ -119,7 +117,6 @@ export const useAudioLevelDetection = (options: AudioLevelDetectionOptions = {})
       
       monitor();
     } catch (error) {
-      console.warn('Audio monitoring failed:', error);
     }
   }, [threshold, initializeAudioContext]);
 
@@ -153,7 +150,6 @@ export const useAudioLevelDetection = (options: AudioLevelDetectionOptions = {})
             isSpeaking
           };
         } catch (error) {
-          console.warn(`Audio detection failed for participant ${participant._id}:`, error);
           return { _id: participant._id, audioLevel: 0, isSpeaking: false };
         }
       })

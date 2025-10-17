@@ -15,31 +15,25 @@ class WebSocketClient {
     this.token = token;
 
     const wsUrl = `ws://localhost:3007/ws?meetingId=${encodeURIComponent(meetingId)}&token=${encodeURIComponent(token)}`;
-    console.log('🔌 Connecting to WebSocket:', wsUrl);
 
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('🔌 WebSocket connected');
       this.reconnectAttempts = 0;
     };
 
     this.ws.onclose = (event) => {
-      console.log('🔌 WebSocket disconnected:', event.code, event.reason);
       this.handleReconnect();
     };
 
     this.ws.onerror = (error) => {
-      console.error('🔌 WebSocket error:', error);
     };
 
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        console.log('🔌 WebSocket message received:', message);
         this.handleMessage(message);
       } catch (error) {
-        console.error('🔌 Error parsing WebSocket message:', error);
       }
     };
 
@@ -49,7 +43,6 @@ class WebSocketClient {
   private handleReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`🔌 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
       
       setTimeout(() => {
         if (this.meetingId && this.token) {
@@ -57,7 +50,6 @@ class WebSocketClient {
         }
       }, this.reconnectDelay * this.reconnectAttempts);
     } else {
-      console.error('🔌 Max reconnection attempts reached');
     }
   }
 
@@ -73,10 +65,8 @@ class WebSocketClient {
         this.onUserLeft?.(message);
         break;
       case 'INFO':
-        console.log('🔌 WebSocket info:', message.text);
         break;
       default:
-        console.log('🔌 Unknown message type:', message.event);
     }
   }
 
@@ -86,10 +76,8 @@ class WebSocketClient {
         event: 'CHAT_SEND',
         text: text.trim()
       };
-      console.log('📤 Sending chat message:', message);
       this.ws.send(JSON.stringify(message));
     } else {
-      console.error('❌ WebSocket not connected, cannot send message');
     }
   }
 

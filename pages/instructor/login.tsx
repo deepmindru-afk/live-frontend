@@ -76,9 +76,6 @@ const InstructorLoginPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('🔐 INSTRUCTOR LOGIN: Caught error in handleSubmit:', error);
-      console.error('🔐 INSTRUCTOR LOGIN: Error message:', error.message);
-      console.error('🔐 INSTRUCTOR LOGIN: Error type:', typeof error);
       
       // Handle different types of errors with SweetAlert
       let errorMessage = '로그인 중 오류가 발생했습니다.';
@@ -91,7 +88,6 @@ const InstructorLoginPage: React.FC = () => {
         errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
       }
       
-      console.log('🔐 INSTRUCTOR LOGIN: Showing SweetAlert with message:', errorMessage);
       
       await Swal.fire({
         icon: 'error',

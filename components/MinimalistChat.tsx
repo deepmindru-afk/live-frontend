@@ -40,7 +40,6 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     meetingId,
     token: token || '',
     onMessage: (message) => {
-      console.log('📨 Chat message received:', message);
       const newMsg: Message = {
         _id: message._id || Date.now().toString(),
         text: message.text || (message as any).message || '',
@@ -64,11 +63,9 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
       });
     },
     onParticipantJoined: (participant) => {
-      console.log('👋 Participant joined chat:', participant);
       // Don't show chat join messages - only meeting join messages
     },
     onParticipantLeft: (participant) => {
-      console.log('👋 Participant left chat:', participant);
       // Don't show chat leave messages - only meeting leave messages
     }
   });
@@ -126,12 +123,6 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     if (participants.length > 0 && previousParticipants.length > 0) {
       // FIXED: Add debouncing to prevent spam from frequent participant updates
       const timeoutId = setTimeout(() => {
-        console.log('🔍 PARTICIPANT COMPARISON:', {
-          currentCount: participants.length,
-          previousCount: previousParticipants.length,
-          currentIds: participants.map(p => p._id),
-          previousIds: previousParticipants.map(p => p._id)
-        });
         // Only show join/leave messages for actual status changes, not frequent array updates
         // Check for new participants (actually joined - not just appeared in array due to heartbeat updates)
         const newParticipants = participants.filter(newP => {
@@ -250,9 +241,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     try {
       // Send message via WebSocket using the hook's sendMessage function
       if (sendMessage && isConnected) {
-        sendMessage(messageText);
-        console.log('📤 Message sent via WebSocket:', messageText);
-        
+        sendMessage(messageText);        
         // Don't add message locally here - let the WebSocket onMessage handle it
         // This prevents duplicate messages from the sender
       } else {
@@ -269,10 +258,8 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
           const otherMessages = prev.filter(msg => msg._id !== 'welcome');
           return welcomeMsg ? [welcomeMsg, ...otherMessages, message] : [...prev, message];
         });
-        console.log('📤 Message added locally (WebSocket not available):', messageText);
       }
     } catch (error) {
-      console.error('Error sending message:', error);
     }
   };
 

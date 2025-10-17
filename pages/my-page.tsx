@@ -64,7 +64,6 @@ const MyPage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
       } finally {
         setLoading(false);
       }
@@ -93,7 +92,6 @@ const MyPage: React.FC = () => {
     e.preventDefault();
     
     try {
-      console.log('👤 PROFILE UPDATE: Starting update with data:', formData);
       
       // Make GraphQL request
       const data = await makeGraphQLRequest(UPDATE_PROFILE, {
@@ -107,7 +105,6 @@ const MyPage: React.FC = () => {
         }
       });
       
-      console.log('👤 PROFILE UPDATE: Response received:', data);
       
       if (data.updateProfile) {
           // Update user state with new data
@@ -128,7 +125,6 @@ const MyPage: React.FC = () => {
         throw new Error('Profile update failed');
       }
     } catch (error: unknown) {
-      console.error('👤 PROFILE UPDATE: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -164,7 +160,6 @@ const MyPage: React.FC = () => {
     }
     
     try {
-      console.log('🔐 PASSWORD CHANGE: Starting password change');
       
       // Make GraphQL request
       const data = await makeGraphQLRequest(CHANGE_PASSWORD, {
@@ -174,7 +169,6 @@ const MyPage: React.FC = () => {
         }
       });
       
-      console.log('🔐 PASSWORD CHANGE: Response received:', data);
       
       if (data.changePassword && data.changePassword.success) {
         await Swal.fire({
@@ -193,7 +187,6 @@ const MyPage: React.FC = () => {
         throw new Error(data.changePassword?.message || 'Password change failed');
       }
     } catch (error: unknown) {
-      console.error('🔐 PASSWORD CHANGE: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -230,21 +223,18 @@ const MyPage: React.FC = () => {
       }
       
       try {
-        console.log('📤 IMAGE UPLOAD: Starting upload for file:', file.name);
         
         // Convert file to base64
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
             const base64String = event.target?.result as string;
-            console.log('📤 IMAGE UPLOAD: File converted to base64, length:', base64String.length);
             
             // Make GraphQL request
             const data = await makeGraphQLRequest(UPLOAD_PROFILE_IMAGE, {
               file: base64String
             });
             
-            console.log('📤 IMAGE UPLOAD: Response received:', data);
             
             if (data.uploadProfileImage && data.uploadProfileImage.success) {
               // Update user state with new avatar URL
@@ -263,7 +253,6 @@ const MyPage: React.FC = () => {
               throw new Error(data.uploadProfileImage?.message || 'Upload failed');
             }
           } catch (error: unknown) {
-            console.error('📤 IMAGE UPLOAD: Error:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             await Swal.fire({
               icon: 'error',
@@ -285,7 +274,6 @@ const MyPage: React.FC = () => {
         
         reader.readAsDataURL(file);
       } catch (error: unknown) {
-        console.error('📤 IMAGE UPLOAD: Error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         await Swal.fire({
           icon: 'error',
@@ -311,12 +299,10 @@ const MyPage: React.FC = () => {
       });
       
       if (result.isConfirmed) {
-        console.log('🗑️ IMAGE DELETE: Starting delete request');
         
         // Make GraphQL request
         const data = await makeGraphQLRequest(DELETE_PROFILE_IMAGE);
         
-        console.log('🗑️ IMAGE DELETE: Response received:', data);
         
         if (data.deleteProfileImage && data.deleteProfileImage.success) {
           // Update user state to remove avatar URL
@@ -336,7 +322,6 @@ const MyPage: React.FC = () => {
         }
       }
     } catch (error: unknown) {
-      console.error('🗑️ IMAGE DELETE: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -575,7 +560,6 @@ const MyPage: React.FC = () => {
                           }
                         });
                       } catch (error) {
-                        console.error('Logout error:', error);
                       }
                     }}
                   >

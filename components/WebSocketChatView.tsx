@@ -14,7 +14,6 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
   isHost,
   token
 }) => {
-  console.log('🎯 WebSocketChatView props:', { meetingId, currentUser: currentUser?.displayName, isHost, token: token ? 'present' : 'missing' });
   
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -39,13 +38,10 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
       }, 100);
     },
     onParticipantJoined: (participant) => {
-      console.log('👤 Participant joined chat:', participant);
     },
     onParticipantLeft: (participant) => {
-      console.log('👤 Participant left chat:', participant);
     },
     onError: (error) => {
-      console.error('❌ Chat error:', error);
     },
   });
 
@@ -66,14 +62,12 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
   }, [isConnected, ping]);
 
   const handleSendMessage = useCallback(() => {
-    console.log('📝 handleSendMessage called:', { newMessage: newMessage.trim(), isConnected, participants: participants.length });
     if (!newMessage.trim() || !isConnected) return;
 
     try {
       sendMessage(newMessage.trim());
       setNewMessage('');
     } catch (error) {
-      console.error('❌ Error sending message:', error);
     }
   }, [newMessage, isConnected, sendMessage, participants.length]);
 

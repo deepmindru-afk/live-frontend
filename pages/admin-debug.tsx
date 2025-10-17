@@ -12,7 +12,6 @@ const AdminDebugPage: React.FC = () => {
   const addDebugInfo = (message: string) => {
     const timestamp = new Date().toISOString();
     setDebugInfo(prev => [...prev, `[${timestamp}] ${message}`]);
-    console.log(`[ADMIN DEBUG] ${message}`);
   };
 
   useEffect(() => {
@@ -54,7 +53,6 @@ const AdminDebugPage: React.FC = () => {
       setUser(userData);
     } catch (error) {
       addDebugInfo(`Auth check error: ${error}`);
-      console.error('Auth check error:', error);
       router.push('/login');
     } finally {
       addDebugInfo('Auth check completed');
@@ -139,10 +137,5 @@ const AdminDebugPage: React.FC = () => {
 };
 
 export default AdminDebugPage;
-
-
-
-
-
 
 

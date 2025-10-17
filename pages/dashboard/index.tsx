@@ -62,7 +62,6 @@ const Dashboard: React.FC = () => {
 
   const testBackendConnection = async () => {
     try {
-      console.log('🔍 BACKEND TEST: Testing backend connection...');
       
       // Test with a simple query that should exist
       const result = await enhancedMakeGraphQLRequest(`
@@ -71,7 +70,6 @@ const Dashboard: React.FC = () => {
         }
       `);
       
-      console.log('🔍 BACKEND TEST: Backend is reachable:', result);
       
       // Test if meeting mutations exist
       try {
@@ -86,19 +84,15 @@ const Dashboard: React.FC = () => {
             }
           }
         `);
-        console.log('🔍 BACKEND TEST: GraphQL schema accessible');
       } catch (schemaError) {
-        console.warn('🔍 BACKEND TEST: Cannot access GraphQL schema:', schemaError);
       }
       
     } catch (error) {
-      console.error('🔍 BACKEND TEST: Backend connection failed:', error);
     }
   };
 
   const fetchMeetings = async () => {
     try {
-      console.log('📊 DASHBOARD: Fetching meetings...');
       
       // Try to fetch meetings via GraphQL first
       try {
@@ -120,15 +114,12 @@ const Dashboard: React.FC = () => {
           }));
           
           setMeetings(meetings);
-          console.log('📊 DASHBOARD: Successfully loaded meetings from GraphQL:', meetings.length);
           return;
         }
       } catch (graphqlError) {
-        console.warn('📊 DASHBOARD: GraphQL request failed, falling back to mock data:', graphqlError);
       }
       
       // Fallback to mock data if GraphQL fails
-      console.log('📊 DASHBOARD: Using mock data - backend meeting queries not available');
       
       // Mock data for demonstration
       const mockMeetings: Meeting[] = [
@@ -165,10 +156,8 @@ const Dashboard: React.FC = () => {
       ];
       
       setMeetings(mockMeetings);
-      console.log('📊 DASHBOARD: Successfully loaded mock meetings:', mockMeetings.length);
       
     } catch (error) {
-      console.error('📊 DASHBOARD: Error fetching meetings:', error);
       
       // Show error but don't block the UI
       await Swal.fire({
@@ -195,12 +184,9 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      console.log('🏠 CREATE MEETING: Creating meeting with title:', newMeetingTitle);
-      console.log('🏠 CREATE MEETING: Schedule:', meetingSchedule);
 
       // Try to create meeting via GraphQL first
       try {
-        console.log('🏠 CREATE MEETING: Attempting GraphQL request...');
         const result = await enhancedMakeGraphQLRequest(CREATE_MEETING, {
           input: {
             title: newMeetingTitle,
@@ -210,7 +196,6 @@ const Dashboard: React.FC = () => {
           }
         });
 
-        console.log('🏠 CREATE MEETING: GraphQL response received:', result);
 
         if (result.createMeeting && result.createMeeting._id) {
           const newMeeting: Meeting = {
@@ -238,15 +223,12 @@ const Dashboard: React.FC = () => {
           setNewMeetingTitle('');
           setMeetingSchedule('');
 
-          console.log('🏠 CREATE MEETING: Meeting created via GraphQL:', newMeeting);
           return;
         }
       } catch (graphqlError) {
-        console.warn('🏠 CREATE MEETING: GraphQL request failed:', graphqlError);
         
         // Check if it's a "field not found" error (backend doesn't have meeting mutations)
         if (graphqlError instanceof Error && graphqlError.message.includes('Cannot query field')) {
-          console.warn('🏠 CREATE MEETING: Backend does not have meeting mutations implemented');
         }
       }
 
@@ -276,10 +258,8 @@ const Dashboard: React.FC = () => {
       setNewMeetingTitle('');
       setMeetingSchedule('');
 
-      console.log('🏠 CREATE MEETING: Mock meeting created:', newMeeting);
 
     } catch (error: unknown) {
-      console.error('🏠 CREATE MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -292,7 +272,6 @@ const Dashboard: React.FC = () => {
 
   const handleStartMeeting = async (meetingId: string) => {
     try {
-      console.log('▶️ START MEETING: Starting meeting:', meetingId);
       
       // Try to start meeting via GraphQL first
       try {
@@ -313,14 +292,12 @@ const Dashboard: React.FC = () => {
             confirmButtonText: '확인'
           });
 
-          console.log('▶️ START MEETING: Meeting started via GraphQL, navigating to prejoin:', meetingId);
           
           // Navigate to prejoin room
           router.push(`/prejoin/${meetingId}`);
           return;
         }
       } catch (graphqlError) {
-        console.warn('▶️ START MEETING: GraphQL request failed, falling back to local update:', graphqlError);
       }
       
       // Fallback to local state update if GraphQL fails
@@ -337,13 +314,11 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
 
-      console.log('▶️ START MEETING: Mock meeting started, navigating to prejoin:', meetingId);
       
       // Navigate to prejoin room even for mock service
       router.push(`/prejoin/${meetingId}`);
 
     } catch (error: unknown) {
-      console.error('▶️ START MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -356,23 +331,18 @@ const Dashboard: React.FC = () => {
 
   const handleEndMeeting = async (meetingId: string) => {
     try {
-      console.log('⏹️ END MEETING: Ending meeting:', meetingId);
       
       // Try to end meeting via GraphQL first
       try {
-        console.log('⏹️ END MEETING: Calling GraphQL with meetingId:', meetingId);
         const result = await enhancedMakeGraphQLRequest(END_MEETING, { meetingId });
-        console.log('⏹️ END MEETING: GraphQL response received:', result);
         
         // Check if result is null (which happens when auth is cleared)
         if (result === null) {
-          console.warn('⏹️ END MEETING: GraphQL returned null (auth cleared), falling back to local update');
           throw new Error('Authentication cleared during request');
         }
         
         // Check if the result has the expected structure
         if (result && result.endMeeting && result.endMeeting._id) {
-          console.log('⏹️ END MEETING: GraphQL result structure:', result);
           // Update meeting status in local state
           setMeetings(prev => prev.map(meeting => 
             meeting._id === meetingId 
@@ -387,21 +357,17 @@ const Dashboard: React.FC = () => {
             confirmButtonText: '확인'
           });
 
-          console.log('⏹️ END MEETING: Meeting ended via GraphQL:', meetingId);
           return;
         } else {
-          console.warn('⏹️ END MEETING: GraphQL result missing expected fields, falling back to local update');
           throw new Error('Invalid response structure');
         }
       } catch (graphqlError) {
-        console.warn('⏹️ END MEETING: GraphQL request failed, falling back to local update:', graphqlError);
         
         // Check if this is an authentication error that cleared the token
         if (graphqlError instanceof Error && 
             (graphqlError.message.includes('Invalid credentials') || 
              graphqlError.message.includes('JWT_EXPIRED') ||
              graphqlError.message.includes('TOKEN_NOT_EXIST'))) {
-          console.warn('⏹️ END MEETING: Authentication error detected, user may be logged out');
           // Don't show error to user, just fall back to local update
         }
       }
@@ -420,10 +386,8 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
 
-      console.log('⏹️ END MEETING: Meeting ended via fallback:', meetingId);
 
     } catch (error: unknown) {
-      console.error('⏹️ END MEETING: Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await Swal.fire({
         icon: 'error',
@@ -444,7 +408,6 @@ const Dashboard: React.FC = () => {
         confirmButtonText: '확인'
       });
     } catch (error) {
-      console.error('Copy failed:', error);
       await Swal.fire({
         icon: 'error',
         title: '복사 실패',

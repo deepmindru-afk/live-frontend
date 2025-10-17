@@ -63,23 +63,14 @@ export const useWebSocketHandRaise = ({
   // Raise hand
   const raiseHand = useCallback(() => {
     if (!socket || !isConnected) {
-      console.error('✋ WebSocket not connected');
       callbacksRef.current.onError?.('Not connected to server');
       return;
     }
 
     if (myHandRaised) {
-      console.log('✋ Hand already raised, ignoring');
       return;
     }
 
-    console.log('✋ Raising hand via WebSocket', {
-      meetingId,
-      userId,
-      displayName,
-      socket: !!socket,
-      isConnected
-    });
     setIsLoading(true);
     
     socket.emit('RAISE_HAND', {
@@ -91,7 +82,6 @@ export const useWebSocketHandRaise = ({
     // Add a timeout to detect if the event is not being processed
     setTimeout(() => {
       if (isLoading) {
-        console.error('✋ Hand raise timeout - no response received');
         setIsLoading(false);
         callbacksRef.current.onError?.('Hand raise timeout - no response from server');
       }
@@ -101,17 +91,14 @@ export const useWebSocketHandRaise = ({
   // Lower hand
   const lowerHand = useCallback(() => {
     if (!socket || !isConnected) {
-      console.error('✋ WebSocket not connected');
       callbacksRef.current.onError?.('Not connected to server');
       return;
     }
 
     if (!myHandRaised) {
-      console.log('✋ Hand not raised, ignoring');
       return;
     }
 
-    console.log('✋ Lowering hand via WebSocket');
     setIsLoading(true);
     
     socket.emit('LOWER_HAND', {
@@ -124,11 +111,9 @@ export const useWebSocketHandRaise = ({
   // Get current raised hands
   const getRaisedHands = useCallback(() => {
     if (!socket || !isConnected) {
-      console.error('✋ WebSocket not connected');
       return;
     }
 
-    console.log('✋ Getting raised hands list');
     socket.emit('GET_RAISED_HANDS', { meetingId });
   }, [socket, isConnected, meetingId]);
 
@@ -137,22 +122,17 @@ export const useWebSocketHandRaise = ({
     if (!socket) return;
 
     const handleHandRaised = (data: HandRaiseInfo) => {
-      console.log('✋ Hand raised event received:', data);
-      console.log('✋ Current userId:', userId);
-      console.log('✋ Is this my hand?', data.userId === userId);
       setIsLoading(false);
       
       setRaisedHands(prev => {
         // Remove any existing entry for this user
         const filtered = prev.filter(hand => hand.userId !== data.userId);
         const newHands = [...filtered, data];
-        console.log('✋ Updated raised hands:', newHands);
         return newHands;
       });
       
       // Update my hand status if it's my hand
       if (data.userId === userId) {
-        console.log('✋ Updating my hand status to raised');
         setMyHandRaised(true);
       }
       
@@ -160,7 +140,6 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleHandLowered = (data: HandRaiseInfo) => {
-      console.log('✋ Hand lowered event received:', data);
       setIsLoading(false);
       
       setRaisedHands(prev => {
@@ -177,7 +156,6 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleHandAutoLowered = (data: HandRaiseInfo & { reason: string }) => {
-      console.log('✋ Hand auto-lowered event received:', data);
       setIsLoading(false);
       
       setRaisedHands(prev => {
@@ -194,7 +172,6 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleRaisedHandsList = (data: { raisedHands: HandRaiseInfo[] }) => {
-      console.log('✋ Raised hands list received:', data);
       setRaisedHands(data.raisedHands);
       
       // Update my hand status
@@ -203,7 +180,6 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleHandLoweredByHost = (data: HandRaiseInfo & { hostId: string; hostDisplayName: string; reason?: string }) => {
-      console.log('✋ Hand lowered by host event received:', data);
       setIsLoading(false);
       
       setRaisedHands(prev => {
@@ -220,7 +196,6 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleAllHandsLowered = (data: { hostId: string; hostDisplayName: string; reason?: string; loweredCount: number; loweredHands: HandRaiseInfo[] }) => {
-      console.log('✋ All hands lowered event received:', data);
       setIsLoading(false);
       
       // Clear all raised hands
@@ -231,13 +206,11 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleError = (error: { message: string }) => {
-      console.error('✋ Hand raise error:', error);
       setIsLoading(false);
       callbacksRef.current.onError?.(error.message);
     };
 
     // Register event listeners
-    console.log('✋ Registering WebSocket event listeners');
     socket.on('HAND_RAISED', handleHandRaised);
     socket.on('HAND_LOWERED', handleHandLowered);
     socket.on('HAND_LOWERED_BY_HOST', handleHandLoweredByHost);
@@ -249,13 +222,11 @@ export const useWebSocketHandRaise = ({
     // Add a test listener to see if any events are coming through
     socket.onAny((eventName, ...args) => {
       if (eventName.includes('HAND') || eventName.includes('ERROR')) {
-        console.log('✋ WebSocket event received:', eventName, args);
       }
     });
 
     // Cleanup - CRITICAL: Remove ALL listeners to prevent duplication
     return () => {
-      console.log('✋ Cleaning up WebSocket event listeners');
       socket.off('HAND_RAISED', handleHandRaised);
       socket.off('HAND_LOWERED', handleHandLowered);
       socket.off('HAND_LOWERED_BY_HOST', handleHandLoweredByHost);

@@ -53,7 +53,6 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
 
       return JSON.parse(data.testLivekitToken);
     } catch (error: any) {
-      console.error('❌ LiveKit: Token generation failed', error);
       throw new Error(`Token generation failed: ${error.message}`);
     }
   };
@@ -66,11 +65,9 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
     setError(null);
 
     try {
-      console.log('🔌 LiveKit: Starting connection...', { meetingId, participantName, meetingRole });
 
       // Get token
       const tokenResponse = await getLiveKitToken();
-      console.log('🎫 LiveKit: Token received');
 
       // Create room
       const newRoom = new Room({
@@ -83,7 +80,6 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
 
       // Connect to room
       await newRoom.connect(tokenResponse.wsUrl, tokenResponse.token);
-      console.log('✅ LiveKit: Connected to room');
 
       setRoom(newRoom);
       setIsConnected(true);
@@ -91,7 +87,6 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
       onConnected?.();
 
     } catch (error: any) {
-      console.error('❌ LiveKit: Connection failed', error);
       setError(error.message);
       setIsConnecting(false);
       onError?.(error);
@@ -101,7 +96,6 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
   // Disconnect from room
   const disconnectFromRoom = async () => {
     if (room) {
-      console.log('🔌 LiveKit: Disconnecting...');
       await room.disconnect();
       setRoom(null);
       setIsConnected(false);
@@ -116,24 +110,20 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
   // Set up room event listeners
   const setupRoomEventListeners = (roomInstance: Room) => {
     roomInstance.on(RoomEvent.Connected, () => {
-      console.log('✅ LiveKit: Room connected');
       setConnectionState(ConnectionState.Connected);
       setIsConnected(true);
     });
 
     roomInstance.on(RoomEvent.Disconnected, (reason) => {
-      console.log('🔌 LiveKit: Room disconnected', reason);
       setConnectionState(ConnectionState.Disconnected);
       setIsConnected(false);
     });
 
     roomInstance.on(RoomEvent.ParticipantConnected, (participant) => {
-      console.log('👤 LiveKit: Participant connected', participant.identity);
       setParticipants(prev => new Map(prev.set(participant.identity, participant)));
     });
 
     roomInstance.on(RoomEvent.ParticipantDisconnected, (participant) => {
-      console.log('👋 LiveKit: Participant disconnected', participant.identity);
       setParticipants(prev => {
         const newMap = new Map(prev);
         newMap.delete(participant.identity);
@@ -148,17 +138,14 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
     });
 
     roomInstance.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-      console.log('🎵 LiveKit: Track subscribed', { track, participant: participant.identity });
       handleTrackSubscribed(track, participant);
     });
 
     roomInstance.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-      console.log('🔇 LiveKit: Track unsubscribed', { track, participant: participant.identity });
       handleTrackUnsubscribed(track, participant);
     });
 
     roomInstance.on(RoomEvent.TrackMuted, (publication, participant) => {
-      console.log('🔇 LiveKit: Track muted', { participant: participant.identity, track: publication.kind });
       if (participant === roomInstance.localParticipant) {
         if (publication.kind === Track.Kind.Audio) {
           setIsMuted(true);
@@ -171,14 +158,9 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
     roomInstance.on(RoomEvent.TrackUnmuted, (publication, participant) => {
       // CRITICAL FIX: Add null checks for participant to prevent "cannot read properties of undefined" errors
       if (!participant) {
-        console.warn('⚠️ LiveKit: TrackUnmuted event received with undefined participant');
         return;
       }
       
-      console.log('🔊 LiveKit: Track unmuted', { 
-        participant: participant.identity || 'unknown', 
-        track: publication?.kind || 'unknown' 
-      });
       
       if (participant === roomInstance.localParticipant) {
         if (publication.kind === Track.Kind.Audio) {
@@ -254,14 +236,11 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
       if (isMuted) {
         await room.localParticipant.setMicrophoneEnabled(true);
         setIsMuted(false);
-        console.log('🎤 LiveKit: Microphone enabled');
       } else {
         await room.localParticipant.setMicrophoneEnabled(false);
         setIsMuted(true);
-        console.log('🎤 LiveKit: Microphone disabled');
       }
     } catch (error) {
-      console.error('❌ LiveKit: Failed to toggle microphone', error);
       setError('Failed to toggle microphone');
     }
   };
@@ -274,7 +253,6 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
       if (isCameraEnabled) {
         await room.localParticipant.setCameraEnabled(false);
         setIsCameraEnabled(false);
-        console.log('📹 LiveKit: Camera disabled');
       } else {
         // FIX: Use explicit video constraints to prevent "scaleResolutionDownBy non-finite" error
         await room.localParticipant.setCameraEnabled(true, {
@@ -285,10 +263,8 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
           },
         });
         setIsCameraEnabled(true);
-        console.log('📹 LiveKit: Camera enabled');
       }
     } catch (error) {
-      console.error('❌ LiveKit: Failed to toggle camera', error);
       setError('Failed to toggle camera');
     }
   };
@@ -301,14 +277,11 @@ const SimpleLiveKitRoom: React.FC<SimpleLiveKitRoomProps> = ({
       if (isScreenSharing) {
         await room.localParticipant.setScreenShareEnabled(false);
         setIsScreenSharing(false);
-        console.log('🖥️ LiveKit: Screen sharing stopped');
       } else {
         await room.localParticipant.setScreenShareEnabled(true);
         setIsScreenSharing(true);
-        console.log('🖥️ LiveKit: Screen sharing started');
       }
     } catch (error) {
-      console.error('❌ LiveKit: Failed to toggle screen share', error);
       setError('Failed to toggle screen share');
     }
   };

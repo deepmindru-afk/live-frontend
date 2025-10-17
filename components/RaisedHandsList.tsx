@@ -34,19 +34,14 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
     participantId,
     isHost,
     onHandRaised: (info) => {
-      console.log('Hand raised:', info);
     },
     onHandLowered: (info) => {
-      console.log('Hand lowered:', info);
     },
     onHandLoweredByHost: (info) => {
-      console.log('Hand lowered by host:', info);
     },
     onAllHandsLowered: (info) => {
-      console.log('All hands lowered:', info);
     },
     onError: (error) => {
-      console.error('Hand raise error:', error);
     },
   });
 

@@ -115,7 +115,6 @@ const SimpleDashboard: React.FC = () => {
           return;
         }
       } catch (graphqlError) {
-        console.warn('GraphQL request failed, falling back to mock data:', graphqlError);
       }
 
       // Fallback to mock meeting if GraphQL fails
@@ -135,7 +134,6 @@ const SimpleDashboard: React.FC = () => {
       setMeetingSchedule('');
       alert('Meeting created successfully! (Mock Service)');
     } catch (error) {
-      console.error('Error creating meeting:', error);
       alert('Error creating meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
@@ -159,7 +157,6 @@ const SimpleDashboard: React.FC = () => {
           return;
         }
       } catch (graphqlError) {
-        console.warn('GraphQL request failed, falling back to local update:', graphqlError);
       }
       
       // Fallback to local state update if GraphQL fails
@@ -173,7 +170,6 @@ const SimpleDashboard: React.FC = () => {
       // Navigate to prejoin room even for mock service
       router.push(`/prejoin/${meetingId}`);
     } catch (error) {
-      console.error('Error starting meeting:', error);
       alert('Error starting meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
@@ -194,7 +190,6 @@ const SimpleDashboard: React.FC = () => {
           return;
         }
       } catch (graphqlError) {
-        console.warn('GraphQL request failed, falling back to local update:', graphqlError);
       }
       
       // Fallback to local state update if GraphQL fails
@@ -205,7 +200,6 @@ const SimpleDashboard: React.FC = () => {
       ));
       alert('Meeting ended! (Mock Service)');
     } catch (error) {
-      console.error('Error ending meeting:', error);
       alert('Error ending meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };

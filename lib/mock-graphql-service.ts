@@ -171,8 +171,6 @@ function isMeetingOperation(query: string): boolean {
 
 // Mock GraphQL request handler
 export async function mockGraphQLRequest(query: string, variables: any = {}) {
-  console.log('🎭 MOCK GRAPHQL: Handling mock request for:', query.substring(0, 100) + '...');
-  console.log('🎭 MOCK GRAPHQL: Variables:', variables);
 
   // Handle createMeeting mutation
   if (query.includes('createMeeting')) {
@@ -276,7 +274,6 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
 
   // Handle getMeetings query (for member dashboard)
   if (query.includes('getMeetings') && !query.includes('getMeetingStats')) {
-    console.log('🎭 MOCK GRAPHQL: Handling getMeetings query');
     return {
       getMeetings: {
         total: mockMeetings.length,
@@ -482,7 +479,6 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
     }
 
     // Meeting not found in mock data, try to fetch from real backend
-    console.log('🎭 MOCK GRAPHQL: Meeting not found in mock data, trying real backend:', meetingId);
     
     try {
       const { makeGraphQLRequest } = await import('./simple-auth-handlers');
@@ -491,15 +487,12 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
       const realResult = await makeGraphQLRequest(GET_MEETING_BY_ID, { meetingId });
       
       if (realResult.getMeetingById) {
-        console.log('🎭 MOCK GRAPHQL: Found meeting in real backend:', realResult.getMeetingById);
         return realResult;
       }
     } catch (error) {
-      console.log('🎭 MOCK GRAPHQL: Could not fetch from real backend:', error.message);
     }
 
     // If real backend also fails, create a dynamic meeting
-    console.log('🎭 MOCK GRAPHQL: Creating dynamic meeting as fallback:', meetingId);
     
     return {
       getMeetingById: {
@@ -747,7 +740,6 @@ export async function enhancedMakeGraphQLRequest(query: string | any, variables:
   }
 
   // ALWAYS use real backend - disable mock service to fix participant join issues
-  console.log('🌐 REAL GRAPHQL: Using real backend for all operations (mock service disabled)');
   
   // Import the real makeGraphQLRequest function
   const { makeGraphQLRequest } = await import('./simple-auth-handlers');

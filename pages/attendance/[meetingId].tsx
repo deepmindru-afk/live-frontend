@@ -88,38 +88,26 @@ const AttendancePage: React.FC = () => {
           setMeeting(meetingResult.getMeetingById);
         }
       } catch (error) {
-        console.warn('Failed to load meeting details:', error);
       }
 
       // Load attendance data
       try {
-        console.log('🔍 Loading attendance data for meeting:', meetingId);
         const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         });
         
-        console.log('📊 Attendance result:', attendanceResult);
         
         if (attendanceResult.getMeetingAttendance) {
-          console.log('✅ Setting attendance data:', attendanceResult.getMeetingAttendance);
           setAttendance(attendanceResult.getMeetingAttendance);
         } else {
-          console.log('❌ No attendance data in result');
           setAttendance(null);
         }
       } catch (error) {
-        console.error('❌ Failed to load attendance data:', error);
-        console.error('❌ Error details:', {
-          message: error.message,
-          stack: error.stack,
-          response: error.response
-        });
         // No fallback data - let it show empty state
         setAttendance(null);
       }
       
     } catch (error) {
-      console.error('Error loading meeting data:', error);
     } finally {
       setLoading(false);
     }
@@ -944,10 +932,5 @@ const AttendancePage: React.FC = () => {
 };
 
 export default AttendancePage;
-
-
-
-
-
 
 

@@ -115,7 +115,6 @@ const InstructorSignupPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Tutor signup error:', error);
     } finally {
       setIsLoading(false);
     }

@@ -31,12 +31,6 @@ class PresenceService {
     this.config = config;
     this.callbacks = callbacks;
     
-    console.log('[PRESENCE_SERVICE] Initialized with config:', {
-      serverUrl: config.serverUrl,
-      meetingId: config.meetingId,
-      userId: config.userId,
-      hasToken: !!config.token
-    });
   }
 
   /**
@@ -48,12 +42,10 @@ class PresenceService {
     }
 
     if (this.socket?.connected) {
-      console.log('[PRESENCE_SERVICE] Already connected');
       return;
     }
 
     try {
-      console.log('[PRESENCE_SERVICE] Connecting to WebSocket...');
       
       this.socket = io(`${this.config.serverUrl}/signaling`, {
         auth: {
@@ -74,7 +66,6 @@ class PresenceService {
 
         this.socket!.on('connect', () => {
           clearTimeout(timeout);
-          console.log('[PRESENCE_SERVICE] Connected to WebSocket');
           resolve();
         });
 
@@ -84,7 +75,6 @@ class PresenceService {
         });
       });
     } catch (error) {
-      console.error('[PRESENCE_SERVICE] Connection failed:', error);
       throw error;
     }
   }
@@ -98,7 +88,6 @@ class PresenceService {
     }
 
     try {
-      console.log('[PRESENCE_SERVICE] Joining meeting:', this.config.meetingId);
       
       this.socket.emit('JOIN_MEETING', { meetingId: this.config.meetingId });
       
@@ -108,7 +97,6 @@ class PresenceService {
       this.isActive = true;
       this.callbacks.onConnected?.();
     } catch (error) {
-      console.error('[PRESENCE_SERVICE] Failed to join meeting:', error);
       throw error;
     }
   }
@@ -118,12 +106,10 @@ class PresenceService {
    */
   async leaveMeeting(): Promise<void> {
     if (!this.socket?.connected || !this.config) {
-      console.warn('[PRESENCE_SERVICE] Not connected, cannot leave meeting');
       return;
     }
 
     try {
-      console.log('[PRESENCE_SERVICE] Leaving meeting:', this.config.meetingId);
       
       this.socket.emit('LEAVE_MEETING', { meetingId: this.config.meetingId });
       
@@ -133,7 +119,6 @@ class PresenceService {
       this.isActive = false;
       this.callbacks.onDisconnected?.();
     } catch (error) {
-      console.error('[PRESENCE_SERVICE] Failed to leave meeting:', error);
       throw error;
     }
   }
@@ -146,7 +131,6 @@ class PresenceService {
       clearInterval(this.heartbeatInterval);
     }
 
-    console.log('[PRESENCE_SERVICE] Starting heartbeat system');
     
     // Send initial heartbeat
     this.sendHeartbeat();
@@ -161,7 +145,6 @@ class PresenceService {
    * Stop heartbeat system
    */
   private stopHeartbeat(): void {
-    console.log('[PRESENCE_SERVICE] Stopping heartbeat system');
     
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -179,12 +162,10 @@ class PresenceService {
    */
   private sendHeartbeat(): void {
     if (!this.socket?.connected || !this.config) {
-      console.warn('[PRESENCE_SERVICE] Cannot send heartbeat: not connected');
       return;
     }
 
     try {
-      console.log('[PRESENCE_SERVICE] Sending heartbeat');
       this.socket.emit('HEARTBEAT', { meetingId: this.config.meetingId });
       
       // Set timeout to detect if heartbeat is not acknowledged
@@ -193,12 +174,10 @@ class PresenceService {
       }
 
       this.heartbeatTimeout = setTimeout(() => {
-        console.warn('[PRESENCE_SERVICE] Heartbeat timeout - no acknowledgment received');
         this.callbacks.onHeartbeatTimeout?.();
       }, 15000); // 15 second timeout
       
     } catch (error) {
-      console.error('[PRESENCE_SERVICE] Error sending heartbeat:', error);
       this.callbacks.onError?.(`Failed to send heartbeat: ${(error as Error).message}`);
     }
   }
@@ -210,18 +189,15 @@ class PresenceService {
     if (!this.socket) return;
 
     this.socket.on('MEETING_JOIN_SUCCESS', (data) => {
-      console.log('[PRESENCE_SERVICE] Meeting join successful:', data);
       this.lastHeartbeat = new Date();
       this.callbacks.onPresenceUpdate?.(data);
     });
 
     this.socket.on('MEETING_LEAVE_SUCCESS', (data) => {
-      console.log('[PRESENCE_SERVICE] Meeting leave successful:', data);
       this.callbacks.onPresenceUpdate?.(data);
     });
 
     this.socket.on('HEARTBEAT_ACK', (data) => {
-      console.log('[PRESENCE_SERVICE] Heartbeat acknowledged:', data);
       this.lastHeartbeat = new Date();
       
       // Clear heartbeat timeout
@@ -234,19 +210,16 @@ class PresenceService {
     });
 
     this.socket.on('ERROR', (data) => {
-      console.error('[PRESENCE_SERVICE] WebSocket error:', data);
       this.callbacks.onError?.(data.message || 'WebSocket error occurred');
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('[PRESENCE_SERVICE] Disconnected:', reason);
       this.stopHeartbeat();
       this.isActive = false;
       this.callbacks.onDisconnected?.();
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('[PRESENCE_SERVICE] Connection error:', error);
       this.callbacks.onError?.(`Connection error: ${error.message}`);
     });
   }
@@ -255,7 +228,6 @@ class PresenceService {
    * Disconnect from WebSocket
    */
   disconnect(): void {
-    console.log('[PRESENCE_SERVICE] Disconnecting...');
     
     this.stopHeartbeat();
     

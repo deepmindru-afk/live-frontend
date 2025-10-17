@@ -60,7 +60,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
       analyserRef.current.fftSize = 256;
       analyserRef.current.smoothingTimeConstant = 0.8;
     } catch (error) {
-      console.warn('Audio analysis not supported:', error);
     }
   }, []);
 
@@ -82,7 +81,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
       
       return Math.round(average);
     } catch (error) {
-      console.warn('Error analyzing audio:', error);
       return 0;
     }
   }, []);
@@ -295,10 +293,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update participants when initialParticipants changes
   useEffect(() => {
-    console.log('🔄 [useParticipantQueue] initialParticipants changed:', {
-      initialParticipantsLength: initialParticipants.length,
-      initialParticipants: initialParticipants.map(p => ({ id: p._id, name: p.displayName }))
-    });
     
     const updatedParticipants = initialParticipants.map((p, index) => ({
       ...p,

@@ -67,20 +67,15 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🔐 LOGIN FORM: Form submitted!');
-    console.log('🔐 LOGIN FORM: Form data:', formData);
     
     if (!validateForm()) {
-      console.log('🔐 LOGIN FORM: Validation failed');
       return;
     }
 
-    console.log('🔐 LOGIN FORM: Validation passed, calling handleLogin');
     setIsLoading(true);
     
     try {
       const success = await handleLogin(formData);
-      console.log('🔐 LOGIN FORM: handleLogin result:', success);
       if (success) {
         // Get user data and redirect
         const user = await getCurrentUser();
@@ -91,7 +86,6 @@ const LoginPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('🔐 LOGIN FORM: Login error:', error);
       
       // Handle different types of errors with SweetAlert
       let errorMessage = '로그인 중 오류가 발생했습니다.';

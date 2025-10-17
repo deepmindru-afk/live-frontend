@@ -52,7 +52,6 @@ const LiveKitVideoComponent: React.FC<LiveKitVideoComponentProps> = ({
   const handleVideoError = () => {
     setHasError(true);
     setIsVideoLoaded(false);
-    console.error('Video track error for participant:', participant.identity);
   };
 
   const handleVideoLoad = () => {
