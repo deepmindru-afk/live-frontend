@@ -88,24 +88,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     isLiveKitConnected: false
   });
   
-  console.log(`🏠 [PARENT RENDER] ProfessionalLiveStreamRoom #${parentRenderCountRef.current}`, {
-    propMeetingId,
-    role,
-    userId,
-    timestamp: new Date().toISOString()
-  });
-  
-  // DEBUG: Track what's causing re-renders (props vs internal state)
+  // Track what's causing re-renders (props vs internal state)
   const prevPropsRef = useRef({ propMeetingId, role, userId });
   useEffect(() => {
     if (prevPropsRef.current.propMeetingId !== propMeetingId || 
         prevPropsRef.current.role !== role || 
         prevPropsRef.current.userId !== userId) {
-      console.log('🔄 [PROPS CHANGED] Parent props changed', {
-        parentRender: parentRenderCountRef.current,
-        oldProps: prevPropsRef.current,
-        newProps: { propMeetingId, role, userId }
-      });
       prevPropsRef.current = { propMeetingId, role, userId };
     }
   }, [propMeetingId, role, userId]);
@@ -149,28 +137,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [currentParticipant, setCurrentParticipant] = useState<any>(null);
   // ✅ CRITICAL FIX: Store only participant ID to prevent reference issues
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
-  
-  // Derive the actual participant object from the current participants list
-  const selectedParticipant = useMemo(() => {
-    if (!selectedParticipantId) return null;
-    return queueState.participants.find(p => p._id === selectedParticipantId) || null;
-  }, [selectedParticipantId, queueState.participants]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   
-  // DEBUG: Track participants state changes
+  // Track participants state changes
   const prevParticipantsRef = useRef(participants);
   
   useEffect(() => {
     if (prevParticipantsRef.current !== participants) {
-      console.log('🔄 [STATE CHANGE] participants changed', {
-        parentRender: parentRenderCountRef.current,
-        oldLength: prevParticipantsRef.current?.length,
-        newLength: participants?.length,
-        oldRef: prevParticipantsRef.current,
-        newRef: participants
-      });
       prevParticipantsRef.current = participants;
     }
   }, [participants]);
@@ -188,12 +163,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const prevMemoizedRef = useRef<any[]>([]);
   
   const memoizedParticipants = useMemo(() => {
-    console.log('🔄 [MEMOIZED] memoizedParticipants recalculating', {
-      parentRender: parentRenderCountRef.current,
-      participantsLength: participants?.length,
-      participantsRef: participants
-    });
-    
     const newMemoized = participants.map(p => ({
       _id: p._id,
       displayName: p.displayName,
@@ -225,12 +194,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
       }
       if (!hasChanged) {
-        console.log('✅ [MEMOIZED] memoizedParticipants unchanged, returning cached version');
         return prevMemoizedRef.current; // Return same reference if data unchanged
       }
     }
     
-    console.log('🔄 [MEMOIZED] memoizedParticipants changed, creating new array');
     prevMemoizedRef.current = newMemoized;
     return newMemoized;
   }, [participants]);
@@ -250,46 +217,53 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     updateParticipantAudioLevel
   } = useParticipantQueue(memoizedParticipants);
   
-  // DEBUG: Track if useParticipantQueue functions are changing
+  // ✅ CRITICAL FIX: Derive selectedParticipant from ID to prevent reference issues
+  // Use a ref to store the previous selected participant to maintain reference stability
+  const selectedParticipantRef = useRef<any>(null);
+  
+  const selectedParticipant = useMemo(() => {
+    if (!selectedParticipantId) {
+      selectedParticipantRef.current = null;
+      return null;
+    }
+    
+    const found = queueState.participants.find(p => p._id === selectedParticipantId);
+    
+    // Only update the ref if the participant ID changed or the participant object is different
+    if (!found) {
+      selectedParticipantRef.current = null;
+      return null;
+    }
+    
+    // Check if we need to update the ref (ID changed or first time)
+    if (!selectedParticipantRef.current || selectedParticipantRef.current._id !== found._id) {
+      selectedParticipantRef.current = found;
+    }
+    
+    // Always return the cached reference to prevent prop changes
+    return selectedParticipantRef.current;
+  }, [selectedParticipantId, queueState.participants]);
+  
+  // Track if useParticipantQueue functions are changing
   const prevQueueFunctionsRef = useRef({ addToQueue, removeFromQueue, updateQueueParticipant });
   useEffect(() => {
     if (prevQueueFunctionsRef.current.addToQueue !== addToQueue || 
         prevQueueFunctionsRef.current.removeFromQueue !== removeFromQueue ||
         prevQueueFunctionsRef.current.updateQueueParticipant !== updateQueueParticipant) {
-      console.log('🔄 [QUEUE FUNCTIONS] useParticipantQueue functions changed', {
-        parentRender: parentRenderCountRef.current,
-        addToQueueChanged: prevQueueFunctionsRef.current.addToQueue !== addToQueue,
-        removeFromQueueChanged: prevQueueFunctionsRef.current.removeFromQueue !== removeFromQueue,
-        updateQueueParticipantChanged: prevQueueFunctionsRef.current.updateQueueParticipant !== updateQueueParticipant
-      });
       prevQueueFunctionsRef.current = { addToQueue, removeFromQueue, updateQueueParticipant };
     }
   }, [addToQueue, removeFromQueue, updateQueueParticipant]);
   
   // Memoize queueState properties to prevent unnecessary re-renders
   const memoizedActiveSpeaker = useMemo(() => {
-    console.log('🔄 [MEMOIZED] activeSpeaker changed', {
-      parentRender: parentRenderCountRef.current,
-      activeSpeakerId: queueState.activeSpeaker?._id,
-      activeSpeakerRef: queueState.activeSpeaker
-    });
     return queueState.activeSpeaker;
   }, [queueState.activeSpeaker?._id]);
   
   const memoizedScreenShareMode = useMemo(() => {
-    console.log('🔄 [MEMOIZED] screenShareMode changed', {
-      parentRender: parentRenderCountRef.current,
-      screenShareMode: queueState.screenShareMode
-    });
     return queueState.screenShareMode;
   }, [queueState.screenShareMode]);
   
   const memoizedScreenShareParticipant = useMemo(() => {
-    console.log('🔄 [MEMOIZED] screenShareParticipant changed', {
-      parentRender: parentRenderCountRef.current,
-      screenShareParticipantId: queueState.screenShareParticipant?._id,
-      screenShareParticipantRef: queueState.screenShareParticipant
-    });
     return queueState.screenShareParticipant;
   }, [queueState.screenShareParticipant?._id]);
   
@@ -363,7 +337,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   });
   
-  // DEBUG: Track LiveKit state changes
+  // Track LiveKit state changes
   const prevLiveKitRef = useRef({
     isLiveKitConnected: false,
     liveKitParticipants: new Map(),
@@ -372,31 +346,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   
   useEffect(() => {
     if (prevLiveKitRef.current.isLiveKitConnected !== isLiveKitConnected) {
-      console.log('🔄 [LIVEKIT STATE] isLiveKitConnected changed', {
-        parentRender: parentRenderCountRef.current,
-        old: prevLiveKitRef.current.isLiveKitConnected,
-        new: isLiveKitConnected
-      });
       prevLiveKitRef.current.isLiveKitConnected = isLiveKitConnected;
     }
     
     if (prevLiveKitRef.current.liveKitParticipants !== liveKitParticipants) {
-      console.log('🔄 [LIVEKIT STATE] liveKitParticipants changed', {
-        parentRender: parentRenderCountRef.current,
-        oldSize: prevLiveKitRef.current.liveKitParticipants?.size,
-        newSize: liveKitParticipants?.size,
-        oldRef: prevLiveKitRef.current.liveKitParticipants,
-        newRef: liveKitParticipants
-      });
       prevLiveKitRef.current.liveKitParticipants = liveKitParticipants;
     }
     
     if (prevLiveKitRef.current.liveKitService !== liveKitService) {
-      console.log('🔄 [LIVEKIT STATE] liveKitService changed', {
-        parentRender: parentRenderCountRef.current,
-        old: prevLiveKitRef.current.liveKitService,
-        new: liveKitService
-      });
       prevLiveKitRef.current.liveKitService = liveKitService;
     }
   }, [isLiveKitConnected, liveKitParticipants, liveKitService]);
@@ -513,7 +470,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     },
     onError: (error) => {
-      console.error('❌ [WEBSOCKET] Error:', error);
+      // WebSocket error
     },
     // Hand raise events are handled through participants data changes
   });
@@ -1242,12 +1199,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       // Only process if the actual participant list changed (not just the object reference)
       if (currentParticipantIds !== prevParticipantIdsRef.current) {
-        console.log('🔄 [USEEFFECT] participants data ACTUALLY changed', {
-          parentRender: parentRenderCountRef.current,
-          oldIds: prevParticipantIdsRef.current,
-          newIds: currentParticipantIds
-        });
-        
         prevParticipantIdsRef.current = currentParticipantIds;
         
         const previousParticipants = participants;
@@ -1260,14 +1211,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           const newParticipants = participantsList.filter((newP: any) => 
             !previousParticipants.find((oldP: any) => oldP._id === newP._id)
           );
-          
-          if (newParticipants.length > 0) {
-            console.log('➕ [NEW PARTICIPANTS JOINED]', {
-              count: newParticipants.length,
-              participants: newParticipants.map((p: any) => ({ id: p._id, name: p.displayName, userId: p.user?._id })),
-              timestamp: new Date().toISOString()
-            });
-          }
           
           newParticipants.forEach((participant: any) => {
             addToQueue({
@@ -1288,14 +1231,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           const leftParticipants = previousParticipants.filter((oldP: any) => 
             !participantsList.find((newP: any) => newP._id === oldP._id)
           );
-          
-          if (leftParticipants.length > 0) {
-            console.log('➖ [PARTICIPANTS LEFT]', {
-              count: leftParticipants.length,
-              participants: leftParticipants.map((p: any) => ({ id: p._id, name: p.displayName })),
-              timestamp: new Date().toISOString()
-            });
-          }
           
           leftParticipants.forEach((participant: any) => {
             removeFromQueue(participant._id);
@@ -3282,52 +3217,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               return null;
             })()}
             {isLiveKitConnected && liveKitParticipants.size > 0 ? (
-            (() => {
-              // AGGRESSIVE DEBUGGING: Log every time we're about to render LiveKitParticipantQueue
-              console.log('🎯 [PARENT RENDER] About to render LiveKitParticipantQueue with props:', {
-                participantsLength: memoizedParticipants?.length,
-                participantsRef: memoizedParticipants,
-                activeSpeakerId: memoizedActiveSpeaker?._id,
-                activeSpeakerRef: memoizedActiveSpeaker,
-                screenShareMode: memoizedScreenShareMode,
-                screenShareParticipantId: memoizedScreenShareParticipant?._id,
-                screenShareParticipantRef: memoizedScreenShareParticipant,
-                selectedParticipantId: selectedParticipant?._id,
-                selectedParticipantRef: selectedParticipant,
-                onParticipantClickRef: handleParticipantClick,
-                onHandRaiseClickRef: handleHandRaiseClick,
-                onKickParticipantRef: handleKickParticipantClick,
-                isHost,
-                viewMode,
-                maxThumbnails: 6,
-                liveKitParticipantsSize: liveKitParticipants?.size,
-                liveKitParticipantsRef: liveKitParticipants,
-                localParticipantId: liveKitLocalParticipant?.identity,
-                localParticipantRef: liveKitLocalParticipant,
-                liveKitServiceRef: liveKitService,
-                isLiveKitConnected
-              });
-              
-              return (
-                <LiveKitParticipantQueue
-                  participants={memoizedParticipants}
-                  activeSpeaker={memoizedActiveSpeaker}
-                  screenShareMode={memoizedScreenShareMode}
-                  screenShareParticipant={memoizedScreenShareParticipant}
-                  selectedParticipant={selectedParticipant}
-                  onParticipantClick={handleParticipantClick}
-                  onHandRaiseClick={handleHandRaiseClick}
-                  onKickParticipant={handleKickParticipantClick}
-                  isHost={isHost}
-                  viewMode={viewMode}
-                  maxThumbnails={6}
-                  liveKitParticipants={liveKitParticipants}
-                  localParticipant={liveKitLocalParticipant}
-                  liveKitService={liveKitService}
-                  isLiveKitConnected={isLiveKitConnected}
-                />
-              );
-            })()
+              <LiveKitParticipantQueue
+                participants={memoizedParticipants}
+                activeSpeaker={memoizedActiveSpeaker}
+                screenShareMode={memoizedScreenShareMode}
+                screenShareParticipant={memoizedScreenShareParticipant}
+                selectedParticipant={selectedParticipant}
+                onParticipantClick={handleParticipantClick}
+                onHandRaiseClick={handleHandRaiseClick}
+                onKickParticipant={handleKickParticipantClick}
+                isHost={isHost}
+                viewMode={viewMode}
+                maxThumbnails={6}
+                liveKitParticipants={liveKitParticipants}
+                localParticipant={liveKitLocalParticipant}
+                liveKitService={liveKitService}
+                isLiveKitConnected={isLiveKitConnected}
+              />
             ) : (
               <ParticipantQueue
                 participants={queueState.participants}
