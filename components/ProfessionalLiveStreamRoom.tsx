@@ -117,8 +117,41 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [participants, setParticipants] = useState<any[]>([]);
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
+  
+  // Circuit breaker to prevent infinite loops
+  const processingRef = useRef<Set<string>>(new Set());
+  const renderCountRef = useRef(0);
+  
+  // Track render count (for monitoring only, won't block)
+  renderCountRef.current += 1;
 
-  // Participant Queue System
+  // Track what's causing participants to change (for debugging only)
+  const prevParticipantsRef = useRef(participants);
+  useEffect(() => {
+    if (prevParticipantsRef.current !== participants) {
+      prevParticipantsRef.current = participants;
+    }
+  }, [participants]);
+
+  // Participant Queue System - Memoize participants to prevent infinite loop
+  const memoizedParticipants = useMemo(() => {
+    return participants.map(p => ({
+      _id: p._id,
+      displayName: p.displayName,
+      email: p.email || '',
+      isMuted: p.micState === 'OFF',
+      isCameraOff: p.cameraState === 'OFF',
+      joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z', // ✅ FIXED: Use static fallback
+      isHost: p.role === 'HOST',
+      role: p.role,
+      hasHandRaised: p.hasHandRaised || false,
+      handRaisedAt: p.handRaisedAt,
+      isSpeaking: false,
+      audioLevel: 0,
+      lastActivity: '2024-01-01T00:00:00.000Z' // ✅ FIXED: Use static fallback
+    }));
+  }, [participants]);
+
   const {
     queueState,
     addParticipant: addToQueue,
@@ -132,21 +165,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     getThumbnailParticipants,
     analyzeAudioLevel,
     updateParticipantAudioLevel
-  } = useParticipantQueue(participants.map(p => ({
-    _id: p._id,
-    displayName: p.displayName,
-    email: p.email || '',
-    isMuted: p.micState === 'OFF',
-    isCameraOff: p.cameraState === 'OFF',
-    joinedAt: p.joinedAt || new Date().toISOString(),
-    isHost: p.role === 'HOST',
-    role: p.role,
-    hasHandRaised: p.hasHandRaised || false,
-    handRaisedAt: p.handRaisedAt,
-    isSpeaking: false,
-    audioLevel: 0,
-    lastActivity: new Date().toISOString()
-  })));
+  } = useParticipantQueue(memoizedParticipants);
 
   // Audio Level Detection
   const { detectSpeakingStatus, isSupported: audioSupported } = useAudioLevelDetection({
@@ -272,13 +291,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onMessage: (message) => {
     },
     onParticipantJoined: (participant) => {
+      const participantKey = `${participant._id}-${participant.userId}`;
+      
+      // Circuit breaker: prevent processing the same participant multiple times
+      if (processingRef.current.has(participantKey)) {
+        return;
+      }
+      
+      processingRef.current.add(participantKey);
+      
       // CRITICAL FIX: Directly update local participants state for immediate UI update
       setParticipants(prev => {
         const exists = prev.find(p => p._id === participant._id || p.userId === participant.userId);
         if (exists) {
+          processingRef.current.delete(participantKey);
           return prev;
         }
         const newParticipants = [...prev, participant];
+        processingRef.current.delete(participantKey);
         return newParticipants;
       });
       
@@ -288,9 +318,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     },
     onParticipantLeft: (participant) => {
+      const participantKey = `${participant._id}-${participant.userId}`;
+      
+      // Circuit breaker: prevent processing the same participant multiple times
+      if (processingRef.current.has(participantKey)) {
+        return;
+      }
+      
+      processingRef.current.add(participantKey);
+      
       // CRITICAL FIX: Directly update local participants state for immediate UI update
       setParticipants(prev => {
         const filtered = prev.filter(p => p._id !== participant._id && p.userId !== participant.userId);
+        processingRef.current.delete(participantKey);
         return filtered;
       });
       
@@ -300,6 +340,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     },
     onError: (error) => {
+      console.error('❌ [WEBSOCKET] Error:', error);
     },
     // Hand raise events are handled through participants data changes
   });
@@ -1017,13 +1058,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Update participants data
   useEffect(() => {
-    
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
       const previousParticipants = participants;
       
+      // ✅ CRITICAL FIX: Check if data actually changed before updating state
+      const hasChanged = 
+        participantsList.length !== previousParticipants.length ||
+        participantsList.some((p: any) => !previousParticipants.find((prev: any) => prev._id === p._id));
       
-      setParticipants(participantsList);
+      // ✅ CRITICAL FIX: Only update state if data actually changed
+      if (hasChanged) {
+        setParticipants(participantsList);
+      }
       
       // Note: Queue will be automatically updated via useEffect in useParticipantQueue hook
 
@@ -1033,6 +1080,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           !previousParticipants.find((oldP: any) => oldP._id === newP._id)
         );
         
+        if (newParticipants.length > 0) {
+          console.log('➕ [NEW PARTICIPANTS JOINED]', {
+            count: newParticipants.length,
+            participants: newParticipants.map((p: any) => ({ id: p._id, name: p.displayName, userId: p.user?._id })),
+            timestamp: new Date().toISOString()
+          });
+        }
+        
         newParticipants.forEach((participant: any) => {
           addToQueue({
             _id: participant._id,
@@ -1040,7 +1095,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             email: participant.email || '',
             isMuted: participant.micState === 'OFF',
             isCameraOff: participant.cameraState === 'OFF',
-            joinedAt: participant.joinedAt || new Date().toISOString(),
+            joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z', // ✅ FIXED: Use static fallback
             isHost: participant.role === 'HOST',
             role: participant.role,
             hasHandRaised: participant.hasHandRaised || false,
@@ -1053,12 +1108,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           !participantsList.find((newP: any) => newP._id === oldP._id)
         );
         
+        if (leftParticipants.length > 0) {
+          console.log('➖ [PARTICIPANTS LEFT]', {
+            count: leftParticipants.length,
+            participants: leftParticipants.map((p: any) => ({ id: p._id, name: p.displayName })),
+            timestamp: new Date().toISOString()
+          });
+        }
+        
         leftParticipants.forEach((participant: any) => {
           removeFromQueue(participant._id);
         });
       }
     }
-  }, [participantsData, participants, addToQueue, removeFromQueue, updateQueueParticipant]);
+  }, [participantsData, addToQueue, removeFromQueue, updateQueueParticipant]);
+  
+  // ✅ FIXED: Removed participants from dependency array to prevent infinite loop
 
   // Audio level detection and speaking status monitoring
   useEffect(() => {
@@ -3001,7 +3066,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             })()}
             {isLiveKitConnected && liveKitParticipants.size > 0 ? (
             <LiveKitParticipantQueue
-              participants={queueState.participants}
+              participants={memoizedParticipants}
               activeSpeaker={queueState.activeSpeaker}
               screenShareMode={queueState.screenShareMode}
               screenShareParticipant={queueState.screenShareParticipant}

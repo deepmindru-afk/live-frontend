@@ -149,7 +149,7 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         participants: sortParticipants(updatedParticipants)
       };
     });
-  }, [sortParticipants]);
+  }, []); // ✅ FIXED: Remove sortParticipants dependency
 
   // Remove participant from queue
   const removeParticipant = useCallback((participantId: string) => {
@@ -161,7 +161,7 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         activeSpeaker: prev.activeSpeaker?._id === participantId ? null : prev.activeSpeaker
       };
     });
-  }, [sortParticipants]);
+  }, []); // ✅ FIXED: Remove sortParticipants dependency
 
   // Update participant speaking status
   const updateSpeakingStatus = useCallback((participantId: string, isSpeaking: boolean, audioLevel: number = 0) => {
@@ -186,7 +186,7 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         activeSpeaker: newActiveSpeaker
       };
     });
-  }, [sortParticipants]);
+  }, []); // ✅ FIXED: Remove sortParticipants dependency
 
   // Update hand raise status
   const updateHandRaiseStatus = useCallback((participantId: string, hasHandRaised: boolean) => {
@@ -207,7 +207,7 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         participants: sortParticipants(updatedParticipants)
       };
     });
-  }, [sortParticipants]);
+  }, []); // ✅ FIXED: Remove sortParticipants dependency
 
   // Start screen share
   const startScreenShare = useCallback((participantId: string) => {
@@ -244,7 +244,7 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         participants: sortParticipants(updatedParticipants)
       };
     });
-  }, [sortParticipants]);
+  }, []); // ✅ FIXED: Remove sortParticipants dependency
 
   // Get main stage participants based on view mode
   const getMainStageParticipants = useCallback((viewMode: 'speaker' | 'grid' = 'grid') => {
@@ -293,28 +293,22 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update participants when initialParticipants changes
   useEffect(() => {
-    
     const updatedParticipants = initialParticipants.map((p, index) => ({
       ...p,
       originalJoinOrder: index,
-      isSpeaking: false,
-      audioLevel: 0,
-      lastActivity: new Date().toISOString()
+      isSpeaking: p.isSpeaking ?? false,
+      audioLevel: p.audioLevel ?? 0,
+      lastActivity: p.lastActivity || '2024-01-01T00:00:00.000Z' // ✅ FIXED: Use static fallback, don't create new timestamp
     }));
     
     setQueueState(prev => ({
       ...prev,
       participants: sortParticipants(updatedParticipants)
     }));
-  }, [initialParticipants, sortParticipants]);
+  }, [initialParticipants]); // ✅ FIXED: Removed sortParticipants from dependencies
 
-  // Re-sort participants when dependencies change
-  useEffect(() => {
-    setQueueState(prev => ({
-      ...prev,
-      participants: sortParticipants(prev.participants)
-    }));
-  }, [sortParticipants]);
+  // ✅ REMOVED: This useEffect was causing infinite loop
+  // Participants are sorted when they're added/updated, no need for separate sorting effect
 
   return {
     queueState,
