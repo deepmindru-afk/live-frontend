@@ -163,23 +163,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const prevMemoizedRef = useRef<any[]>([]);
   
   const memoizedParticipants = useMemo(() => {
-    // 1️⃣ Normalize participant identities safely — don't overwrite everyone with the same value.
-    // Only set identity from that user's own user._id.
+    // 1️⃣ Use ONLY the real user_id field - don't overwrite it!
     const normalizedParticipants = participants.map(p => {
-      const stableIdentity = p.user?._id || p.userId || p.identity || p._id;
+      const realUserId = (p as any)?.user_id; // Use the real ID field
       return {
         ...p,
         backendId: p._id,          // keep backend document id
-        identity: stableIdentity,  // each participant keeps their own user._id
-        _id: stableIdentity,       // use identity as React key
+        identity: realUserId,      // use the real user_id
+        _id: realUserId,           // use real user_id as React key
       };
     });
     
     const newMemoized = normalizedParticipants.map(p => {
-      console.log('[IDENTITY FINAL]', p.displayName, p.identity);
+      console.log('[IDENTITY FINAL]', p.displayName, 'realUserId:', (p as any)?.user_id, 'identity:', p.identity);
       
       return {
-        _id: p._id, // Already normalized to LiveKit identity
+        _id: p._id, // Already normalized to real user_id
         displayName: p.displayName,
         email: p.email || '',
         isMuted: p.micState === 'OFF',
@@ -192,8 +191,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         isSpeaking: false,
         audioLevel: 0,
         lastActivity: '2024-01-01T00:00:00.000Z',
-        // Identity is already normalized
-        identity: p.identity,
+        // Use the real user_id as identity
+        identity: (p as any)?.user_id,
         // Preserve original fields for compatibility
         user: p.user,
         userId: p.userId
