@@ -15,6 +15,10 @@ export interface Participant {
   audioLevel?: number;
   lastActivity?: string;
   originalJoinOrder?: number;
+  // Normalized identity field for consistent LiveKit mapping
+  identity?: string;
+  // Backend document ID (preserved for mutations)
+  backendId?: string;
   // User object contains the user/member ID used as LiveKit identity
   user?: {
     _id: string;

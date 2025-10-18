@@ -163,21 +163,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const prevMemoizedRef = useRef<any[]>([]);
   
   const memoizedParticipants = useMemo(() => {
-    const newMemoized = participants.map(p => ({
-      _id: p._id,
-      displayName: p.displayName,
-      email: p.email || '',
-      isMuted: p.micState === 'OFF',
-      isCameraOff: p.cameraState === 'OFF',
-      joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z',
-      isHost: p.role === 'HOST',
-      role: p.role,
-      hasHandRaised: p.hasHandRaised || false,
-      handRaisedAt: p.handRaisedAt,
-      isSpeaking: false,
-      audioLevel: 0,
-      lastActivity: '2024-01-01T00:00:00.000Z'
-    }));
+    // 1️⃣ Normalize participant identities safely — don't overwrite everyone with the same value.
+    // Only set identity from that user's own user._id.
+    const normalizedParticipants = participants.map(p => {
+      const stableIdentity = p.user?._id || p.userId || p.identity || p._id;
+      return {
+        ...p,
+        backendId: p._id,          // keep backend document id
+        identity: stableIdentity,  // each participant keeps their own user._id
+        _id: stableIdentity,       // use identity as React key
+      };
+    });
+    
+    const newMemoized = normalizedParticipants.map(p => {
+      console.log('[IDENTITY FINAL]', p.displayName, p.identity);
+      
+      return {
+        _id: p._id, // Already normalized to LiveKit identity
+        displayName: p.displayName,
+        email: p.email || '',
+        isMuted: p.micState === 'OFF',
+        isCameraOff: p.cameraState === 'OFF',
+        joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z',
+        isHost: p.role === 'HOST',
+        role: p.role,
+        hasHandRaised: p.hasHandRaised || false,
+        handRaisedAt: p.handRaisedAt,
+        isSpeaking: false,
+        audioLevel: 0,
+        lastActivity: '2024-01-01T00:00:00.000Z',
+        // Identity is already normalized
+        identity: p.identity,
+        // Preserve original fields for compatibility
+        user: p.user,
+        userId: p.userId
+      };
+    });
     
     // Deep equality check - only return new array if data actually changed
     if (prevMemoizedRef.current.length === newMemoized.length) {
@@ -1194,6 +1215,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
       
+      // 🧠 Step 1 — Detect mismatch in raw participant data
+      console.log('[ROOM-PARTICIPANTS RAW]', participantsList.map(p => ({
+        displayName: p.displayName,
+        _id: p._id,
+        userId: p.userId,
+        user__id: p.user?._id
+      })));
+      
       // Create a stable string representation of participant IDs
       const currentParticipantIds = participantsList.map((p: any) => p._id).sort().join(',');
       
@@ -1203,8 +1232,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         const previousParticipants = participants;
         
-        // Update state with new participants
-        setParticipants(participantsList);
+        // 1️⃣ Normalize participant identities safely — don't overwrite everyone with the same value.
+        // Only set identity from that user's own user._id.
+        const normalizedParticipants = participantsList.map(p => {
+          const stableIdentity = p.user?._id || p.userId || p.identity || p._id;
+          return {
+            ...p,
+            backendId: p._id,          // keep backend document id
+            identity: stableIdentity,  // each participant keeps their own user._id
+            _id: stableIdentity,       // use identity as React key
+          };
+        });
+
+        console.log('[PARTICIPANT ID CHECK]', normalizedParticipants.map(pp => ({
+          name: pp.displayName,
+          role: pp.role,
+          backendId: pp.backendId,
+          identity: pp.identity,
+          userId: pp.userId,
+          user__id: pp.user?._id,
+        })));
+        
+        // Update state with normalized participants
+        setParticipants(normalizedParticipants);
 
         // Check for new participants (joined)
         if (previousParticipants.length > 0) {
@@ -2118,6 +2168,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         </button>
       </div>
     );
+  }
+
+  // 🔍 PARTICIPANT ID CHECK - Print all ID fields for each participant and compare them to LiveKit identities
+  if (participants && liveKitService?.room) {
+    console.group('🔍 PARTICIPANT ID CHECK');
+    participants.forEach(p => {
+      const userId = p.userId;
+      const user_id = p.user?._id;
+      const identity = p.identity;
+      const backendId = p._id;
+      
+      // Get LiveKit participant keys from the service's participants map
+      const liveKeys = Array.from(liveKitParticipants.keys());
+      const localId = liveKitService.room?.localParticipant?.identity;
+      
+      console.log({
+        displayName: p.displayName,
+        role: p.role,
+        backendId,
+        userId,
+        user_id,
+        identity,
+        liveKeys,
+        localId,
+      });
+    });
+    console.groupEnd();
   }
 
     return (
@@ -3223,6 +3300,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 screenShareMode={memoizedScreenShareMode}
                 screenShareParticipant={memoizedScreenShareParticipant}
                 selectedParticipant={selectedParticipant}
+                selectedIdentity={selectedParticipant?.identity || null}
                 onParticipantClick={handleParticipantClick}
                 onHandRaiseClick={handleHandRaiseClick}
                 onKickParticipant={handleKickParticipantClick}

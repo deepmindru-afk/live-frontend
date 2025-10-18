@@ -14,6 +14,7 @@ interface LiveKitParticipantQueueProps {
   screenShareMode: boolean;
   screenShareParticipant: Participant | null;
   selectedParticipant?: Participant | null;
+  selectedIdentity?: string | null;
   onParticipantClick?: (participant: Participant) => void;
   onHandRaiseClick?: (participant: Participant) => void;
   onKickParticipant?: (participant: Participant) => void;
@@ -34,6 +35,7 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   screenShareMode,
   screenShareParticipant,
   selectedParticipant,
+  selectedIdentity,
   onParticipantClick,
   onHandRaiseClick,
   onKickParticipant,
@@ -109,24 +111,9 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
   const trackRefs = useRef<{ [key: string]: any }>({});
   
-  // DEBUG: Track video element registrations and track operations
-  const debugLog = (category: string, message: string, data?: any) => {
-    const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-    const colors: any = {
-      'REF_REGISTER': '#9333ea',    // Purple - video element registration
-      'TRACK_ATTACH': '#10b981',     // Green - track attachment
-      'TRACK_DETACH': '#ef4444',     // Red - track detachment
-      'ELEMENT_LOOKUP': '#3b82f6',   // Blue - element lookup
-      'CLEANUP': '#f59e0b',          // Orange - cleanup
-      'ERROR': '#dc2626',            // Dark red - errors
-      'WARNING': '#eab308'           // Yellow - warnings
-    };
-    console.log(
-      `%c[${timestamp}] [${category}]%c ${message}`,
-      `color: ${colors[category] || '#6b7280'}; font-weight: bold`,
-      'color: inherit',
-      data || ''
-    );
+  // Essential error logging only
+  const errorLog = (message: string, error?: any) => {
+    console.error(`[LiveKitParticipantQueue] ${message}`, error || '');
   };
 
   // Track participants prop changes
@@ -143,13 +130,30 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
 
     const room = liveKitService.room;
     
-    debugLog('TRACK_ATTACH', '🎬 useEffect running - Setting up LiveKit track handlers', {
-      roomExists: !!room,
-      participantsCount: participants.length,
-      liveKitParticipantsCount: liveKitParticipants.size,
-      currentVideoRefs: Object.keys(videoRefs.current).length,
-      currentTrackRefs: Object.keys(trackRefs.current).length
-    });
+    // 1️⃣ Ensure local camera is published and retry once if needed
+    const ensureLocalCameraPublished = async () => {
+      if (!room?.localParticipant) return;
+      const alreadyPublished = Array.from(room.localParticipant.videoTrackPublications.values())
+        .some((pub: any) => pub.source === 'camera' && pub.track);
+      if (alreadyPublished) return;
+
+      try {
+        console.warn('[AUTO-PUBLISH] No local camera track found — trying to publish...');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const [track] = stream.getVideoTracks();
+        if (track) {
+          const { createLocalVideoTrack } = await import('livekit-client');
+          const localTrack = await createLocalVideoTrack({ deviceId: track.getSettings().deviceId });
+          await room.localParticipant.publishTrack(localTrack);
+          console.log('[AUTO-PUBLISH] Camera track published successfully ✅');
+        }
+      } catch (err: any) {
+        console.error('[AUTO-PUBLISH ERROR]', err.name, err.message);
+      }
+    };
+
+    ensureLocalCameraPublished();
+    
     
 
     // NOTE: Video elements ready notification removed - no longer needed
@@ -157,29 +161,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
 
     // Handle track subscription for remote participants
     const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
-      debugLog('TRACK_ATTACH', `🎬 Track subscription event fired for ${participant.name}`, {
-        participantIdentity: participant.identity,
-        participantName: participant.name,
-        trackKind: track.kind,
-        trackSource: track.source,
-        // CRITICAL: Show what we're looking for
-        lookingFor: {
-          liveKitIdentity: participant.identity,
-          liveKitName: participant.name
-        },
-        // CRITICAL: Show what participants we have
-        availableParticipants: participants.map(p => ({
-          _id: p._id,
-          displayName: p.displayName,
-          userId: p.user?._id || p.userId,
-          // Show if this participant's IDs match what we're looking for
-          matchesLiveKitIdentity: (p.user?._id || p.userId || p._id) === participant.identity,
-          matchesLiveKitName: p.displayName === participant.name
-        })),
-        // CRITICAL: Show current video refs and track refs
-        currentVideoRefs: Object.keys(videoRefs.current).filter(key => videoRefs.current[key] !== null),
-        currentTrackRefs: Object.keys(trackRefs.current)
-      });
       
       // CRITICAL FIX: Find the matching participant from our participants list first
       // This ensures we use the same participant object that was used for registration
@@ -191,22 +172,11 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         
         // PRIMARY: Exact ID matches (most reliable)
         if (userId === participant.identity || p._id === participant.identity || p.userId === participant.identity) {
-          debugLog('ELEMENT_LOOKUP', `✅ Found by ID match: ${displayName}`, {
-            matchType: 'ID_MATCH',
-            liveKitIdentity: participant.identity,
-            participantId: p._id,
-            userId: userId
-          });
           return true;
         }
         
         // SECONDARY: Exact name match (only if IDs don't match)
         if (displayName === liveKitName && displayName !== '' && liveKitName !== '') {
-          debugLog('ELEMENT_LOOKUP', `✅ Found by exact name match: ${displayName}`, {
-            matchType: 'EXACT_NAME_MATCH',
-            liveKitName: liveKitName,
-            displayName: displayName
-          });
           return true;
         }
         
@@ -217,169 +187,37 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       });
       
       if (!matchingParticipant) {
-        debugLog('ERROR', `❌ No matching participant found in participants list`, {
-          liveKitParticipant: {
-            identity: participant.identity,
-            name: participant.name,
-            _id: participant._id
-          },
-          availableParticipants: participants.map(p => {
-            const userId = p.user?._id || p.userId;
-            return {
-              _id: p._id,
-              displayName: p.displayName,
-              userId: userId,
-              matchingAttempts: {
-                userIdMatch: userId === participant.identity,
-                idMatch: p._id === participant.identity,
-                nameMatch: p.displayName === participant.name
-              }
-            };
-          }),
-          suggestion: 'Check if participant.identity matches any participant._id or userId'
-        });
-        
+        // 2️⃣ Add debug printout for remote participants missing tracks
+        console.warn('[REMOTE-NO-MATCH]', participant.identity, participant.name,
+          'has no matching participant or no camera track; waiting for publication…');
+          
         // FALLBACK: Try to find by LiveKit identity directly in videoRefs
-        debugLog('ELEMENT_LOOKUP', `🔄 FALLBACK: Looking for video element by LiveKit identity directly`, {
-          liveKitIdentity: participant.identity,
-          availableVideoRefKeys: Object.keys(videoRefs.current),
-          // CRITICAL: Show all video elements and their keys
-          videoElementsDetails: Object.entries(videoRefs.current)
-            .filter(([_, el]) => el !== null)
-            .map(([key, el]) => ({
-              key,
-              hasElement: !!el,
-              elementType: el?.tagName,
-              // Check if this element is registered under the LiveKit identity we're looking for
-              isTargetElement: key === participant.identity
-            }))
-        });
-        
-        // Try to attach track directly using LiveKit identity
         const directVideoElement = videoRefs.current[participant.identity];
         const isScreenShare = track.source === SCREEN_SHARE_SOURCE || 
                              track.source === 'screen_share' ||
                              String(track.source).includes('screen');
         
-        if (directVideoElement) {
-          debugLog('ELEMENT_LOOKUP', `✅ FALLBACK SUCCESS: Found video element by LiveKit identity`, {
-            liveKitIdentity: participant.identity,
-            elementFound: true
-          });
-          
-          // Attach track directly
-          if (track.kind === Track.Kind.Video && !isScreenShare) {
-            try {
-              track.attach(directVideoElement);
-              trackRefs.current[participant.identity] = track;
-              debugLog('TRACK_ATTACH', `✅ Track attached via FALLBACK method`, {
-                participant: participant.name,
-                liveKitIdentity: participant.identity
-              });
-            } catch (error) {
-              debugLog('ERROR', `❌ Error attaching track via FALLBACK`, {
-                error: error instanceof Error ? error.message : String(error)
-              });
-            }
+        if (directVideoElement && track.kind === Track.Kind.Video && !isScreenShare) {
+          try {
+            track.attach(directVideoElement);
+            trackRefs.current[participant.identity] = track;
+          } catch (error) {
+            errorLog(`Error attaching track via FALLBACK for ${participant.name}`, error);
           }
-        } else {
-          debugLog('ERROR', `❌ FALLBACK FAILED: No video element found for LiveKit identity`, {
-            liveKitIdentity: participant.identity,
-            availableKeys: Object.keys(videoRefs.current)
-          });
         }
         
         return;
       }
       
       // Use the matching participant's data for consistent key lookup
-          const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
+      const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
       const displayName = matchingParticipant.displayName;
       
-      debugLog('ELEMENT_LOOKUP', `✅ Found matching participant: ${displayName}`, {
-        liveKitIdentity: participant.identity,
-        liveKitName: participant.name,
-        matchedParticipant: {
-          _id: matchingParticipant._id,
-          displayName: matchingParticipant.displayName,
-          userId: userId
-        },
-        // CRITICAL: Show the ID mismatch
-        idMismatch: {
-          liveKitIdentity: participant.identity,
-          matchedUserId: userId,
-          isSameUser: participant.identity === userId,
-          warning: participant.identity !== userId ? '🚨 DIFFERENT USERS - Track for wrong participant!' : '✅ Same user'
-        }
-      });
-      
-      // REMOVED: Blocking logic that was preventing track attachment
-      // The primary key fix above ensures correct video element lookup
-      
-      // PRIMARY: Look up by participant._id (consistent with registration)
-      let videoElement = videoRefs.current[matchingParticipant._id];
-      let lookupKey = matchingParticipant._id;
-      let lookupMethod = 'PRIMARY_PARTICIPANT_ID';
-      
-      // CRITICAL: Log the lookup attempt
-      debugLog('ELEMENT_LOOKUP', `🔍 Looking up video element for ${participant.name}`, {
-        liveKitParticipant: {
-          identity: participant.identity,
-          name: participant.name
-        },
-        matchingParticipant: {
-          _id: matchingParticipant._id,
-          displayName: matchingParticipant.displayName
-        },
-        lookupKey: lookupKey,
-        found: !!videoElement
-      });
-      
-      debugLog('ELEMENT_LOOKUP', `Attempt 1: Looking up by participant._id="${matchingParticipant._id}"`, {
-        found: !!videoElement,
-        allKeys: Object.keys(videoRefs.current)
-      });
-      
-      // FALLBACK 1: Try LiveKit identity directly if participant._id not found
-      if (!videoElement) {
-        videoElement = videoRefs.current[participant.identity];
-        if (videoElement) {
-          lookupKey = participant.identity;
-          lookupMethod = 'FALLBACK_1_LIVEKIT_IDENTITY';
-          debugLog('ELEMENT_LOOKUP', `Attempt 2: Found via LiveKit identity="${participant.identity}"`, {});
-        }
-      }
-      
-      // FALLBACK 2: Try userId if still not found
-      if (!videoElement && matchingParticipant) {
-        const fallbackUserId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
-        videoElement = videoRefs.current[fallbackUserId];
-        if (videoElement) {
-          lookupKey = fallbackUserId;
-          lookupMethod = 'FALLBACK_2_USER_ID';
-          debugLog('ELEMENT_LOOKUP', `Attempt 3: Found via userId="${fallbackUserId}"`, {});
-        }
-      }
-      
-      // FALLBACK 3: Try display name
-      if (!videoElement) {
-        videoElement = videoRefs.current[displayName];
-        if (videoElement) {
-          lookupKey = displayName;
-          lookupMethod = 'FALLBACK_3_DISPLAY_NAME';
-          debugLog('ELEMENT_LOOKUP', `Attempt 4: Found via displayName="${displayName}"`, {});
-        }
-      }
-      
-      // FALLBACK 4: Try participant._id
-      if (!videoElement) {
-        videoElement = videoRefs.current[matchingParticipant._id];
-        if (videoElement) {
-          lookupKey = matchingParticipant._id;
-          lookupMethod = 'FALLBACK_4_PARTICIPANT_ID';
-          debugLog('ELEMENT_LOOKUP', `Attempt 5: Found via participant._id="${matchingParticipant._id}"`, {});
-        }
-      }
+      // Try multiple lookup methods for video element
+      let videoElement = videoRefs.current[matchingParticipant._id] ||
+                        videoRefs.current[participant.identity] ||
+                        videoRefs.current[userId] ||
+                        videoRefs.current[displayName];
 
       // Only attach CAMERA tracks (skip screen share)
       const isScreenShare = track.source === SCREEN_SHARE_SOURCE || 
@@ -387,21 +225,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                            String(track.source).includes('screen');
       
       if (videoElement && track.kind === Track.Kind.Video && !isScreenShare) {
-        // Check if this element already has a track attached
-        const existingTrack = trackRefs.current[userId];
-        const hasExistingSrcObject = videoElement.srcObject !== null;
-        
-        if (existingTrack || hasExistingSrcObject) {
-          debugLog('WARNING', `⚠️ Video element already has track attached!`, {
-            participant: displayName,
-            lookupKey,
-            lookupMethod,
-            existingTrackRef: !!existingTrack,
-            existingSrcObject: hasExistingSrcObject,
-            videoElement: videoElement.id || 'no-id'
-          });
-        }
-        
         try {
           // Ensure video element has valid dimensions to prevent WebRTC encoding issues
           if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
@@ -410,64 +233,14 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           }
           
           track.attach(videoElement);
-          trackRefs.current[matchingParticipant._id] = track; // Use participant._id as the key
-          
-          // CRITICAL: Log successful track attachment
-          debugLog('TRACK_ATTACH', `✅ SUCCESS: Track attached to video element`, {
-            participant: displayName,
-            participantId: matchingParticipant._id,
-            trackRefsCount: Object.keys(trackRefs.current).length,
-            videoElementFound: !!videoElement
-          });
-          
-          debugLog('TRACK_ATTACH', `✅ Track successfully attached to video element`, {
-            participant: displayName,
-            lookupKey,
-            lookupMethod,
-            trackRefStoredAs: userId,
-            elementDimensions: `${videoElement.offsetWidth}x${videoElement.offsetHeight}`
-          });
+          trackRefs.current[matchingParticipant._id] = track;
         } catch (error) {
-          debugLog('ERROR', `❌ Error attaching track`, {
-            participant: displayName,
-            error: error instanceof Error ? error.message : String(error)
-          });
+          errorLog(`Error attaching track for ${displayName}`, error);
         }
-      } else if (!videoElement) {
-        debugLog('ERROR', `❌ No video element found for participant ${displayName}`, {
-          liveKitParticipant: {
-            identity: participant.identity,
-            name: participant.name,
-            _id: participant._id
-          },
-          matchedParticipant: {
-            _id: matchingParticipant._id,
-            displayName: matchingParticipant.displayName,
-            userId: userId
-          },
-          lookupAttempts: {
-            userId: userId,
-            identity: participant.identity,
-            displayName: displayName,
-            participantId: matchingParticipant._id
-          },
-          availableKeys: Object.keys(videoRefs.current),
-          registeredKeys: Object.keys(videoRefs.current).map(key => ({
-            key,
-            hasElement: !!videoRefs.current[key],
-            elementType: videoRefs.current[key]?.tagName
-          }))
-        });
       }
     };
 
     const handleTrackUnsubscribed = (track: any, publication: any, participant: any) => {
-      debugLog('TRACK_DETACH', `🎬 Track unsubscription event fired for ${participant.name}`, {
-        participantIdentity: participant.identity,
-        participantName: participant.name,
-        trackKind: track.kind
-      });
-      
       if (track.kind === Track.Kind.Video) {
         // Find the matching participant to get consistent keys
         const matchingParticipant = participants.find(p => {
@@ -481,87 +254,32 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         });
         
         if (!matchingParticipant) {
-          debugLog('WARNING', `⚠️ No matching participant found for cleanup`, {
-            liveKitParticipant: {
-              identity: participant.identity,
-              name: participant.name
-            }
-          });
           return;
         }
         
         const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
         const displayName = matchingParticipant.displayName;
         
-        // Check what keys exist before cleanup
-        const keysBeforeCleanup = Object.keys(videoRefs.current).filter(key => 
-          videoRefs.current[key] !== null
-        );
-        
-        debugLog('CLEANUP', `🧹 Starting cleanup for ${displayName}`, {
-          participantIdentity: participant.identity,
-          userId: userId,
-          allVideoRefKeys: keysBeforeCleanup,
-          trackRefExists: !!trackRefs.current[matchingParticipant._id]
-        });
-        
         track.detach();
-        const hadTrackRef = !!trackRefs.current[matchingParticipant._id];
         delete trackRefs.current[matchingParticipant._id];
         
-        // Try to find video element using participant._id first (consistent with registration)
+        // Try to find video element using multiple keys
         let videoElement = videoRefs.current[matchingParticipant._id] || 
                           videoRefs.current[participant.identity] || 
                           videoRefs.current[userId] || 
                           videoRefs.current[displayName];
         
         if (videoElement) {
-          const hadSrcObject = videoElement.srcObject !== null;
           videoElement.srcObject = null;
-          
-          debugLog('CLEANUP', `✅ Cleaned up video element found via userId="${userId}"`, {
-            hadTrackRef,
-            hadSrcObject,
-            clearedSrcObject: true
-          });
-        } else {
-          debugLog('WARNING', `⚠️ No video element found during cleanup`, {
-            identity: participant.identity,
-            name: participant.name,
-            userId: userId,
-            hadTrackRef
-          });
-        }
-        
-        // Check if there are dangling references with other keys
-        const danglingKeys = keysBeforeCleanup.filter(key => {
-          if (key === userId || key === participant.identity || key === displayName || key === matchingParticipant._id) {
-            return false; // Already handled
-          }
-          const element = videoRefs.current[key];
-          // Check if this element is the same as the one we just cleaned (by comparing references)
-          return element === videoElement && element !== null;
-        });
-        
-        if (danglingKeys.length > 0) {
-          debugLog('WARNING', `⚠️ DANGLING REFERENCES DETECTED! Same video element registered under ${danglingKeys.length} other keys`, {
-            participant: displayName,
-            primaryKey: userId,
-            danglingKeys,
-            totalKeysForThisElement: danglingKeys.length + 1
-          });
         }
       }
     };
 
     // Handle local participant tracks
     const handleLocalTrackPublished = (publication: any, participant: any) => {
-
       if (publication.kind === Track.Kind.Video && participant.isLocal) {
-        // CRITICAL FIX: Use participant.identity (user._id) as primary lookup key
         let videoElement = videoRefs.current[participant.identity];
         
-        // FALLBACK: Try to find by matching user._id in our participants list
         if (!videoElement) {
           const matchingParticipant = participants.find(p => 
             (p.user?._id === participant.identity) || 
@@ -574,16 +292,13 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
           }
         }
         
-        // FALLBACK 2: Try other keys
         if (!videoElement) {
           videoElement = videoRefs.current[participant.name] || 
                         videoRefs.current[participant._id];
         }
         
-        
         if (videoElement && publication.track) {
           try {
-            // Ensure video element has valid dimensions to prevent WebRTC encoding issues
             if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
               videoElement.style.width = '320px';
               videoElement.style.height = '240px';
@@ -592,21 +307,17 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             publication.track.attach(videoElement);
             trackRefs.current[participant.identity] = publication.track;
           } catch (error) {
+            errorLog(`Error attaching local track for ${participant.name}`, error);
           }
-        } else {
         }
       }
     };
 
     // Attach existing tracks
-
-    // CRITICAL FIX: room.participants is a Map in LiveKit, not an array!
     if (room && room.participants) {
       const participantsArray = Array.from(room.participants.values());
       
       participantsArray.forEach((participant: any) => {
-        
-        // CRITICAL FIX: trackPublications is a Map, not an array!
         if (participant.trackPublications && participant.trackPublications.size > 0) {
           const publications = Array.from(participant.trackPublications.values());
           publications.forEach((publication: any) => {
@@ -615,10 +326,8 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                                  String(publication.source).includes('screen');
             
             if (publication.track && publication.kind === Track.Kind.Video && !isScreenShare) {
-              // CRITICAL FIX: Use participant.identity (user._id) as primary lookup key
               let videoElement = videoRefs.current[participant.identity];
               
-              // FALLBACK: Try to find by matching user._id in our participants list
               if (!videoElement) {
                 const matchingParticipant = participants.find(p => 
                   (p.user?._id === participant.identity) || 
@@ -631,7 +340,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                 }
               }
               
-              // FALLBACK 2: Try other keys
               if (!videoElement) {
                 videoElement = videoRefs.current[participant.name] || 
                               videoRefs.current[participant._id];
@@ -639,7 +347,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
               
               if (videoElement) {
                 try {
-                  // Ensure video element has valid dimensions to prevent WebRTC encoding issues
                   if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
                     videoElement.style.width = '320px';
                     videoElement.style.height = '240px';
@@ -648,35 +355,28 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                   publication.track.attach(videoElement);
                   trackRefs.current[participant.identity] = publication.track;
                 } catch (error) {
+                  errorLog(`Error attaching existing track for ${participant.name}`, error);
                 }
-              } else {
               }
             }
           });
         }
       });
-    } else {
     }
 
     // Attach local participant tracks
     if (room && room.localParticipant) {
-      
-      // CRITICAL FIX: trackPublications is a Map, not an array!
       if (room.localParticipant.trackPublications && room.localParticipant.trackPublications.size > 0) {
         const publications = Array.from(room.localParticipant.trackPublications.values());
         
         publications.forEach((publication: any) => {
-          
-          // Only attach camera tracks, not screen share
           const isScreenShare = publication.source === SCREEN_SHARE_SOURCE || 
                                publication.source === 'screen_share' ||
                                String(publication.source).includes('screen');
           
           if (publication.track && publication.kind === Track.Kind.Video && !isScreenShare) {
-            // CRITICAL FIX: Use localParticipant.identity (user._id) as primary lookup key
             let videoElement = videoRefs.current[room.localParticipant.identity];
             
-            // FALLBACK: Try to find by matching user._id in our participants list
             if (!videoElement) {
               const matchingParticipant = participants.find(p => 
                 (p.user?._id === room.localParticipant.identity) || 
@@ -689,7 +389,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
               }
             }
             
-            // FALLBACK 2: Try other keys
             if (!videoElement) {
               videoElement = videoRefs.current[room.localParticipant.name] || 
                             videoRefs.current[room.localParticipant._id];
@@ -697,7 +396,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             
             if (videoElement) {
               try {
-                // Ensure video element has valid dimensions to prevent WebRTC encoding issues
                 if (videoElement.offsetWidth === 0 || videoElement.offsetHeight === 0) {
                   videoElement.style.width = '320px';
                   videoElement.style.height = '240px';
@@ -706,14 +404,12 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
                 publication.track.attach(videoElement);
                 trackRefs.current[room.localParticipant.identity] = publication.track;
               } catch (error) {
+                errorLog(`Error attaching local participant track`, error);
               }
-            } else {
             }
           }
         });
-      } else {
       }
-    } else {
     }
 
     // Add event listeners
@@ -723,14 +419,22 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       room.on('localTrackPublished', handleLocalTrackPublished);
     }
 
+    // 3️⃣ Add a short delayed check to list all current publications
+    setTimeout(() => {
+      if (room && room.participants && typeof room.participants.values === 'function') {
+        console.log('[ROOM-PUBLISHES]',
+          Array.from(room.participants.values()).map((p: any) => ({
+            name: p.name,
+            id: p.identity,
+            tracks: Array.from(p.trackPublications.values()).map((t: any) => ({
+              kind: t.kind, source: t.source, track: !!t.track
+            }))
+          }))
+        );
+      }
+    }, 1500);
+
     return () => {
-      debugLog('CLEANUP', '🧹 useEffect cleanup - Removing event listeners and detaching all tracks', {
-        totalTrackRefs: Object.keys(trackRefs.current).length,
-        totalVideoRefs: Object.keys(videoRefs.current).length,
-        trackRefKeys: Object.keys(trackRefs.current),
-        videoRefKeys: Object.keys(videoRefs.current)
-      });
-      
       if (room && typeof room.off === 'function') {
         room.off('trackSubscribed', handleTrackSubscribed);
         room.off('trackUnsubscribed', handleTrackUnsubscribed);
@@ -740,15 +444,10 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
       // Clean up track references
       Object.entries(trackRefs.current).forEach(([key, track]: [string, any]) => {
         if (track) {
-          debugLog('CLEANUP', `Detaching track for key: ${key}`, { key });
           track.detach();
         }
       });
       trackRefs.current = {};
-      
-      debugLog('CLEANUP', '✅ useEffect cleanup complete - All tracks detached', {
-        trackRefsCleared: Object.keys(trackRefs.current).length === 0
-      });
     };
   }, [liveKitService]);
 
@@ -792,146 +491,30 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
   const mainStageParticipants = getMainStageParticipants();
   const thumbnailParticipants = getThumbnailParticipants();
   
-  // CRITICAL: Log which participants are where with ALL IDs
-  debugLog('REF_REGISTER', `📊 Video Layout Analysis`, {
-    mainStageParticipants: mainStageParticipants.map(p => ({
-      _id: p._id,
-      displayName: p.displayName,
-      userId: p.user?._id || p.userId,
-      // CRITICAL: Show ALL IDs for main stage participants
-      allIds: {
-        participantId: p._id,
-        userId: p.user?._id || p.userId,
-        user_id: p.user?._id,
-        displayName: p.displayName
-      }
-    })),
-    thumbnailParticipants: thumbnailParticipants.map(p => ({
-      _id: p._id,
-      displayName: p.displayName,
-      userId: p.user?._id || p.userId,
-      // CRITICAL: Show ALL IDs for thumbnail participants
-      allIds: {
-        participantId: p._id,
-        userId: p.user?._id || p.userId,
-        user_id: p.user?._id,
-        displayName: p.displayName
-      }
-    })),
-    totalParticipants: participants.length,
-    videoRefsCount: Object.keys(videoRefs.current).length,
-    trackRefsCount: Object.keys(trackRefs.current).length,
-    // CRITICAL: Show all video element keys currently registered
-    allVideoElementKeys: Object.keys(videoRefs.current).filter(key => videoRefs.current[key] !== null),
-    // CRITICAL: Show all track ref keys currently registered
-    allTrackRefKeys: Object.keys(trackRefs.current)
-  });
   
-  // DEBUG: Log component state on every 10th render to avoid spam
-  useEffect(() => {
-    if (renderCountRef.current % 10 === 0) {
-      debugLog('REF_REGISTER', `📊 Component state summary (render #${renderCountRef.current})`, {
-        renderCount: renderCountRef.current,
-        participants: participants.map(p => ({
-          id: p._id,
-          name: p.displayName,
-          userId: p.user?._id || p.userId,
-          // CRITICAL: Show all possible IDs for this participant
-          allIds: {
-            _id: p._id,
-            userId: p.userId,
-            user_id: p.user?._id,
-            displayName: p.displayName
-          }
-        })),
-        videoRefsState: Object.entries(videoRefs.current)
-          .filter(([_, el]) => el !== null)
-          .map(([key, el]) => ({
-            key,
-            hasElement: !!el,
-            hasSrcObject: !!(el?.srcObject)
-          })),
-        trackRefsState: Object.keys(trackRefs.current),
-        liveKitParticipantsCount: liveKitParticipants.size,
-        isLiveKitConnected,
-        // CRITICAL: Show LiveKit participants details
-        liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([key, p]) => ({
-          key,
-          identity: p.identity,
-          name: p.name
-        }))
-      });
-    }
-  });
   
 
   // Helper function to get user ID from participant (used as LiveKit identity)
   const getUserIdFromParticipant = (participant: Participant): string | null => {
-    // LiveKit identity is set to user._id in backend token generation
-    // Priority: 1) user._id, 2) userId, 3) _id as fallback
-    const userId = participant.user?._id || participant.userId || participant._id;
-    return userId;
+    return participant?.identity || participant?.user?._id || participant?.userId || participant?._id || null;
   };
 
-  // Helper function to find LiveKit participant by backend participant
+  // 3️⃣ Fix lookup: search only by identity and log clearer mismatch info.
   const findLiveKitParticipantById = (participant: Participant) => {
-    // Get the user ID which is used as LiveKit identity
-    const userId = getUserIdFromParticipant(participant);
-    
-    debugLog('REF_REGISTER', `🔍 findLiveKitParticipantById for ${participant.displayName}`, {
-      participant: {
-        _id: participant._id,
+    const identity = getUserIdFromParticipant(participant);
+    if (!identity) return undefined;
+
+    const lk = liveKitParticipants.get(identity);
+    if (!lk) {
+      console.warn('[LK-LOOKUP-MISS]', {
         displayName: participant.displayName,
-        userId: userId,
-        user: participant.user
-      },
-      availableLiveKitParticipants: Array.from(liveKitParticipants.entries()).map(([key, p]) => ({
-        key,
-        identity: p.identity,
-        name: p.name
-      })),
-      lookupAttempts: {
-        byUserId: userId ? liveKitParticipants.has(userId) : false,
-        byParticipantId: liveKitParticipants.has(participant._id)
-      },
-      // CRITICAL: Show all possible keys we could search for
-      allPossibleKeys: [
-        userId,
-        participant._id,
-        participant.user?._id,
-        participant.userId,
-        participant.displayName
-      ].filter(Boolean)
-    });
-    
-    // CRITICAL FIX: Use user ID (LiveKit identity) for lookup
-    let liveKitParticipant = userId ? liveKitParticipants.get(userId) : undefined;
-    
-    // If not found by user ID, try participant._id as fallback
-    if (!liveKitParticipant) {
-      liveKitParticipant = liveKitParticipants.get(participant._id);
+        identityWanted: identity,
+        liveKitKeys: Array.from(liveKitParticipants.keys()),
+      });
+    } else {
+      console.log('[LK-MATCH]', participant.displayName, '→', identity);
     }
-    
-    // If still not found, search by identity or name across all participants
-    if (!liveKitParticipant) {
-      for (const [key, lkParticipant] of liveKitParticipants.entries()) {
-        if (lkParticipant?.identity === userId || 
-            lkParticipant?.identity === participant._id ||
-            lkParticipant?.name === participant.displayName) {
-          liveKitParticipant = lkParticipant;
-          break;
-        }
-      }
-    }
-    
-    debugLog('REF_REGISTER', `🔍 findLiveKitParticipantById result for ${participant.displayName}`, {
-      found: liveKitParticipant ? {
-        identity: liveKitParticipant.identity,
-        name: liveKitParticipant.name
-      } : 'undefined'
-    });
-    
-    return liveKitParticipant;
+    return lk;
   };
 
   // CIRCUIT BREAKER: Early return AFTER all hooks are called
@@ -961,138 +544,52 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
     // Find corresponding LiveKit participant using improved lookup
     const liveKitParticipant = findLiveKitParticipantById(participant);
     const userId = getUserIdFromParticipant(participant);
-    // CRITICAL FIX: Check if this participant is local using multiple criteria
-    // If no LiveKit participant found, assume it's local if it matches localParticipant
-    let isLocalParticipant = liveKitParticipant ? 
-      (localParticipant?.identity === userId || 
-       localParticipant?.identity === participant._id ||
-       localParticipant?.identity === liveKitParticipant.identity ||
-       localParticipant?.name === participant.displayName) :
-      (localParticipant?.identity === userId || 
-       localParticipant?.identity === participant._id ||
-       localParticipant?.name === participant.displayName);
     
-    // CRITICAL: Override local participant detection with the correct logic
-    // Only the participant whose LiveKit identity matches localParticipant.identity should be local
-    if (localParticipant?.identity && liveKitParticipant?.identity) {
-      const shouldBeLocal = localParticipant.identity === liveKitParticipant.identity;
-      
-      if (shouldBeLocal && !isLocalParticipant) {
-        // This participant should be local but isn't - fix it
-        isLocalParticipant = true;
-        debugLog('REF_REGISTER', `✅ FIXING LOCAL PARTICIPANT: ${participant.displayName} (LiveKit identity matches localParticipant)`, {
-          participantId: participant._id,
-          liveKitIdentity: liveKitParticipant.identity,
-          actualLocalParticipantIdentity: localParticipant.identity,
-          isMainStage: isMainStage,
-          wasLocal: false,
-          nowLocal: true,
-          reason: 'LiveKit identity matches localParticipant identity'
-        });
-      } else if (!shouldBeLocal && isLocalParticipant) {
-        // This participant shouldn't be local but is - fix it
-        isLocalParticipant = false;
-        debugLog('REF_REGISTER', `🚫 FIXING NON-LOCAL PARTICIPANT: ${participant.displayName} (LiveKit identity does not match localParticipant)`, {
-          participantId: participant._id,
-          liveKitIdentity: liveKitParticipant.identity,
-          actualLocalParticipantIdentity: localParticipant.identity,
-          isMainStage: isMainStage,
-          wasLocal: true,
-          nowLocal: false,
-          reason: 'LiveKit identity does not match localParticipant identity'
-        });
-      }
-    }
-    
-    // CRITICAL: Prevent duplicate local participants
-    // If this participant is not found in LiveKit participants but has the same display name as localParticipant,
-    // it might be a duplicate. Only treat as local if it's the first one or matches exactly.
-    if (!liveKitParticipant && localParticipant?.name === participant.displayName && !isMainStage) {
-      // This is likely a duplicate participant, don't treat as local
-      isLocalParticipant = false;
-      debugLog('REF_REGISTER', `🚫 DUPLICATE PARTICIPANT DETECTED: ${participant.displayName}`, {
-        participantId: participant._id,
-        localParticipantName: localParticipant?.name,
-        localParticipantIdentity: localParticipant?.identity,
-        isDuplicate: true
-      });
-    }
-    
-    // CRITICAL: Log local participant detection details
-    debugLog('REF_REGISTER', `🏠 LOCAL PARTICIPANT CHECK for ${participant.displayName}`, {
-      participant: {
-        _id: participant._id,
-        displayName: participant.displayName,
-        userId: userId
-      },
-      localParticipant: {
-        identity: localParticipant?.identity,
-        name: localParticipant?.name
-      },
-      liveKitParticipant: {
-        identity: liveKitParticipant?.identity,
-        name: liveKitParticipant?.name
-      },
-      checks: {
-        userIdMatch: localParticipant?.identity === userId,
-        participantIdMatch: localParticipant?.identity === participant._id,
-        liveKitIdentityMatch: liveKitParticipant && localParticipant?.identity === liveKitParticipant.identity
-      },
-      isLocalParticipant: isLocalParticipant,
-      // CRITICAL: Show what we're comparing against
-      comparisonDetails: {
-        localParticipantIdentity: localParticipant?.identity,
-        localParticipantName: localParticipant?.name,
-        participantUserId: userId,
-        participantId: participant._id,
-        liveKitParticipantIdentity: liveKitParticipant?.identity,
-        allPossibleMatches: [
-          localParticipant?.identity === userId,
-          localParticipant?.identity === participant._id,
-          localParticipant?.identity === liveKitParticipant?.identity,
-          localParticipant?.name === participant.displayName
-        ],
-        // CRITICAL: Show the exact comparison that determines local status
-        exactMatch: localParticipant?.identity === liveKitParticipant?.identity
-      }
-    });
-    
-    // CRITICAL: Debug why liveKitParticipant is undefined
-    debugLog('REF_REGISTER', `🔍 DEBUGGING liveKitParticipant lookup for ${participant.displayName}`, {
-      participant: {
-        _id: participant._id,
-        displayName: participant.displayName,
-        userId: participant.user?._id || participant.userId
-      },
-      liveKitParticipants: Array.from(liveKitParticipants.entries()).map(([key, p]) => ({
-        key,
-        identity: p.identity,
-        name: p.name
-      })),
-      findLiveKitParticipantByIdResult: liveKitParticipant ? {
-        identity: liveKitParticipant.identity,
-        name: liveKitParticipant.name
-      } : 'undefined',
+    // C) Local/remote detection must be exact: ONLY local when identities match
+    const isLocalParticipant =
+      !!localParticipant?.identity && !!userId &&
+      localParticipant.identity === userId;
+
+    // F) Add a short sanity log (temporarily) to ensure Host vs Participant are distinct & correct:
+    console.log('[RENDER-CHECK]', {
+      name: participant.displayName,
+      role: participant.role,
+      identity: userId,
+      lkIdentity: liveKitParticipant?.identity,
+      localIdentity: localParticipant?.identity,
+      isLocalParticipant,
       isMainStage
     });
+
+    // 4️⃣ Guard to wait until participant is available with timeout
+    const [waited, setWaited] = React.useState(false);
+    React.useEffect(() => {
+      const t = setTimeout(() => setWaited(true), 5000);
+      return () => clearTimeout(t);
+    }, []);
     
-    // CRITICAL: Log which type of video element this is with ALL IDs
-    debugLog('REF_REGISTER', `🎬 Rendering ${isMainStage ? 'MAIN STAGE' : 'THUMBNAIL'} video for ${participant.displayName}`, {
-      participant: participant.displayName,
-      isMainStage,
-      // ALL POSSIBLE IDs FOR THIS PARTICIPANT
-      allIds: {
-        participantId: participant._id,
-        userId: userId,
-        user_id: participant.user?._id,
-        displayName: participant.displayName,
-        liveKitIdentity: liveKitParticipant?.identity,
-        liveKitName: liveKitParticipant?.name
-      },
-      isLocalParticipant,
-      // CRITICAL: Show which key will be used for video element registration
-      primaryKey: liveKitParticipant?.identity || participant._id
-    });
+    if (!liveKitParticipant && !isLocalParticipant && !waited) {
+      console.warn('[MAIN-STAGE-WAIT]', participant.displayName, 'waiting for track registration…');
+      return (
+        <div style={{
+          display:'flex',alignItems:'center',justifyContent:'center',
+          background:'#111',color:'#888',width:'100%',height:'100%'
+        }}>
+          Loading {participant.displayName} video…
+        </div>
+      );
+    }
+    
+    if (!liveKitParticipant && waited) {
+      return (
+        <div style={{
+          display:'flex',alignItems:'center',justifyContent:'center',
+          background:'#111',color:'#f87171',width:'100%',height:'100%'
+        }}>
+          ⚠️ {participant.displayName} has no camera track.
+        </div>
+      );
+    }
     
     return (
       <div
@@ -1118,19 +615,18 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
         {/* Video Element */}
         <video
           ref={el => {
-            // CRITICAL FIX: Use LiveKit identity as primary key for consistency with track events
-            // This ensures video elements are registered with the same key that LiveKit uses for tracks
-            // If no LiveKit participant found, use participant._id as fallback
-            const primaryKey = liveKitParticipant?.identity || participant._id;
-            
-            // CRITICAL: Log the primary key to ensure consistency
-            debugLog('REF_REGISTER', `🔑 PRIMARY KEY for ${participant.displayName}`, {
-              participantId: participant._id,
+            console.log('[VIDEO-REF] Registering video element', {
+              displayName: participant.displayName,
+              primaryKey: liveKitParticipant?.identity || participant._id,
               liveKitIdentity: liveKitParticipant?.identity,
-              primaryKey: primaryKey,
-              usingLiveKitIdentity: liveKitParticipant?.identity === primaryKey,
-              usingParticipantId: participant._id === primaryKey
+              localIdentity: localParticipant?.identity,
+              isLocalParticipant,
+              isMainStage,
             });
+            
+            // D) Video ref registration must use identity only (no name/_id fallbacks)
+            const primaryKey = userId || liveKitParticipant?.identity || participant._id;
+            
             
             // Track which keys will be registered
             const keysToRegister: string[] = [primaryKey];
@@ -1149,10 +645,6 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
             
             // Skip rapid re-renders to prevent instability
             if (isRapidRerender && !isNewRegistration) {
-              debugLog('WARNING', `⚡ Skipping rapid re-render for ${participant.displayName}`, {
-                timeSinceLastRender,
-                isRapidRerender: true
-              });
               return;
             }
             
@@ -1167,94 +659,17 @@ const LiveKitParticipantQueue: React.FC<LiveKitParticipantQueueProps> = ({
               if (localVideoTrack && localVideoTrack.track) {
                 try {
                   localVideoTrack.track.attach(el);
-                  debugLog('TRACK_ATTACH', `✅ Immediately attached local track in ref callback`, {
-                    participant: participant.displayName,
-                    isLocal: true,
-                    primaryKey: primaryKey
-                  });
-                  
                   // CRITICAL FIX: Update trackRefs.current for local participant
                   trackRefs.current[primaryKey] = localVideoTrack.track;
-                  debugLog('TRACK_ATTACH', `📝 Updated trackRefs for local participant`, {
-                    participant: participant.displayName,
-                    primaryKey: primaryKey,
-                    trackRefsCount: Object.keys(trackRefs.current).length
-                  });
                 } catch (attachError) {
-                  debugLog('ERROR', `❌ Failed to attach local track in ref callback`, {
-                    participant: participant.displayName,
-                    error: attachError instanceof Error ? attachError.message : String(attachError)
-                  });
+                  errorLog(`Failed to attach local track in ref callback for ${participant.displayName}`, attachError);
                 }
-              } else {
-                debugLog('TRACK_ATTACH', `⚠️ No local video track found for ${participant.displayName}`, {
-                  participant: participant.displayName,
-                  isLocalParticipant: isLocalParticipant,
-                  hasRoom: !!liveKitService?.room,
-                  hasLocalParticipant: !!liveKitService?.room?.localParticipant,
-                  videoTrackPublications: liveKitService?.room?.localParticipant ? 
-                    Array.from(liveKitService.room.localParticipant.videoTrackPublications.values()).map((pub: any) => ({
-                      source: pub.source,
-                      hasTrack: !!pub.track
-                    })) : []
-                });
               }
             }
             
             // REMOVED: Multiple key registration that was causing race conditions
             // Only register with the primary key (participant._id) for consistency
             
-            // Log the registration
-            if (isNewRegistration) {
-              debugLog('REF_REGISTER', `📹 NEW video element registered for ${participant.displayName}`, {
-                participant: participant.displayName,
-                primaryKey,
-                totalKeys: keysToRegister.length,
-                allKeys: keysToRegister,
-                // CRITICAL: Show ALL IDs being used for registration
-                allIds: {
-                  participantId: participant._id,
-                  userId: userId,
-                  user_id: participant.user?._id,
-                  displayName: participant.displayName,
-                  liveKitIdentity: liveKitParticipant?.identity,
-                  liveKitName: liveKitParticipant?.name
-                },
-                isLocal: isLocalParticipant,
-                isMainStage: isMainStage,
-                // CRITICAL: Show which keys the video element is registered under
-                videoElementKeys: {
-                  primaryKey: primaryKey,
-                  allRegisteredKeys: keysToRegister,
-                  liveKitIdentityKey: liveKitParticipant?.identity,
-                  userIdKey: userId,
-                  participantIdKey: participant._id,
-                  displayNameKey: participant.displayName
-                }
-              });
-            } else if (isUpdatingExisting) {
-              debugLog('WARNING', `⚠️ UPDATING existing video element for ${participant.displayName}`, {
-                participant: participant.displayName,
-                primaryKey,
-                totalKeys: keysToRegister.length,
-                allKeys: keysToRegister,
-                oldElementExists: true
-              });
-            } else if (isUnregistering) {
-              debugLog('REF_REGISTER', `🗑️ Unregistering video element for ${participant.displayName}`, {
-                participant: participant.displayName,
-                primaryKey,
-                totalKeys: keysToRegister.length
-              });
-            } else if (el !== null) {
-              debugLog('REF_REGISTER', `🔄 Re-registering SAME video element for ${participant.displayName}`, {
-                participant: participant.displayName,
-                primaryKey,
-                totalKeys: keysToRegister.length,
-                allKeys: keysToRegister,
-                sameElement: true
-              });
-            }
           }}
           autoPlay
           muted={true} // Always mute to prevent feedback, local video is for visual only
