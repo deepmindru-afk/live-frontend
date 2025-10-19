@@ -409,6 +409,24 @@ export const HEALTH_CHECK = gql`
   }
 `;
 
+// Participant by User and Meeting Query
+export const GET_PARTICIPANT_BY_USER_MEETING = gql`
+  query GetParticipantByUserAndMeeting($meetingId: ID!) {
+    getParticipantByUserAndMeeting(meetingId: $meetingId) {
+      _id
+      displayName
+      role
+      micState
+      cameraState
+      user {
+        _id
+        displayName
+        email
+      }
+    }
+  }
+`;
+
 // LiveKit Queries
 export const CREATE_LIVEKIT_TOKEN = gql`
   mutation CreateLivekitToken($input: GenerateTokenInput!) {

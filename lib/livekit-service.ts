@@ -126,8 +126,11 @@ export class LiveKitService {
       // Enable media tracks
 
       if (options.enableCamera !== false) {
+        // Enabling camera
         await this.enableCamera();
+        // Camera enabled successfully
       } else {
+        // Camera disabled by options
       }
 
       if (options.enableMicrophone !== false) {
@@ -169,7 +172,9 @@ export class LiveKitService {
           };
           
           this.roomState.participants.set(this._room.localParticipant.identity, localLiveKitParticipant);
+          // Local participant added to service state
         } else {
+          // Local participant has no identity
         }
       }
 
@@ -472,30 +477,7 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      
-      // Check camera permissions first
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
-        if (videoDevices.length === 0) {
-          throw new Error('No camera devices found');
-        }
-        
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          } 
-        });
-        stream.getTracks().forEach(track => {
-          track.stop(); // Stop test stream
-        });
-      } catch (permError: any) {
-        
-        // Don't throw, just log and continue - LiveKit will handle gracefully
-      }
+      // Starting camera enable process
       
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
       // This ensures all values passed to RTCPeerConnection.addTransceiver are valid finite numbers
@@ -516,24 +498,20 @@ export class LiveKitService {
       }
       
       
-      try {
-        await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
-      } catch (cameraError: any) {
-        
-        // Try without constraints as fallback
         try {
-          await this._room.localParticipant.setCameraEnabled(true);
-        } catch (fallbackError) {
-          throw fallbackError;
+          await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
+        } catch (cameraError: any) {
+          // Try without constraints as fallback
+          try {
+            await this._room.localParticipant.setCameraEnabled(true);
+          } catch (fallbackError) {
+            throw fallbackError;
+          }
         }
-      }
       
       const videoTrack = this._room.localParticipant.videoTrackPublications.values().next().value;
       
-      // CRITICAL: Ensure track is actually published and visible to other participants
-      if (videoTrack && videoTrack.track) {
-      } else {
-      }
+      // Video track published successfully
       
       this.updateRoomState({ isCameraEnabled: true });
     } catch (error: any) {

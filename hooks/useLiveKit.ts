@@ -45,7 +45,11 @@ export interface UseLiveKitReturn {
   liveKitService: LiveKitService | null;
 }
 
-export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn => {
+export const useLiveKit = (options: UseLiveKitOptions = {
+  roomName: '',
+  participantName: '',
+  meetingRole: 'PARTICIPANT'
+}): UseLiveKitReturn => {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -65,8 +69,8 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     optionsRef.current = options;
   }, [options]);
 
-  const setupEventListeners = useCallback(() => {
-    if (!liveKitServiceRef.current) return;
+  const setupEventListeners = useCallback((): (() => void) | null => {
+    if (!liveKitServiceRef.current) return null;
 
     const service = liveKitServiceRef.current;
 
@@ -92,25 +96,11 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
       setIsConnected(roomState.isConnected);
       setConnectionState(roomState.connectionState);
       
-      // ✅ CRITICAL FIX: Only update participants Map if it actually changed
-      // This prevents infinite re-renders caused by creating new Map references
-      setParticipants(prev => {
-        // Check if the Map has actually changed
-        if (prev.size !== roomState.participants.size) {
-          return new Map(roomState.participants);
-        }
-        
-        // Check if any participant has changed
-        let hasChanged = false;
-        for (const [key, value] of roomState.participants) {
-          if (prev.get(key) !== value) {
-            hasChanged = true;
-            break;
-          }
-        }
-        
-        return hasChanged ? new Map(roomState.participants) : prev;
-      });
+      // ✅ CRITICAL FIX: Update participants Map with room state
+      // This ensures local participant is included in the participants map
+      setParticipants(new Map(roomState.participants));
+      
+      // Room state updated with participants
       
       setLocalParticipant(roomState.localParticipant);
       setIsMuted(roomState.isMuted);
@@ -120,9 +110,9 @@ export const useLiveKit = (options: UseLiveKitOptions = {}): UseLiveKitReturn =>
     };
 
     const handleParticipantConnected = ({ participant }: { participant: LiveKitParticipant }) => {
-      
       setParticipants(prev => {
-        const newMap = new Map(prev.set(participant.identity, participant));
+        const newMap = new Map(prev);
+        newMap.set(participant.identity, participant);
         return newMap;
       });
       

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 
-// Extend Window interface for thumbnail video refs
-declare global {
-  interface Window {
-    thumbnailVideoRefs?: { [key: string]: HTMLVideoElement };
-  }
-}
+// TODO: Removed thumbnailVideoRefs - now handled by ParticipantThumbnail components
+// declare global {
+//   interface Window {
+//     thumbnailVideoRefs?: { [key: string]: HTMLVideoElement };
+//   }
+// }
 import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
@@ -36,7 +36,8 @@ import MinimalistChat from './MinimalistChat';
 import PictureInPicture from './PictureInPicture';
 import { usePictureInPicture } from '../hooks/usePictureInPicture';
 import ParticipantQueue from './ParticipantQueue';
-import LiveKitParticipantQueue from './LiveKitParticipantQueue';
+// import LiveKitParticipantQueue from './LiveKitParticipantQueue'; // TODO: Re-implement this component
+import { ParticipantThumbnail, MainStageView } from './livekit';
 import { useParticipantQueue, Participant } from '../hooks/useParticipantQueue';
 import { useAudioLevelDetection } from '../hooks/useAudioLevelDetection';
 import { useLiveKit } from '../hooks/useLiveKit';
@@ -163,27 +164,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const prevMemoizedRef = useRef<any[]>([]);
   
   const memoizedParticipants = useMemo(() => {
-    // 1️⃣ Use ONLY the real user_id field - don't overwrite it!
-    const normalizedParticipants = participants.map(p => {
-      const realUserId = (p as any)?.user_id; // Use the real ID field
-      return {
-        ...p,
-        backendId: p._id,          // keep backend document id
-        identity: realUserId,      // use the real user_id
-        _id: realUserId,           // use real user_id as React key
-      };
-    });
+    // ✅ CLEAN FIX: Use ONE consistent ID + deduplication
+    const participantMap = new Map();
     
-    const newMemoized = normalizedParticipants.map(p => {
-      console.log('[IDENTITY FINAL]', p.displayName, 'realUserId:', (p as any)?.user_id, 'identity:', p.identity);
-      
-      return {
-        _id: p._id, // Already normalized to real user_id
+    participants.forEach(p => {
+      const userIdentity = p.user?._id;
+      if (userIdentity && !participantMap.has(userIdentity)) {
+        participantMap.set(userIdentity, {
+          _id: userIdentity, // Use user ID as React key and primary identifier
         displayName: p.displayName,
-        email: p.email || '',
+          email: p.user?.email || '',
         isMuted: p.micState === 'OFF',
         isCameraOff: p.cameraState === 'OFF',
-        joinedAt: p.joinedAt || '2024-01-01T00:00:00.000Z',
+          joinedAt: p.createdAt || '2024-01-01T00:00:00.000Z',
         isHost: p.role === 'HOST',
         role: p.role,
         hasHandRaised: p.hasHandRaised || false,
@@ -191,13 +184,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         isSpeaking: false,
         audioLevel: 0,
         lastActivity: '2024-01-01T00:00:00.000Z',
-        // Use the real user_id as identity
-        identity: (p as any)?.user_id,
+          identity: userIdentity, // ✅ SINGLE ID: user._id matches LiveKit identity
         // Preserve original fields for compatibility
         user: p.user,
-        userId: p.userId
-      };
+          backendId: p._id // Keep participant document ID for backend operations
+        });
+      }
     });
+    
+    const newMemoized = Array.from(participantMap.values());
+    
+                // Participant deduplication completed
     
     // Deep equality check - only return new array if data actually changed
     if (prevMemoizedRef.current.length === newMemoized.length) {
@@ -341,7 +338,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     autoConnect: false,
     onConnected: (roomState) => {
       setMicEnabled(!roomState.isMuted);
-      setCameraEnabled(roomState.isCameraEnabled);
+      // ✅ FIX: Don't override cameraEnabled with roomState - keep the user's preference
+      // setCameraEnabled(roomState.isCameraEnabled); // This was causing the camera to be disabled
       setScreenSharing(roomState.isScreenSharing);
       
       // IMPORTANT: Camera enable should happen here, after connection is fully established
@@ -761,6 +759,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // Connect to LiveKit with camera/mic settings from state
       // Camera will be enabled during connection if cameraEnabled=true
 
+      // LiveKit connection with camera and mic state
+
       liveKitConnect({
         roomName: actualMeetingId,
         participantName: currentUser.displayName || currentUser.name || 'User',
@@ -769,6 +769,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         enableMicrophone: micEnabled,
         enableScreenShare: true
       }).catch(error => {
+        console.error('🚨 LiveKit Connection Error:', error);
       });
     }
   }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
@@ -779,196 +780,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // NOTE: Video elements ready event listener removed - no longer needed
 
-  // Connect LiveKit tracks to thumbnail video elements
-  useEffect(() => {
-    if (!liveKitService?.room || !isLiveKitConnected) return;
-
-    const room = liveKitService.room;
-    
-    // CRITICAL FIX: Attach local participant's own camera to their thumbnail
-    const attachLocalVideoToThumbnail = () => {
-      if (room.localParticipant) {
-        const localVideoTrack = Array.from(room.localParticipant.videoTrackPublications.values())
-          .find(pub => pub.source === 'camera');
-        
-        if (localVideoTrack && localVideoTrack.track) {
-          // Try multiple lookup strategies for local participant
-          let videoElement = null;
-          let videoId = null;
-          
-          // Strategy 1: Use local participant identity (user._id)
-          videoId = `thumbnail-${room.localParticipant.identity}`;
-          videoElement = window.thumbnailVideoRefs?.[videoId];
-          
-          // Strategy 2: Find local participant in participants list and use their ID
-          if (!videoElement) {
-            const localParticipant = participants.find(p => 
-              (p.user?._id === room.localParticipant.identity) || 
-              (p.userId === room.localParticipant.identity)
-            );
-            if (localParticipant) {
-              const userId = localParticipant.user?._id || localParticipant.userId || localParticipant._id;
-              videoId = `thumbnail-${userId}`;
-              videoElement = window.thumbnailVideoRefs?.[videoId];
-            }
-          }
-          
-          // Strategy 3: Try participant._id as fallback
-          if (!videoElement) {
-            const localParticipant = participants.find(p => 
-              (p.user?._id === room.localParticipant.identity) || 
-              (p.userId === room.localParticipant.identity)
-            );
-            if (localParticipant) {
-              videoId = `thumbnail-${localParticipant._id}`;
-              videoElement = window.thumbnailVideoRefs?.[videoId];
-            }
-          }
-          
-          
-          if (videoElement) {
-            try {
-            localVideoTrack.track.attach(videoElement);
-            
-            const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-            if (fallbackDiv) {
-              (fallbackDiv as HTMLElement).style.display = 'none';
-              }
-            } catch (attachError) {
-            }
-          } else {
-          }
-        }
-      }
-    };
-    
-    // Try to attach local video immediately
-    setTimeout(() => attachLocalVideoToThumbnail(), 100);
-    setTimeout(() => attachLocalVideoToThumbnail(), 500);
-    setTimeout(() => attachLocalVideoToThumbnail(), 1000);
-    
-    const handleTrackSubscribed = (track: any, publication: any, participant: any) => {
-      if (track.kind === 'video') {
-
-        // Only attach CAMERA tracks to thumbnails, not screen share tracks
-        // Screen share tracks will be handled by LiveKitParticipantQueue in the main area
-        if (track.source === 'screen_share' || track.source === 'screen_share_audio') {
-          return;
-        }
-
-        // Try multiple video element lookup strategies
-        let videoElement = null;
-        let videoId = null;
-        
-        // Strategy 1: Use participant.identity (user._id)
-        videoId = `thumbnail-${participant.identity}`;
-        videoElement = window.thumbnailVideoRefs?.[videoId];
-        
-        // Strategy 2: Try to find by matching participant in our participants list
-        if (!videoElement) {
-          const matchingParticipant = participants.find(p => 
-            (p.user?._id === participant.identity) || 
-            (p.userId === participant.identity) ||
-            (p._id === participant.identity)
-          );
-          if (matchingParticipant) {
-            const userId = matchingParticipant.user?._id || matchingParticipant.userId || matchingParticipant._id;
-            videoId = `thumbnail-${userId}`;
-            videoElement = window.thumbnailVideoRefs?.[videoId];
-          }
-        }
-        
-        // Strategy 3: Try participant._id as fallback
-        if (!videoElement) {
-          videoId = `thumbnail-${participant._id}`;
-          videoElement = window.thumbnailVideoRefs?.[videoId];
-        }
-        
-        
-        if (videoElement) {
-          try {
-          track.attach(videoElement);
-          
-          // Hide fallback avatar when video is attached
-          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-          if (fallbackDiv) {
-            (fallbackDiv as HTMLElement).style.display = 'none';
-            }
-            
-          } catch (attachError) {
-          }
-        } else {
-          
-          // PERFORMANCE FIX: Better retry logic with multiple attempts
-          let retryCount = 0;
-          const maxRetries = 5;
-          const retryInterval = setInterval(() => {
-            retryCount++;
-            const retryElement = window.thumbnailVideoRefs?.[videoId];
-            if (retryElement) {
-              try {
-                track.attach(retryElement);
-                const fallbackDiv = retryElement.parentElement?.querySelector('[style*="position: absolute"]');
-                if (fallbackDiv) {
-                  (fallbackDiv as HTMLElement).style.display = 'none';
-                }
-                clearInterval(retryInterval);
-              } catch (retryError) {
-                if (retryCount >= maxRetries) {
-                  clearInterval(retryInterval);
-                }
-              }
-            } else if (retryCount >= maxRetries) {
-              clearInterval(retryInterval);
-            }
-          }, 300); // Retry every 300ms for up to 1.5 seconds
-        }
-      }
-    };
-
-    const handleTrackUnsubscribed = (track: any, publication: any, participant: any) => {
-      if (track.kind === 'video') {
-
-        // Show fallback avatar when video is detached
-        const videoId = `thumbnail-${participant.identity}`;
-        const videoElement = window.thumbnailVideoRefs?.[videoId];
-        if (videoElement) {
-          track.detach();
-          
-          // Show fallback avatar when video is detached
-          const fallbackDiv = videoElement.parentElement?.querySelector('[style*="position: absolute"]');
-          if (fallbackDiv) {
-            (fallbackDiv as HTMLElement).style.display = 'flex';
-          }
-        }
-      }
-    };
-
-    // Handle track published events (for local and remote participants)
-    const handleTrackPublished = (publication: any, participant: any) => {
-      
-      // If it's a video track, try to attach it to thumbnail
-      if (publication.kind === 'video' && publication.track && publication.source === 'camera') {
-        setTimeout(() => attachLocalVideoToThumbnail(), 200);
-      }
-    };
-
-    // Listen for track events
-    room.on('trackSubscribed', handleTrackSubscribed);
-    room.on('trackUnsubscribed', handleTrackUnsubscribed);
-    room.on('trackPublished', handleTrackPublished);
-
-    // Initial attachment for already published tracks
-    attachLocalVideoToThumbnail();
-
-    // Cleanup
-    return () => {
-      room.off('trackSubscribed', handleTrackSubscribed);
-      room.off('trackUnsubscribed', handleTrackUnsubscribed);
-      room.off('trackPublished', handleTrackPublished);
-    };
-  }, [liveKitService, isLiveKitConnected]);
-  // Camera is enabled during initial connection in the connect() method
+  // NOTE: Old video attachment code removed - video tracks now handled by ParticipantThumbnail and MainStageView components
 
   // Simple mobile detection for responsive layout
   useEffect(() => {
@@ -1215,12 +1027,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       const participantsList = participantsData.getParticipantsByMeeting as any[];
       
       // 🧠 Step 1 — Detect mismatch in raw participant data
-      console.log('[ROOM-PARTICIPANTS RAW]', participantsList.map(p => ({
-        displayName: p.displayName,
-        _id: p._id,
-        userId: p.userId,
-        user__id: p.user?._id
-      })));
+      // Raw participant data processed
       
       // Create a stable string representation of participant IDs
       const currentParticipantIds = participantsList.map((p: any) => p._id).sort().join(',');
@@ -1231,29 +1038,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         const previousParticipants = participants;
         
-        // 1️⃣ Normalize participant identities safely — don't overwrite everyone with the same value.
-        // Only set identity from that user's own user._id.
-        const normalizedParticipants = participantsList.map(p => {
-          const stableIdentity = p.user?._id || p.userId || p.identity || p._id;
-          return {
-            ...p,
-            backendId: p._id,          // keep backend document id
-            identity: stableIdentity,  // each participant keeps their own user._id
-            _id: stableIdentity,       // use identity as React key
-          };
-        });
-
-        console.log('[PARTICIPANT ID CHECK]', normalizedParticipants.map(pp => ({
-          name: pp.displayName,
-          role: pp.role,
-          backendId: pp.backendId,
-          identity: pp.identity,
-          userId: pp.userId,
-          user__id: pp.user?._id,
-        })));
-        
-        // Update state with normalized participants
-        setParticipants(normalizedParticipants);
+        // ✅ CLEAN FIX: No need to normalize - just use the participants as they come from backend
+        // The memoizedParticipants will handle the ID mapping cleanly
+        setParticipants(participantsList);
 
         // Check for new participants (joined)
         if (previousParticipants.length > 0) {
@@ -2169,32 +1956,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     );
   }
 
-  // 🔍 PARTICIPANT ID CHECK - Print all ID fields for each participant and compare them to LiveKit identities
-  if (participants && liveKitService?.room) {
-    console.group('🔍 PARTICIPANT ID CHECK');
-    participants.forEach(p => {
-      const userId = p.userId;
-      const user_id = p.user?._id;
-      const identity = p.identity;
-      const backendId = p._id;
-      
-      // Get LiveKit participant keys from the service's participants map
-      const liveKeys = Array.from(liveKitParticipants.keys());
-      const localId = liveKitService.room?.localParticipant?.identity;
-      
-      console.log({
-        displayName: p.displayName,
-        role: p.role,
-        backendId,
-        userId,
-        user_id,
-        identity,
-        liveKeys,
-        localId,
-      });
-    });
-    console.groupEnd();
-  }
+  // Participant data processed
 
     return (
       <>
@@ -2793,184 +2555,61 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </>
               )}
 
-              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant) => (
-                <div
-                  key={participant._id}
-                  onClick={() => setSelectedParticipantId(participant._id)}
-                  style={{
-                    minWidth: isMobile ? '100px' : '120px',
-                    width: isMobile ? '100px' : '120px',
-                    height: isMobile ? '100px' : '120px',
-                    backgroundColor: '#1f2937',
-                    borderRadius: isMobile ? '8px' : '10px',
-                    border: selectedParticipant?._id === participant._id 
-                      ? '3px solid #3b82f6' // Blue border for selected participant
-                      : participant.role === 'HOST' 
-                        ? '2px solid #10b981' 
-                        : '2px solid #e5e7eb',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    transition: 'all 0.3s ease',
-                    overflow: 'hidden',
-                    flexShrink: 0,
-                    transform: selectedParticipant?._id === participant._id ? 'scale(1.05)' : 'scale(1)',
-                    boxShadow: selectedParticipant?._id === participant._id 
-                      ? '0 4px 12px rgba(59, 130, 246, 0.4)' 
-                      : 'none'
-                  }}
-                >
-                  {/* Video Element */}
-                  <video
-                    ref={el => {
-                      if (el) {
-                        // Store video element for LiveKit track attachment
-                        // Use user._id as primary key (LiveKit identity), fallback to participant._id
-                        const userId = participant.user?._id || participant.userId || participant._id;
-                        const videoId = `thumbnail-${userId}`;
-                        if (!window.thumbnailVideoRefs) window.thumbnailVideoRefs = {};
-                        window.thumbnailVideoRefs[videoId] = el;
-                        
-                        // Also register with participant._id as backup
-                        const backupVideoId = `thumbnail-${participant._id}`;
-                        window.thumbnailVideoRefs[backupVideoId] = el;
-                        
-                      }
-                    }}
-                    autoPlay
-                    muted
-                    playsInline
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      borderRadius: isMobile ? '6px' : '8px',
-                      backgroundColor: '#374151'
-                    }}
+              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant) => {
+                // Check if participant is speaking (from audio level detection)
+                const isSpeaking = participant.audioLevel > 0.1 || false;
+                
+                // Get video and audio tracks from LiveKit room
+                let videoTrack = null;
+                let audioTrack = null;
+                
+                if (liveKitService?.room) {
+                  // ✅ FIX: Use user._id as the identity since that's what LiveKit uses
+                  const participantIdentity = participant.user?._id || participant.identity;
+                  const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                      // Video track retrieval for participant
+                  
+                  if (liveKitRoomParticipant) {
+                    // Get first video track publication
+                    const videoTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())[0];
+                    videoTrack = videoTrackPub?.track;
+                    
+                    // Get first audio track publication  
+                    const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
+                    audioTrack = audioTrackPub?.track;
+                    
+                      // Track publications retrieved
+                  } else {
+                    // Check if this is the local participant
+                    if (participantIdentity === liveKitService.room.localParticipant?.identity) {
+                      // Using local participant for video tracks
+                      const videoTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())[0];
+                      videoTrack = videoTrackPub?.track;
+                      
+                      const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                      audioTrack = audioTrackPub?.track;
+                      
+                      // Local participant tracks retrieved
+                    }
+                  }
+                }
+                
+                return (
+                  <ParticipantThumbnail
+                    key={participant._id}
+                    participantId={participant._id}
+                    name={participant.displayName || 'Unknown'}
+                    videoTrack={videoTrack}
+                    audioTrack={audioTrack}
+                    isSpeaking={isSpeaking}
+                    isHandRaised={participant.hasHandRaised}
+                    isMuted={participant.micState === 'OFF'}
+                    isVideoOff={!videoTrack} // ✅ FIX: Use actual video track presence, not backend state
+                    isHost={participant.role === 'HOST'}
+                    onClick={() => setSelectedParticipantId(participant._id)}
                   />
-                  
-                  {/* Fallback Avatar - Show when video is off or not available */}
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#374151',
-                    borderRadius: isMobile ? '6px' : '8px'
-                  }}>
-                    <div style={{ 
-                      fontSize: isMobile ? '24px' : '26px', 
-                      marginBottom: isMobile ? '4px' : '6px',
-                      fontWeight: 'bold'
-                    }}>
-                      {(participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).charAt(0)?.toUpperCase() || 'U'}
-                    </div>
-                    <div style={{ 
-                      fontSize: isMobile ? '10px' : '11px', 
-                      fontWeight: '500', 
-                      textAlign: 'center',
-                      color: '#f3f4f6',
-                      lineHeight: 1.2,
-                      maxWidth: '90%'
-                    }}>
-                      {isMobile ? 
-                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student')).substring(0, 6) :
-                        (participant.displayName || (participant.role === 'HOST' ? 'Host' : 'Student'))
-                      }
-                    </div>
-                  </div>
-                  
-                  {/* Overlay Indicators */}
-                  {participant.role === 'HOST' && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '4px',
-                      left: '4px',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      fontSize: isMobile ? '8px' : '9px',
-                      fontWeight: '600',
-                      padding: '3px 5px',
-                      borderRadius: '3px',
-                      zIndex: 10
-                    }}>
-                      HOST
-                    </div>
-                  )}
-                  
-                  {/* Hand Raise Indicator */}
-                  {participant.hasHandRaised && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '4px',
-                      fontSize: isMobile ? '18px' : '20px',
-                      zIndex: 10,
-                      animation: 'pulse 1.5s infinite'
-                    }}>
-                      ✋
-                    </div>
-                  )}
-                  
-                  {/* Mic/Camera Status Indicators */}
-                  <div style={{ 
-                    position: 'absolute', 
-                    bottom: '4px', 
-                    left: '4px', 
-                    right: '4px', 
-                    display: 'flex', 
-                    gap: '2px', 
-                    justifyContent: 'center' 
-                  }}>
-                    <div style={{
-                      width: isMobile ? '18px' : '20px',
-                      height: isMobile ? '18px' : '20px',
-                      borderRadius: '3px',
-                      backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      {participant.micState === 'ON' ? (
-                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
-                          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                        </svg>
-                      ) : (
-                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
-                          <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
-                        </svg>
-                      )}
-                    </div>
-                    <div style={{
-                      width: isMobile ? '18px' : '20px',
-                      height: isMobile ? '18px' : '20px',
-                      borderRadius: '3px',
-                      backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      {participant.cameraState === 'ON' ? (
-                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
-                          <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                        </svg>
-                      ) : (
-                        <svg width={isMobile ? "9" : "11"} height={isMobile ? "9" : "11"} viewBox="0 0 24 24" fill="white">
-                          <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               
             </div>
           )}
@@ -3288,30 +2927,170 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             {/* Participant Queue Display with LiveKit */}
             {(() => {
               
-              // DEBUG: Check participant identity mapping
-              
               return null;
             })()}
-            {isLiveKitConnected && liveKitParticipants.size > 0 ? (
-              <LiveKitParticipantQueue
-                participants={memoizedParticipants}
-                activeSpeaker={memoizedActiveSpeaker}
-                screenShareMode={memoizedScreenShareMode}
-                screenShareParticipant={memoizedScreenShareParticipant}
-                selectedParticipant={selectedParticipant}
-                selectedIdentity={selectedParticipant?.identity || null}
-                onParticipantClick={handleParticipantClick}
-                onHandRaiseClick={handleHandRaiseClick}
-                onKickParticipant={handleKickParticipantClick}
-                isHost={isHost}
-                viewMode={viewMode}
-                maxThumbnails={6}
-                liveKitParticipants={liveKitParticipants}
-                localParticipant={liveKitLocalParticipant}
-                liveKitService={liveKitService}
-                isLiveKitConnected={isLiveKitConnected}
-              />
-            ) : (
+            {(() => {
+              console.log('🔍 Main Stage Render Check:', {
+                isLiveKitConnected,
+                liveKitParticipantsSize: liveKitParticipants.size,
+                memoizedParticipantsLength: memoizedParticipants.length,
+                hasSelectedParticipant: !!selectedParticipant,
+                hasMemoizedActiveSpeaker: !!memoizedActiveSpeaker
+              });
+              
+              // Always render main stage if we have participants (either from LiveKit or memoized)
+              const hasParticipants = (isLiveKitConnected && liveKitParticipants.size > 0) || memoizedParticipants.length > 0;
+              
+              if (!hasParticipants) {
+                console.log('❌ Main Stage - No participants available');
+                return null;
+              }
+              
+              // Get the participant for main stage (selected or active speaker or first available)
+              const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
+              if (!mainParticipant) {
+                console.log('❌ Main Stage - No main participant found');
+                return null;
+              }
+              
+              console.log('✅ Main Stage - Rendering for participant:', {
+                participantId: mainParticipant._id,
+                participantName: mainParticipant.displayName,
+                isSelected: !!selectedParticipant,
+                isActiveSpeaker: !!memoizedActiveSpeaker
+              });
+
+                // Get video and audio tracks for main stage
+                let mainVideoTrack = null;
+                let mainAudioTrack = null;
+                let mainScreenShareTrack = null;
+
+                if (liveKitService?.room && mainParticipant._id) {
+                  const participantIdentity = mainParticipant._id;
+                  
+                  console.log('🔍 Main Stage Debug - Participant Identity Check:', {
+                    participantIdentity,
+                    localParticipantIdentity: liveKitService.room.localParticipant?.identity,
+                    isLocalParticipant: participantIdentity === liveKitService.room.localParticipant?.identity,
+                    hasLocalParticipant: !!liveKitService.room.localParticipant,
+                    hasRemoteParticipants: liveKitService.room.remoteParticipants.size > 0
+                  });
+                  
+                  // Check if this is the local participant first
+                  if (participantIdentity === liveKitService.room.localParticipant?.identity) {
+                    console.log('🔍 Main Stage Debug - Local Participant Track Info:', {
+                      videoTrackPublications: liveKitService.room.localParticipant.videoTrackPublications.size,
+                      audioTrackPublications: liveKitService.room.localParticipant.audioTrackPublications.size,
+                      videoTrackPubs: Array.from(liveKitService.room.localParticipant.videoTrackPublications.values()),
+                      audioTrackPubs: Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())
+                    });
+                    
+                    // Local participant - get tracks from localParticipant
+                    const videoTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())[0];
+                    mainVideoTrack = videoTrackPub?.track;
+                    
+                    const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                    mainAudioTrack = audioTrackPub?.track;
+                    
+                    console.log('🔍 Main Stage Debug - Local Participant Track Assignment:', {
+                      videoTrackPub: videoTrackPub,
+                      videoTrack: mainVideoTrack,
+                      audioTrackPub: audioTrackPub,
+                      audioTrack: mainAudioTrack
+                    });
+                    
+                    // Check for screen share
+                    const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                      .find(pub => pub.track?.source === 'screen_share');
+                    mainScreenShareTrack = screenShareTrackPub?.track;
+                  } else {
+                    console.log('🔍 Main Stage Debug - Remote Participant Track Info:', {
+                      participantIdentity,
+                      hasRemoteParticipant: !!liveKitService.room.remoteParticipants.get(participantIdentity)
+                    });
+                    
+                    // Remote participant - get tracks from remoteParticipants
+                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    
+                    if (liveKitRoomParticipant) {
+                      console.log('🔍 Main Stage Debug - Remote Participant Track Details:', {
+                        videoTrackPublications: liveKitRoomParticipant.videoTrackPublications.size,
+                        audioTrackPublications: liveKitRoomParticipant.audioTrackPublications.size,
+                        videoTrackPubs: Array.from(liveKitRoomParticipant.videoTrackPublications.values()),
+                        audioTrackPubs: Array.from(liveKitRoomParticipant.audioTrackPublications.values())
+                      });
+                      
+                      const videoTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())[0];
+                      mainVideoTrack = videoTrackPub?.track;
+                      
+                      const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
+                      mainAudioTrack = audioTrackPub?.track;
+                      
+                      console.log('🔍 Main Stage Debug - Remote Participant Track Assignment:', {
+                        videoTrackPub: videoTrackPub,
+                        videoTrack: mainVideoTrack,
+                        audioTrackPub: audioTrackPub,
+                        audioTrack: mainAudioTrack
+                      });
+                      
+                      // Check for screen share
+                      const screenShareTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
+                        .find(pub => pub.track?.source === 'screen_share');
+                      mainScreenShareTrack = screenShareTrackPub?.track;
+                    } else {
+                      console.log('❌ Main Stage Debug - No remote participant found for identity:', participantIdentity);
+                    }
+                  }
+                } else {
+                  console.log('❌ Main Stage Debug - Missing requirements, using fallback:', {
+                    hasLiveKitService: !!liveKitService,
+                    hasRoom: !!liveKitService?.room,
+                    hasMainParticipant: !!mainParticipant,
+                    mainParticipantId: mainParticipant?._id,
+                    usingFallback: true
+                  });
+                  
+                  // Fallback: Set video tracks to null for memoized participants
+                  mainVideoTrack = null;
+                  mainAudioTrack = null;
+                  mainScreenShareTrack = null;
+                }
+
+                console.log('🎥 Main Stage Video Tracks:', {
+                  participantId: mainParticipant._id,
+                  participantName: mainParticipant.displayName,
+                  hasVideoTrack: !!mainVideoTrack,
+                  hasAudioTrack: !!mainAudioTrack,
+                  hasScreenShareTrack: !!mainScreenShareTrack,
+                  isScreenSharing: memoizedScreenShareMode,
+                  isLocalParticipant: mainParticipant._id === liveKitService?.room?.localParticipant?.identity
+                });
+
+                return (
+                  <MainStageView
+                    participantId={mainParticipant._id}
+                    name={mainParticipant.displayName || 'Main Stage'}
+                    videoTrack={mainVideoTrack}
+                    audioTrack={mainAudioTrack}
+                    isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
+                    isHandRaised={mainParticipant.hasHandRaised || false}
+                    isMuted={mainParticipant.micState === 'OFF' || false}
+                    isVideoOff={!mainVideoTrack} // Use actual video track presence
+                    isHost={mainParticipant.role === 'HOST' || false}
+                    isScreenSharing={memoizedScreenShareMode}
+                    screenShareTrack={mainScreenShareTrack}
+                    connectionQuality={5} // TODO: Get actual connection quality
+                    onParticipantClick={(participantId) => {
+                      const participant = memoizedParticipants.find(p => p._id === participantId);
+                      if (participant) {
+                        setSelectedParticipantId(participantId);
+                        // Main stage participant selected
+                      }
+                    }}
+                  />
+                );
+              })()}
+            {!isLiveKitConnected || liveKitParticipants.size === 0 ? (
               <ParticipantQueue
                 participants={queueState.participants}
                 activeSpeaker={queueState.activeSpeaker}
@@ -3331,7 +3110,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 viewMode={viewMode}
                 maxThumbnails={6}
               />
-            )}
+            ) : null}
           </div>
 
           {/* Bottom Control Bar */}
