@@ -137,6 +137,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   
+  // Video player mode states
+  const [isVideoPlayerMode, setIsVideoPlayerMode] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   // Track participants state changes
   const prevParticipantsRef = useRef(participants);
   
@@ -694,12 +699,41 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       setIsMobile(mobile);
       if (mobile) {
         setViewMode('speaker');
+        // Auto-enable video player mode on mobile
+        setIsVideoPlayerMode(true);
       }
     };
 
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Auto-enable video player mode after connection
+  useEffect(() => {
+    if (isLiveKitConnected && !isMobile) {
+      // Desktop: Enable video player mode after 2 seconds
+      const timer = setTimeout(() => {
+        setIsVideoPlayerMode(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLiveKitConnected, isMobile]);
+
+  // Production environment checks
+  useEffect(() => {
+    // Check if we're in production
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    if (isProduction) {
+      // Disable console logs in production
+      console.log = () => {};
+      console.warn = () => {};
+      console.info = () => {};
+      
+      // Only keep console.error for debugging
+      console.error = console.error;
+    }
   }, []);
 
   // Mobile fullscreen and immersive mode
@@ -785,30 +819,40 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // Prevent default error handling for mobile
       event.preventDefault();
       
-      // Show user-friendly error message
-      Swal.fire({
-        icon: 'error',
-        title: 'Mobile Error',
-        text: 'Please refresh the page and try again. If the problem persists, try using Chrome or Safari browser.',
-        confirmButtonText: 'Refresh',
-        confirmButtonColor: '#4A6CF7'
-      }).then(() => {
-        window.location.reload();
-      });
+      // Only show error alerts in development
+      if (process.env.NODE_ENV === 'development') {
+        Swal.fire({
+          icon: 'error',
+          title: 'Mobile Error',
+          text: 'Please refresh the page and try again. If the problem persists, try using Chrome or Safari browser.',
+          confirmButtonText: 'Refresh',
+          confirmButtonColor: '#4A6CF7'
+        }).then(() => {
+          window.location.reload();
+        });
+      } else {
+        // In production, just log the error
+        console.error('Mobile error:', event.error);
+      }
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       // Prevent default error handling for mobile
       event.preventDefault();
       
-      // Show user-friendly error message
-      Swal.fire({
-        icon: 'error',
-        title: 'Connection Error',
-        text: 'Please check your internet connection and try again.',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#4A6CF7'
-      });
+      // Only show error alerts in development
+      if (process.env.NODE_ENV === 'development') {
+        Swal.fire({
+          icon: 'error',
+          title: 'Connection Error',
+          text: 'Please check your internet connection and try again.',
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#4A6CF7'
+        });
+      } else {
+        // In production, just log the error
+        console.error('Unhandled promise rejection:', event.reason);
+      }
     };
 
     window.addEventListener('error', handleError);
@@ -819,6 +863,74 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, [isMobile]);
+
+  // Video player mode controls (auto-hide like video player)
+  useEffect(() => {
+    if (!isVideoPlayerMode) return;
+
+    let hideTimer: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(hideTimer);
+      setShowControls(true);
+      hideTimer = setTimeout(() => {
+        setShowControls(false);
+      }, 3000); // Hide after 3 seconds of inactivity
+    };
+
+    // Show controls on mouse movement or touch
+    const handleUserActivity = () => {
+      resetTimer();
+    };
+
+    document.addEventListener('mousemove', handleUserActivity);
+    document.addEventListener('touchstart', handleUserActivity);
+    document.addEventListener('keydown', handleUserActivity);
+
+    // Initial timer
+    resetTimer();
+
+    return () => {
+      clearTimeout(hideTimer);
+      document.removeEventListener('mousemove', handleUserActivity);
+      document.removeEventListener('touchstart', handleUserActivity);
+      document.removeEventListener('keydown', handleUserActivity);
+    };
+  }, [isVideoPlayerMode]);
+
+  // Fullscreen toggle functionality
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+    } catch (error) {
+      // Fullscreen failed, continue anyway
+    }
+  }, []);
 
   // Picture-in-Picture mode for mobile (when app goes to background)
   useEffect(() => {
@@ -1884,6 +1996,62 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             50% { opacity: 0.3; }
             100% { opacity: 1; }
           }
+
+          /* Video Player Mode - All Devices */
+          .video-player-mode {
+            background: #000000 !important;
+            color: #ffffff !important;
+          }
+
+          .video-player-mode body {
+            overflow: hidden;
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            -webkit-overflow-scrolling: touch;
+            background: #000000;
+            margin: 0;
+            padding: 0;
+          }
+
+          /* Hide browser chrome and scrollbars */
+          .video-player-mode html {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+            height: 100%;
+            overflow: hidden;
+          }
+
+          /* Hide scrollbars globally */
+          .video-player-mode ::-webkit-scrollbar {
+            display: none;
+          }
+
+          /* Fullscreen video player container */
+          .video-player-mode #__next {
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: #000000;
+            z-index: 9999;
+          }
+
+          /* Video player controls animation */
+          .video-player-controls {
+            transition: all 0.3s ease;
+          }
+
+          .video-player-controls.hidden {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+
+          .video-player-controls.visible {
+            transform: translateY(0);
+            opacity: 1;
+          }
         
           /* Custom scrollbar for participant thumbnails */
           .participant-thumbnails::-webkit-scrollbar {
@@ -1950,48 +2118,74 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           }
         `}</style>
         
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column', // Ensure column layout for proper structure
-          height: '100vh',
-          width: '100vw', // Use full viewport width
-          backgroundColor: '#ffffff',
-          color: '#333333',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-      {/* Mobile Picture-in-Picture Mode */}
-      {isPiPVisible && isMobile && (
-        <PictureInPicture
-          videoRef={mainVideoRef as React.RefObject<HTMLVideoElement>}
-          meetingId={actualMeetingId}
-          meetingTitle={meeting?.title || 'Live Stream'}
-          participantCount={participants.length}
-          onLeaveMeeting={handleLeaveMeetingFromPiP}
-          onBackToRoom={handleClosePiP}
-          isVisible={isPiPVisible}
-          onClose={handleClosePiP}
-        />
-      )}
-      
-      {/* Header - Hidden when PiP is active on mobile */}
+        <div 
+          className={isVideoPlayerMode ? 'video-player-mode' : ''}
+          style={{
+            display: 'flex',
+            flexDirection: 'column', // Ensure column layout for proper structure
+            height: '100vh',
+            width: '100vw', // Use full viewport width
+            backgroundColor: isVideoPlayerMode ? '#000000' : '#ffffff',
+            color: isVideoPlayerMode ? '#ffffff' : '#333333',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            position: 'relative',
+            overflow: 'hidden',
+            // Video player mode styling
+            ...(isVideoPlayerMode && {
+              background: 'linear-gradient(135deg, #000000 0%, #1a1a2e 100%)'
+            })
+          }}>
+          
+          {/* Main Content Area - Takes remaining space */}
           <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-          height: isMobile ? '56px' : '70px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e5e7eb',
-        display: (isMobile && isPiPVisible) ? 'none' : 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-          padding: isMobile ? '0 12px' : '0 24px',
-        zIndex: 1000,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          gap: isMobile ? '8px' : '16px'
-        }}>
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            overflow: 'hidden',
+            // Reserve space for fixed header and bottom bar
+            paddingTop: isMobile ? '56px' : '70px',
+            paddingBottom: isMobile ? '70px' : '80px'
+          }}>
+            {/* Mobile Picture-in-Picture Mode */}
+            {isPiPVisible && isMobile && (
+              <PictureInPicture
+                videoRef={mainVideoRef as React.RefObject<HTMLVideoElement>}
+                meetingId={actualMeetingId}
+                meetingTitle={meeting?.title || 'Live Stream'}
+                participantCount={participants.length}
+                onLeaveMeeting={handleLeaveMeetingFromPiP}
+                onBackToRoom={handleClosePiP}
+                isVisible={isPiPVisible}
+                onClose={handleClosePiP}
+              />
+            )}
+      
+            {/* Video Player Header - Auto-hide like video player */}
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: isMobile ? '56px' : '70px',
+              backgroundColor: isVideoPlayerMode 
+                ? (showControls ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0)')
+                : '#ffffff',
+              borderBottom: isVideoPlayerMode 
+                ? (showControls ? '1px solid rgba(255, 255, 255, 0.1)' : 'none')
+                : '1px solid #e5e7eb',
+              display: (isMobile && isPiPVisible) ? 'none' : 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: isMobile ? '0 12px' : '0 24px',
+              zIndex: 1000,
+              boxShadow: isVideoPlayerMode 
+                ? (showControls ? '0 2px 10px rgba(0,0,0,0.3)' : 'none')
+                : '0 1px 3px rgba(0,0,0,0.1)',
+              gap: isMobile ? '8px' : '16px',
+              transition: 'all 0.3s ease',
+              backdropFilter: isVideoPlayerMode && showControls ? 'blur(10px)' : 'none'
+            }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '16px', flex: 1, minWidth: 0 }}>
             <div style={{
               width: isMobile ? '32px' : '44px',
@@ -2020,7 +2214,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               <div style={{ 
                 fontSize: isMobile ? '14px' : '20px', 
                 fontWeight: '600', 
-                color: '#111827',
+                color: isVideoPlayerMode ? '#ffffff' : '#111827',
                 lineHeight: 1.2,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -2030,15 +2224,77 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             </div>
               <div style={{ 
                 fontSize: isMobile ? '11px' : '14px', 
-                color: '#6b7280',
+                color: isVideoPlayerMode ? 'rgba(255, 255, 255, 0.7)' : '#6b7280',
                 whiteSpace: 'nowrap'
               }}>
                 {isMobile ? (meeting?.inviteCode || actualMeetingId).substring(0, 8) : `Code: ${meeting?.inviteCode || actualMeetingId}`}
             </div>
           </div>
-        </div>
+            </div>
 
-          <div style={{ display: 'flex', gap: isMobile ? '4px' : '12px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: isMobile ? '4px' : '12px', alignItems: 'center' }}>
+            {/* Video Player Mode Toggle */}
+            <button
+              onClick={() => setIsVideoPlayerMode(!isVideoPlayerMode)}
+              style={{
+                width: isMobile ? '36px' : '44px',
+                height: isMobile ? '36px' : '44px',
+                borderRadius: '8px',
+                backgroundColor: isVideoPlayerMode 
+                  ? 'rgba(74, 108, 247, 0.9)' 
+                  : 'rgba(255, 255, 255, 0.1)',
+                border: isVideoPlayerMode 
+                  ? '1px solid rgba(74, 108, 247, 0.3)'
+                  : '1px solid rgba(255, 255, 255, 0.2)',
+                cursor: 'pointer',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                backdropFilter: 'blur(10px)'
+              }}
+              title={isVideoPlayerMode ? 'Exit Video Mode' : 'Enter Video Mode'}
+            >
+              <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                {isVideoPlayerMode ? (
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                ) : (
+                  <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7v6l5-3-5-3z"/>
+                )}
+              </svg>
+            </button>
+
+            {/* Fullscreen Toggle Button - Video Player Mode */}
+            {isVideoPlayerMode && (
+              <button
+                onClick={toggleFullscreen}
+                style={{
+                  width: isMobile ? '36px' : '44px',
+                  height: isMobile ? '36px' : '44px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  cursor: 'pointer',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(10px)'
+                }}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              >
+                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+                  {isFullscreen ? (
+                    <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+                  ) : (
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                  )}
+                </svg>
+              </button>
+            )}
+
             {/* Live Status Badge - Desktop Only */}
             {!isMobile && (
               <div style={{
@@ -2804,18 +3060,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               />
             </div>
 
-            {/* Participant Queue Display with LiveKit */}
-            {(() => {
-              
-              return null;
-            })()}
-            {(() => {
-              // Always render main stage if we have participants (either from LiveKit or memoized)
-              const hasParticipants = (isLiveKitConnected && liveKitParticipants.size > 0) || memoizedParticipants.length > 0;
-              
-              if (!hasParticipants) {
+            {/* Main Video Content Area */}
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+              width: '100%',
+              height: '100%'
+            }}>
+              {/* Participant Queue Display with LiveKit */}
+              {(() => {
+                
                 return null;
-              }
+              })()}
+              {(() => {
+                // Always render main stage if we have participants (either from LiveKit or memoized)
+                const hasParticipants = (isLiveKitConnected && liveKitParticipants.size > 0) || memoizedParticipants.length > 0;
+                
+                if (!hasParticipants) {
+                  return null;
+                }
               
               // Get the participant for main stage (selected or active speaker or first available)
               const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
@@ -2913,21 +3179,36 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 maxThumbnails={6}
               />
             ) : null}
+            </div>
           </div>
 
-          {/* Bottom Control Bar */}
-        <div style={{
+          {/* Video Player Control Bar - Auto-hide */}
+          <div style={{
             height: isMobile ? '70px' : '80px',
-            backgroundColor: '#ffffff',
-            borderTop: '1px solid #e5e7eb',
-          display: 'flex',
+            backgroundColor: isVideoPlayerMode 
+              ? (showControls ? 'rgba(0, 0, 0, 0.9)' : 'transparent')
+              : '#ffffff',
+            borderTop: isVideoPlayerMode 
+              ? (showControls ? '1px solid rgba(255, 255, 255, 0.1)' : 'none')
+              : '1px solid #e5e7eb',
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: isMobile ? '0 12px' : '0 24px',
-            boxShadow: '0 -2px 8px rgba(0,0,0,0.1)',
-            position: 'relative',
+            boxShadow: isVideoPlayerMode 
+              ? (showControls ? '0 -2px 10px rgba(0,0,0,0.3)' : 'none')
+              : '0 -2px 8px rgba(0,0,0,0.1)',
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
             zIndex: 1000,
-            flexShrink: 0
+            flexShrink: 0,
+            transition: 'all 0.3s ease',
+            transform: isVideoPlayerMode 
+              ? (showControls ? 'translateY(0)' : 'translateY(100%)')
+              : 'translateY(0)',
+            backdropFilter: isVideoPlayerMode && showControls ? 'blur(10px)' : 'none'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '16px' }}>
               {/* Participant Count */}
@@ -2948,24 +3229,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 })()}
               </div>
               
-              {/* Mic Control */}
-              <button
-                onClick={handleMicToggle}
-                style={{
-                  width: isMobile ? '40px' : '48px',
-                  height: isMobile ? '40px' : '48px',
-                  borderRadius: '50%',
-                  backgroundColor: micEnabled ? '#22c55e' : '#ef4444',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                }}
-                title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+                {/* Mic Control - Video Player Style */}
+                <button
+                  onClick={handleMicToggle}
+                  style={{
+                    width: isMobile ? '44px' : '52px',
+                    height: isMobile ? '44px' : '52px',
+                    borderRadius: '50%',
+                    backgroundColor: isVideoPlayerMode 
+                      ? (micEnabled ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)')
+                      : (micEnabled ? '#22c55e' : '#ef4444'),
+                    border: isVideoPlayerMode ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                    cursor: 'pointer',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isVideoPlayerMode 
+                      ? '0 4px 12px rgba(0,0,0,0.3)'
+                      : '0 2px 8px rgba(0,0,0,0.15)',
+                    backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+                  }}
+                  title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
                 {micEnabled ? (
                   <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
@@ -3422,6 +3708,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             </div>
           )}
+          </div>
         </div>
       </>
     );

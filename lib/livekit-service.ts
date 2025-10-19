@@ -557,6 +557,15 @@ export class LiveKitService {
           throw new Error('Media devices not supported in this browser');
         }
 
+        // Production environment check
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (isProduction) {
+          // Additional production checks
+          if (!window.isSecureContext && location.protocol !== 'https:') {
+            throw new Error('Microphone access requires HTTPS in production');
+          }
+        }
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(device => device.kind === 'audioinput');
         
