@@ -29,6 +29,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [shouldShake, setShouldShake] = useState(false);
   const previousHandRaised = useRef(isHandRaised);
 
@@ -46,6 +47,19 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       };
     }
   }, [videoTrack, participantId, name, isVideoOff]);
+
+  // ✅ CRITICAL: Attach audio track for sound
+  useEffect(() => {
+    if (audioRef.current && audioTrack) {
+      audioTrack.attach(audioRef.current);
+      
+      return () => {
+        if (audioTrack && audioRef.current) {
+          audioTrack.detach(audioRef.current);
+        }
+      };
+    }
+  }, [audioTrack, participantId]);
 
   // Shake animation when hand is raised
   useEffect(() => {
@@ -70,6 +84,9 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''}`}
       onClick={onClick}
     >
+      {/* ✅ Hidden audio element for playing participant audio */}
+      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      
       <div className={styles['thumbnail-video-container']}>
         {!isVideoOff && videoTrack ? (
           <video

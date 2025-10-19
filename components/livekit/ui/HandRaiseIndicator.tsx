@@ -205,8 +205,7 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
     
     // Handle errors silently (no alert)
     onError: (error) => {
-      // Just log - no UI interruption
-      console.error('Hand raise error:', error);
+      // Errors handled silently - no UI interruption
     }
   });
 

@@ -674,7 +674,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         enableMicrophone: micEnabled,
         enableScreenShare: true
       }).catch(error => {
-        console.error('🚨 LiveKit Connection Error:', error);
+        // Connection error handled
       });
     }
   }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
@@ -690,7 +690,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Simple mobile detection for responsive layout
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth <= 768;
+      const mobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       setIsMobile(mobile);
       if (mobile) {
         setViewMode('speaker');
@@ -774,6 +774,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
+    };
+  }, [isMobile]);
+
+  // Mobile error handling
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleError = (event: ErrorEvent) => {
+      // Prevent default error handling for mobile
+      event.preventDefault();
+      
+      // Show user-friendly error message
+      Swal.fire({
+        icon: 'error',
+        title: 'Mobile Error',
+        text: 'Please refresh the page and try again. If the problem persists, try using Chrome or Safari browser.',
+        confirmButtonText: 'Refresh',
+        confirmButtonColor: '#4A6CF7'
+      }).then(() => {
+        window.location.reload();
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Prevent default error handling for mobile
+      event.preventDefault();
+      
+      // Show user-friendly error message
+      Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Please check your internet connection and try again.',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#4A6CF7'
+      });
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, [isMobile]);
 
@@ -2767,35 +2810,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               return null;
             })()}
             {(() => {
-              console.log('🔍 Main Stage Render Check:', {
-                isLiveKitConnected,
-                liveKitParticipantsSize: liveKitParticipants.size,
-                memoizedParticipantsLength: memoizedParticipants.length,
-                hasSelectedParticipant: !!selectedParticipant,
-                hasMemoizedActiveSpeaker: !!memoizedActiveSpeaker
-              });
-              
               // Always render main stage if we have participants (either from LiveKit or memoized)
               const hasParticipants = (isLiveKitConnected && liveKitParticipants.size > 0) || memoizedParticipants.length > 0;
               
               if (!hasParticipants) {
-                console.log('❌ Main Stage - No participants available');
                 return null;
               }
               
               // Get the participant for main stage (selected or active speaker or first available)
               const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
               if (!mainParticipant) {
-                console.log('❌ Main Stage - No main participant found');
                 return null;
               }
-              
-              console.log('✅ Main Stage - Rendering for participant:', {
-                participantId: mainParticipant._id,
-                participantName: mainParticipant.displayName,
-                isSelected: !!selectedParticipant,
-                isActiveSpeaker: !!memoizedActiveSpeaker
-              });
 
                 // Get video and audio tracks for main stage
                 let mainVideoTrack = null;
@@ -2805,23 +2831,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 if (liveKitService?.room && mainParticipant._id) {
                   const participantIdentity = mainParticipant._id;
                   
-                  console.log('🔍 Main Stage Debug - Participant Identity Check:', {
-                    participantIdentity,
-                    localParticipantIdentity: liveKitService.room.localParticipant?.identity,
-                    isLocalParticipant: participantIdentity === liveKitService.room.localParticipant?.identity,
-                    hasLocalParticipant: !!liveKitService.room.localParticipant,
-                    hasRemoteParticipants: liveKitService.room.remoteParticipants.size > 0
-                  });
-                  
                   // Check if this is the local participant first
                   if (participantIdentity === liveKitService.room.localParticipant?.identity) {
-                    console.log('🔍 Main Stage Debug - Local Participant Track Info:', {
-                      videoTrackPublications: liveKitService.room.localParticipant.videoTrackPublications.size,
-                      audioTrackPublications: liveKitService.room.localParticipant.audioTrackPublications.size,
-                      videoTrackPubs: Array.from(liveKitService.room.localParticipant.videoTrackPublications.values()),
-                      audioTrackPubs: Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())
-                    });
-                    
                     // Local participant - get tracks from localParticipant
                     const videoTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())[0];
                     mainVideoTrack = videoTrackPub?.track;
@@ -2829,79 +2840,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     mainAudioTrack = audioTrackPub?.track;
                     
-                    console.log('🔍 Main Stage Debug - Local Participant Track Assignment:', {
-                      videoTrackPub: videoTrackPub,
-                      videoTrack: mainVideoTrack,
-                      audioTrackPub: audioTrackPub,
-                      audioTrack: mainAudioTrack
-                    });
-                    
                     // Check for screen share
                     const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
                       .find(pub => pub.track?.source === 'screen_share');
                     mainScreenShareTrack = screenShareTrackPub?.track;
                   } else {
-                    console.log('🔍 Main Stage Debug - Remote Participant Track Info:', {
-                      participantIdentity,
-                      hasRemoteParticipant: !!liveKitService.room.remoteParticipants.get(participantIdentity)
-                    });
-                    
                     // Remote participant - get tracks from remoteParticipants
                     const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
                     if (liveKitRoomParticipant) {
-                      console.log('🔍 Main Stage Debug - Remote Participant Track Details:', {
-                        videoTrackPublications: liveKitRoomParticipant.videoTrackPublications.size,
-                        audioTrackPublications: liveKitRoomParticipant.audioTrackPublications.size,
-                        videoTrackPubs: Array.from(liveKitRoomParticipant.videoTrackPublications.values()),
-                        audioTrackPubs: Array.from(liveKitRoomParticipant.audioTrackPublications.values())
-                      });
-                      
                       const videoTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())[0];
                       mainVideoTrack = videoTrackPub?.track;
                       
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
                       
-                      console.log('🔍 Main Stage Debug - Remote Participant Track Assignment:', {
-                        videoTrackPub: videoTrackPub,
-                        videoTrack: mainVideoTrack,
-                        audioTrackPub: audioTrackPub,
-                        audioTrack: mainAudioTrack
-                      });
-                      
                       // Check for screen share
                       const screenShareTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
                         .find(pub => pub.track?.source === 'screen_share');
                       mainScreenShareTrack = screenShareTrackPub?.track;
-                    } else {
-                      console.log('❌ Main Stage Debug - No remote participant found for identity:', participantIdentity);
                     }
                   }
                 } else {
-                  console.log('❌ Main Stage Debug - Missing requirements, using fallback:', {
-                    hasLiveKitService: !!liveKitService,
-                    hasRoom: !!liveKitService?.room,
-                    hasMainParticipant: !!mainParticipant,
-                    mainParticipantId: mainParticipant?._id,
-                    usingFallback: true
-                  });
-                  
                   // Fallback: Set video tracks to null for memoized participants
                   mainVideoTrack = null;
                   mainAudioTrack = null;
                   mainScreenShareTrack = null;
                 }
-
-                console.log('🎥 Main Stage Video Tracks:', {
-                  participantId: mainParticipant._id,
-                  participantName: mainParticipant.displayName,
-                  hasVideoTrack: !!mainVideoTrack,
-                  hasAudioTrack: !!mainAudioTrack,
-                  hasScreenShareTrack: !!mainScreenShareTrack,
-                  isScreenSharing: memoizedScreenShareMode,
-                  isLocalParticipant: mainParticipant._id === liveKitService?.room?.localParticipant?.identity
-                });
 
                 return (
                   <MainStageView

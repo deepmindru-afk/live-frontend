@@ -552,6 +552,11 @@ export class LiveKitService {
       
       // Check microphone permissions first
       try {
+        // Mobile browser compatibility check
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Media devices not supported in this browser');
+        }
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(device => device.kind === 'audioinput');
         
@@ -559,12 +564,15 @@ export class LiveKitService {
           throw new Error('No microphone devices found');
         }
         
-        // Test microphone access
+        // Test microphone access with mobile-optimized constraints
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: true,
+            // Mobile-specific constraints
+            sampleRate: 44100,
+            channelCount: 1
           } 
         });
         stream.getTracks().forEach(track => {
@@ -574,11 +582,15 @@ export class LiveKitService {
         
         // Throw specific error for better user feedback
         if (permError.name === 'NotAllowedError') {
-          throw new Error('Microphone permission denied. Please allow microphone access in your browser settings.');
+          throw new Error('Microphone permission denied. Please allow microphone access in your browser settings and refresh the page.');
         } else if (permError.name === 'NotFoundError') {
           throw new Error('No microphone found. Please connect a microphone device.');
         } else if (permError.name === 'NotReadableError') {
           throw new Error('Microphone is already in use by another application. Please close other apps using your microphone.');
+        } else if (permError.name === 'NotSupportedError') {
+          throw new Error('Microphone not supported on this device. Please use a different browser or device.');
+        } else if (permError.name === 'SecurityError') {
+          throw new Error('Microphone access blocked for security reasons. Please use HTTPS or localhost.');
         } else {
           throw new Error(`Microphone access failed: ${permError.message}`);
         }

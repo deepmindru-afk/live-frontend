@@ -36,34 +36,19 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 }) => {
   const mainVideoRef = useRef<HTMLVideoElement>(null);
   const screenShareRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
+  // Attach video track
   useEffect(() => {
-    console.log('🎥 MainStageView - Video Track Effect:', {
-      participantId,
-      name,
-      hasVideoTrack: !!videoTrack,
-      videoTrackType: videoTrack?.constructor?.name,
-      isVideoOff,
-      isScreenSharing,
-      hasVideoElement: !!mainVideoRef.current
-    });
-    
     if (mainVideoRef.current && videoTrack && !isScreenSharing) {
-      console.log('🎥 MainStageView - Attaching video track to main stage');
       videoTrack.attach(mainVideoRef.current);
       return () => {
-        console.log('🎥 MainStageView - Detaching video track from main stage');
         videoTrack.detach(mainVideoRef.current);
       };
-    } else {
-      console.log('🎥 MainStageView - Not attaching video track:', {
-        hasVideoElement: !!mainVideoRef.current,
-        hasVideoTrack: !!videoTrack,
-        isScreenSharing
-      });
     }
   }, [videoTrack, isScreenSharing, participantId, name, isVideoOff]);
 
+  // Attach screen share track
   useEffect(() => {
     if (screenShareRef.current && screenShareTrack && isScreenSharing) {
       screenShareTrack.attach(screenShareRef.current);
@@ -73,6 +58,16 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
     }
   }, [screenShareTrack, isScreenSharing]);
 
+  // ✅ CRITICAL: Attach audio track for sound
+  useEffect(() => {
+    if (audioRef.current && audioTrack) {
+      audioTrack.attach(audioRef.current);
+      return () => {
+        audioTrack.detach(audioRef.current);
+      };
+    }
+  }, [audioTrack, participantId]);
+
   const handleClick = () => {
     if (onParticipantClick && participantId) {
       onParticipantClick(participantId);
@@ -81,6 +76,9 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
+      {/* ✅ Hidden audio element for playing participant audio */}
+      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      
       {/* Main Video Container */}
       <div className={styles['main-stage-container']} onClick={handleClick}>
         {/* Screen Share Video */}
