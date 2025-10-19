@@ -10,8 +10,6 @@ import { useQuery, useMutation } from '@apollo/client/react';
 import { gql } from '@apollo/client';
 import { isAuthenticated, getCurrentUser } from '../lib/simple-auth-handlers';
 import { useWebSocketChat } from '../hooks/useWebSocketChat';
-import { useHandRaise } from '../hooks/useHandRaise';
-import { useWebSocketHandRaise } from '../hooks/useWebSocketHandRaise';
 import Swal from 'sweetalert2';
 import { GET_MEETING_BY_ID } from '../apollo/livestream/queries';
 import {
@@ -37,7 +35,7 @@ import PictureInPicture from './PictureInPicture';
 import { usePictureInPicture } from '../hooks/usePictureInPicture';
 import ParticipantQueue from './ParticipantQueue';
 // import LiveKitParticipantQueue from './LiveKitParticipantQueue'; // TODO: Re-implement this component
-import { ParticipantThumbnail, MainStageView } from './livekit';
+import { ParticipantThumbnail, MainStageView, HandRaiseIndicator, useParticipantsWithHandRaise } from './livekit';
 import { useParticipantQueue, Participant } from '../hooks/useParticipantQueue';
 import { useAudioLevelDetection } from '../hooks/useAudioLevelDetection';
 import { useLiveKit } from '../hooks/useLiveKit';
@@ -125,12 +123,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [micEnabled, setMicEnabled] = useState(() => getPrejoinPreference('prejoin_audio_enabled', true));
   const [cameraEnabled, setCameraEnabled] = useState(() => getPrejoinPreference('prejoin_video_enabled', true));
   const [screenSharing, setScreenSharing] = useState(false);
-  const [handRaised, setHandRaised] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');
   const [gridSize, setGridSize] = useState<'2x2' | '3x3' | '4x4'>('2x2');
   const [isMobile, setIsMobile] = useState(false);
-  const [handRaiseQueue, setHandRaiseQueue] = useState<any[]>([]);
-  const [currentHandRaiseMessage, setCurrentHandRaiseMessage] = useState<string | null>(null);
   const [isAuth, setIsAuth] = useState(false);
   const [authComplete, setAuthComplete] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -289,9 +284,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     setSelectedParticipantId(participant._id);
   }, []);
   
-  const handleHandRaiseClick = useCallback((participant: any) => {
-    updateHandRaiseStatus(participant._id, false);
+  // Hand raise status update callback
+  const handleHandRaiseStatusChange = useCallback((participantId: string, isRaised: boolean) => {
+    updateHandRaiseStatus(participantId, isRaised);
   }, [updateHandRaiseStatus]);
+
+  // Hand raise list update callback
+  const handleRaisedHandsChange = useCallback((raisedHands: any[]) => {
+    setWsRaisedHands(raisedHands);
+  }, []);
 
   // Audio Level Detection
   const { detectSpeakingStatus, isSupported: audioSupported } = useAudioLevelDetection({
@@ -532,102 +533,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       };
     }
   }, [socket, actualMeetingId, refetchParticipants]);
-
-  // WebSocket-based hand raise functionality (real-time, no DB)
-  const { 
-    raisedHands: wsRaisedHands, 
-    myHandRaised: wsMyHandRaised, 
-    raiseHand: wsRaiseHand, 
-    lowerHand: wsLowerHand 
-  } = useWebSocketHandRaise({
-    meetingId: actualMeetingId || '',
-    userId: currentParticipant?._id || '',
-    displayName: currentParticipant?.displayName || '',
-    socket: socket || undefined,
-    isConnected: wsConnected,
-    onHandRaised: (info) => {
-      setHandRaiseQueue(prev => {
-        // Remove any existing entry for this user
-        const filtered = prev.filter((hand: any) => hand.participantId !== info.userId);
-        // Add to the beginning (most recent first - DESC order)
-        return [{
-          participantId: info.userId,
-          displayName: info.displayName,
-          raisedAt: info.raisedAt
-        }, ...filtered];
-      });
-      
-      // Show notification for host
-      if (isHost) {
-        setCurrentHandRaiseMessage(`${info.displayName} raised their hand`);
-        setTimeout(() => setCurrentHandRaiseMessage(null), 3000);
-      }
-    },
-    onHandLowered: (info) => {
-      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
-      
-      // Clear current message if this was the last hand
-      if (isHost && handRaiseQueue.length <= 1) {
-        setCurrentHandRaiseMessage(null);
-      }
-    },
-    onHandAutoLowered: (info) => {
-      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
-      
-      // Show notification for auto-lower
-      if (info.userId === currentParticipant?._id) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Hand Auto-Lowered',
-          text: 'Your hand was automatically lowered after 1 minute',
-          timer: 3000,
-          showConfirmButton: false
-        });
-      }
-      
-      // Clear current message if this was the last hand
-      if (isHost && handRaiseQueue.length <= 1) {
-        setCurrentHandRaiseMessage(null);
-      }
-    },
-    onHandLoweredByHost: (info) => {
-      setHandRaiseQueue(prev => prev.filter((hand: any) => hand.participantId !== info.userId));
-      
-      // Show notification if this was my hand
-      if (info.userId === currentParticipant?._id) {
-        Swal.fire({
-          icon: 'info',
-          title: 'Hand Lowered',
-          text: 'The host lowered your hand',
-          timer: 3000,
-          showConfirmButton: false
-        });
-      }
-      
-      // Clear current message if this was the last hand
-      if (isHost && handRaiseQueue.length <= 1) {
-        setCurrentHandRaiseMessage(null);
-      }
-    },
-    onAllHandsLowered: () => {
-      setHandRaiseQueue([]);
-      setCurrentHandRaiseMessage(null);
-      
-      // Show notification if I had my hand raised
-      if (wsMyHandRaised) {
-        Swal.fire({
-          icon: 'info',
-          title: 'All Hands Lowered',
-          text: 'The host lowered all hands',
-          timer: 3000,
-          showConfirmButton: false
-        });
-      }
-    },
-    onError: (error) => {
-      // No alert - just log the error
-    }
-  });
 
   // WebSocket event listener for recording announcements
   useEffect(() => {
@@ -1656,51 +1561,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     stopQueueScreenShare();
   }, [stopQueueScreenShare]);
 
-  const handleRaiseHand = async () => {
-    try {
-      if (!currentParticipant?._id) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'No participant found. Please refresh the page.'
-        });
-              return;
-            }
-          
-      if (!socket || !wsConnected) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Connection Error',
-          text: 'Not connected to server. Please check your connection.'
-        });
-        return;
-      }
-      
-      
-      // Use WebSocket state as the source of truth
-      if (wsMyHandRaised) {
-        // Lower hand
-        wsLowerHand();
-        updateHandRaiseStatus(currentParticipant._id, false);
-      } else {
-        // Raise hand
-        wsRaiseHand();
-        updateHandRaiseStatus(currentParticipant._id, true);
-      }
-    } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: `Failed to toggle hand raise: ${(error as Error).message || 'Unknown error'}`
-      });
-    }
-  };
-
-  // Reset hand raise state when there are permission errors
-  const resetHandRaiseState = useCallback(() => {
-    setHandRaised(false);
-  }, []);
-
   const handleKickParticipant = useCallback(async (participantId: string) => {
     try {
       
@@ -1872,24 +1732,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [isHost, meeting?.status, isLive]);
 
-  // Enhance participants with real-time hand raise status
-  const participantsWithHandRaise = useMemo(() => {
-    
-    const enhancedParticipants = participants.map(participant => {
-      const hasHandRaised = wsRaisedHands.some(hand => hand.userId === participant._id) || false;
-      return {
-        ...participant,
-        hasHandRaised
-      };
-    });
-    
-    // Sort to put HOST first
-    return enhancedParticipants.sort((a, b) => {
-      if (a.role === 'HOST') return -1;
-      if (b.role === 'HOST') return 1;
-      return 0;
-    });
-  }, [participants, wsRaisedHands]);
+  // Get wsRaisedHands from HandRaiseIndicator via state
+  const [wsRaisedHands, setWsRaisedHands] = React.useState<any[]>([]);
+  
+  // Enhance participants with real-time hand raise status using the helper hook
+  const participantsWithHandRaise = useParticipantsWithHandRaise(participants, wsRaisedHands);
 
   // Loading state
   if (loading || !authComplete) {
@@ -2900,29 +2747,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             
             {/* Debug Info */}
 
-            {/* Hand raise count - Host Only */}
-            {isHost && wsRaisedHands.length > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '20px',
-                left: isLiveKitConnected ? '200px' : '20px',
-                backgroundColor: '#fef3c7',
-                border: '2px solid #f59e0b',
-                borderRadius: '8px',
-                padding: '12px 20px',
-                fontSize: '16px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: '#92400e',
-                zIndex: 1000,
-                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-                animation: 'pulse 2s infinite'
-              }}>
-                ✋ {wsRaisedHands.length} hand{wsRaisedHands.length > 1 ? 's' : ''} raised
-              </div>
-            )}
+            {/* Hand Raise Indicator - Host Notifications (handled by component) */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000 }}>
+              <HandRaiseIndicator
+                socket={socket}
+                isConnected={wsConnected}
+                meetingId={actualMeetingId}
+                currentParticipant={currentParticipant}
+                isHost={isHost}
+                mode="indicator"
+                onHandRaiseStatusChange={handleHandRaiseStatusChange}
+                onRaisedHandsChange={handleRaisedHandsChange}
+              />
+            </div>
 
             {/* Participant Queue Display with LiveKit */}
             {(() => {
@@ -3276,30 +3113,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 )}
               </button>
 
-              {/* Hand Raise Control */}
-              <button
-                onClick={handleRaiseHand}
-                style={{
-                  width: isMobile ? '40px' : '48px',
-                  height: isMobile ? '40px' : '48px',
-                  borderRadius: '50%',
-                  backgroundColor: wsMyHandRaised ? '#f59e0b' : '#f3f4f6',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: wsMyHandRaised ? 'white' : '#6b7280',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                  animation: wsMyHandRaised ? 'pulse 1.5s infinite' : 'none'
-                }}
-                title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
-              >
-                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>
-                </svg>
-              </button>
+              {/* Hand Raise Control - Now handled by HandRaiseIndicator */}
+              <HandRaiseIndicator
+                socket={socket}
+                isConnected={wsConnected}
+                meetingId={actualMeetingId}
+                currentParticipant={currentParticipant}
+                isHost={isHost}
+                isMobile={isMobile}
+                mode="button"
+                onHandRaiseStatusChange={handleHandRaiseStatusChange}
+                onRaisedHandsChange={handleRaisedHandsChange}
+              />
 
               {/* Leave Button */}
               <button

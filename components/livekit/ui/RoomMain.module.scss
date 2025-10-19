@@ -50,6 +50,10 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     box-shadow: 0 0 0 3px rgba($warning-orange, 0.3), $shadow-lg;
   }
 
+  &.shake-once {
+    animation: shake-vibrate 0.5s ease-in-out;
+  }
+
   .thumbnail-video-container {
     width: 100%;
     height: 100%;
@@ -217,6 +221,18 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   }
   50% {
     height: 12px;
+  }
+}
+
+@keyframes shake-vibrate {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-4px) rotate(-1deg);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(4px) rotate(1deg);
   }
 }
 

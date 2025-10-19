@@ -1,10 +1,10 @@
 // LiveKit Components Exports
 export { ParticipantThumbnail } from './ui/ParticipantThumbnail';
 export { MainStageView } from './ui/MainStageView';
+export { HandRaiseIndicator, useParticipantsWithHandRaise } from './ui/HandRaiseIndicator';
 
 // TODO: Add other exports when components are implemented
 // export { ControlBar } from './ui/ControlBar';
-// export { HandRaiseIndicator } from './ui/HandRaiseIndicator';
 // export { HostControls } from './ui/HostControls';
 // export { ConnectionStatus } from './ui/ConnectionStatus';
 

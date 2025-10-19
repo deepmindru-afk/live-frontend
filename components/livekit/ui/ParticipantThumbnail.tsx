@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import styles from './RoomMain.module.scss';
 
 interface ParticipantThumbnailProps {
@@ -29,7 +29,10 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [shouldShake, setShouldShake] = useState(false);
+  const previousHandRaised = useRef(isHandRaised);
 
+  // Video track attachment
   useEffect(() => {
     if (videoRef.current && videoTrack) {
       // Attach the video track to the video element
@@ -44,9 +47,27 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     }
   }, [videoTrack, participantId, name, isVideoOff]);
 
+  // Shake animation when hand is raised
+  useEffect(() => {
+    // Trigger shake only when hand changes from NOT raised to RAISED
+    if (isHandRaised && !previousHandRaised.current) {
+      setShouldShake(true);
+      
+      // Remove shake class after animation completes (500ms)
+      const timer = setTimeout(() => {
+        setShouldShake(false);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+    
+    // Update the previous state
+    previousHandRaised.current = isHandRaised;
+  }, [isHandRaised]);
+
   return (
     <div 
-      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''}`}
+      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''}`}
       onClick={onClick}
     >
       <div className={styles['thumbnail-video-container']}>
