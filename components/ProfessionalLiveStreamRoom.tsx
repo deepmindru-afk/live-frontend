@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/router';
 
 // TODO: Removed thumbnailVideoRefs - now handled by ParticipantThumbnail components
 // declare global {
@@ -141,6 +142,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [isVideoPlayerMode, setIsVideoPlayerMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Next.js router for navigation prevention
+  const router = useRouter();
   
   // Track participants state changes
   const prevParticipantsRef = useRef(participants);
@@ -969,6 +973,210 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isMobile]);
+
+  // Prevent accidental page navigation (back button, refresh, close tab)
+  useEffect(() => {
+    // Flag to track if user is intentionally leaving
+    let isLeavingIntentionally = false;
+    
+    // Handle browser back button and close tab
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isLeavingIntentionally) {
+        return;
+      }
+      
+      // Show browser confirmation dialog
+      e.preventDefault();
+      e.returnValue = 'Do you want to leave the meeting?';
+      return e.returnValue;
+    };
+    
+    // Handle page hide/unload - attempt to send leave/end meeting request
+    // This fires when user actually closes/navigates away (after confirmation)
+    const handlePageHide = () => {
+      if (!currentParticipant?._id) return;
+      
+      // Use sendBeacon for reliable delivery even as page unloads
+      // This is a "fire and forget" API that works even during page unload
+      const endpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const token = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
+      
+      try {
+        // Check if user is host - if yes, end meeting instead of just leaving
+        const isHost = currentParticipant?.role === 'HOST';
+        
+        if (isHost) {
+          // Host leaving - end the meeting for everyone
+          fetch(`${endpoint}/graphql`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+            body: JSON.stringify({
+              query: `
+                mutation EndMeeting($meetingId: ID!) {
+                  endMeeting(meetingId: $meetingId) {
+                    _id
+                    status
+                  }
+                }
+              `,
+              variables: {
+                meetingId: actualMeetingId
+              }
+            }),
+            keepalive: true
+          }).catch(() => {});
+        } else {
+          // Regular participant - just leave meeting
+          fetch(`${endpoint}/graphql`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+            body: JSON.stringify({
+              query: `
+                mutation LeaveMeeting($input: LeaveMeetingInput!) {
+                  leaveMeeting(input: $input)
+                }
+              `,
+              variables: {
+                input: {
+                  participantId: currentParticipant._id
+                }
+              }
+            }),
+            keepalive: true
+          }).catch(() => {});
+        }
+      } catch (error) {
+        // Silently fail
+      }
+      
+      // Also try to disconnect from LiveKit
+      if (liveKitDisconnect) {
+        liveKitDisconnect().catch(() => {});
+      }
+    };
+    
+    // Handle Next.js route changes (back button, navigation)
+    const handleRouteChangeStart = (url: string) => {
+      if (isLeavingIntentionally) {
+        return;
+      }
+      
+      // Show custom confirmation dialog
+      const confirmed = window.confirm('Do you want to leave the meeting?');
+      
+      if (!confirmed) {
+        // Prevent navigation
+        router.events.emit('routeChangeError');
+        throw 'Route change aborted by user';
+      } else {
+        // User confirmed, mark as intentional leave
+        isLeavingIntentionally = true;
+        
+        // Check if user is host
+        const isHost = currentParticipant?.role === 'HOST';
+        
+        if (isHost) {
+          // Host leaving - end the meeting for everyone
+          endMeeting({
+            variables: {
+              meetingId: actualMeetingId
+            }
+          }).catch(() => {});
+        } else {
+          // Regular participant - just leave meeting
+          if (currentParticipant?._id) {
+            leaveMeeting({
+              variables: {
+                input: {
+                  participantId: currentParticipant._id
+                }
+              }
+            }).catch(() => {});
+          }
+        }
+        
+        // Disconnect from LiveKit
+        if (liveKitDisconnect) {
+          liveKitDisconnect().catch(() => {});
+        }
+      }
+    };
+    
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    router.events.on('routeChangeStart', handleRouteChangeStart);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+      router.events.off('routeChangeStart', handleRouteChangeStart);
+    };
+  }, [router, currentParticipant, currentUser, actualMeetingId, leaveMeeting, endMeeting, liveKitDisconnect]);
+
+  // Monitor host connection - end meeting if host loses connection
+  useEffect(() => {
+    // Only monitor if user is host and connected
+    if (currentParticipant?.role !== 'HOST' || !isLiveKitConnected) {
+      return;
+    }
+
+    // Track disconnection timer
+    let disconnectionTimer: NodeJS.Timeout | null = null;
+    const DISCONNECTION_TIMEOUT = 30000; // 30 seconds grace period
+    
+    // Check connection state
+    if (liveKitConnectionState === 'disconnected' || liveKitConnectionState === 'reconnecting') {
+      // Start timer - if still disconnected after timeout, end meeting
+      disconnectionTimer = setTimeout(async () => {
+        // Double check still disconnected
+        if (liveKitConnectionState === 'disconnected') {
+          console.log('🔴 HOST DISCONNECTED - Ending meeting for all participants');
+          
+          try {
+            // End the meeting
+            await endMeeting({
+              variables: {
+                meetingId: actualMeetingId
+              }
+            });
+            
+            // Show notification to host
+            if (typeof window !== 'undefined') {
+              Swal.fire({
+                icon: 'warning',
+                title: 'Connection Lost',
+                text: 'You lost connection to the meeting. The meeting has been ended.',
+                timer: 3000,
+                showConfirmButton: false
+              });
+              
+              // Redirect after notification
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 3500);
+            }
+          } catch (error) {
+            console.error('Failed to end meeting on host disconnect:', error);
+          }
+        }
+      }, DISCONNECTION_TIMEOUT);
+    }
+    
+    // Cleanup timer
+    return () => {
+      if (disconnectionTimer) {
+        clearTimeout(disconnectionTimer);
+      }
+    };
+  }, [currentParticipant, isLiveKitConnected, liveKitConnectionState, actualMeetingId, endMeeting]);
 
   // Handle leaving meeting from PiP
   const handleLeaveMeetingFromPiP = useCallback(async () => {
