@@ -454,9 +454,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       processingRef.current.add(participantKey);
       
+      // Helper function to get normalized participant identity key
+      const getParticipantKey = (p: any) =>
+        p?.user?._id || p?.userId || p?._id || p?.email || '';
+      
       // CRITICAL FIX: Directly update local participants state for immediate UI update
       setParticipants(prev => {
-        const exists = prev.find(p => p._id === participant._id || p.userId === participant.userId);
+        const newParticipantKey = getParticipantKey(participant);
+        const exists = prev.find(p => getParticipantKey(p) === newParticipantKey && newParticipantKey !== '');
         if (exists) {
           processingRef.current.delete(participantKey);
           return prev;
@@ -481,9 +486,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       processingRef.current.add(participantKey);
       
+      // Helper function to get normalized participant identity key
+      const getParticipantKey = (p: any) =>
+        p?.user?._id || p?.userId || p?._id || p?.email || '';
+      
       // CRITICAL FIX: Directly update local participants state for immediate UI update
       setParticipants(prev => {
-        const filtered = prev.filter(p => p._id !== participant._id && p.userId !== participant.userId);
+        const leftParticipantKey = getParticipantKey(participant);
+        const filtered = prev.filter(p => getParticipantKey(p) !== leftParticipantKey || leftParticipantKey === '');
         processingRef.current.delete(participantKey);
         return filtered;
       });
@@ -1892,6 +1902,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   
   // Enhance participants with real-time hand raise status using the helper hook
   const participantsWithHandRaise = useParticipantsWithHandRaise(participants, wsRaisedHands);
+  
+  // Debug: Check for duplicate participants
+  useEffect(() => {
+    console.log('🔍 PARTICIPANTS DEBUG:', {
+      participantsCount: participants.length,
+      participantsWithHandRaiseCount: participantsWithHandRaise.length,
+      participants: participants.map(p => ({ id: p._id, name: p.displayName })),
+      participantsWithHandRaise: participantsWithHandRaise.map(p => ({ id: p._id, name: p.displayName }))
+    });
+  }, [participants, participantsWithHandRaise]);
 
   // Loading state
   if (loading || !authComplete) {
@@ -2703,7 +2723,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </>
               )}
 
-              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant) => {
+              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant, index) => {
                 // Check if participant is speaking (from audio level detection)
                 const isSpeaking = participant.audioLevel > 0.1 || false;
                 
@@ -2744,21 +2764,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     audioTrack = audioTrackPub?.track;
                     
-                    // Debug logging for local participant
-                    const allVideoTracks = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values());
+                    // Debug logging for local participant (reduced)
                     console.log('🔍 LOCAL PARTICIPANT THUMBNAIL:', {
                       participantName: participant.displayName,
                       cameraTrack: !!videoTrack,
                       screenShare: hasScreenShare,
-                      videoTrackPublications: liveKitService.room.localParticipant.videoTrackPublications.size,
-                      cameraTrackPub: !!cameraTrackPub,
-                      screenSharePub: !!screenSharePub,
-                      allTracks: allVideoTracks.map(pub => ({
-                        source: pub.source,
-                        trackSource: pub.track?.source,
-                        isMuted: pub.track?.isMuted,
-                        kind: pub.track?.kind
-                      }))
+                      trackCount: liveKitService.room.localParticipant.videoTrackPublications.size
                     });
                     
                     // Local participant tracks retrieved
@@ -2786,9 +2797,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   }
                 }
                 
+                // Debug: Check for duplicate participants
+                console.log(`🔍 RENDERING PARTICIPANT THUMBNAIL ${index}:`, {
+                  participantId: participant._id,
+                  name: participant.displayName,
+                  index: index
+                });
+
                 return (
                   <ParticipantThumbnail
-                    key={participant._id}
+                    key={`${participant._id}-${index}`}
                     participantId={participant._id}
                     name={participant.displayName || 'Unknown'}
                     videoTrack={videoTrack}
@@ -3565,8 +3583,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             <div style={{ flex: 1, overflow: 'auto' }}>
             {activeTab === 'participants' && (
                 <div key="participants-tab" style={{ padding: '16px' }}>
-                  {participantsWithHandRaise.map((participant) => (
-                    <div key={participant._id} style={{
+                  {participantsWithHandRaise.map((participant, index) => (
+                    <div key={`${participant._id}-${index}`} style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '12px',
