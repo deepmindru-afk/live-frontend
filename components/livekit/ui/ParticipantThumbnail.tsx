@@ -12,6 +12,7 @@ interface ParticipantThumbnailProps {
   isVideoOff?: boolean;
   avatarUrl?: string;
   isHost?: boolean;
+  isScreenSharing?: boolean;
   onClick?: () => void;
 }
 
@@ -26,6 +27,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   isVideoOff = false,
   avatarUrl,
   isHost = false,
+  isScreenSharing = false,
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -121,6 +123,14 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M19 11C19 11.5523 18.5523 12 18 12C17.4477 12 17 11.5523 17 11V10C17 6.68629 14.3137 4 11 4C10.4477 4 10 3.55228 10 3C10 2.44772 10.4477 2 11 2C15.4183 2 19 5.58172 19 10V11Z" fill="currentColor"/>
                 <line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" strokeWidth="2"/>
+              </svg>
+            </div>
+          )}
+          
+          {isScreenSharing && (
+            <div className={`${styles['indicator']} ${styles['screen-sharing']}`} title="Sharing screen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
               </svg>
             </div>
           )}

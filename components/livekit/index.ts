@@ -2,6 +2,7 @@
 export { ParticipantThumbnail } from './ui/ParticipantThumbnail';
 export { MainStageView } from './ui/MainStageView';
 export { HandRaiseIndicator, useParticipantsWithHandRaise } from './ui/HandRaiseIndicator';
+export { ShareScreen } from './ui/ShareScreen';
 
 // TODO: Add other exports when components are implemented
 // export { ControlBar } from './ui/ControlBar';

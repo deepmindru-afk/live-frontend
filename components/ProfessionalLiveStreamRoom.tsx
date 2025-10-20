@@ -2572,7 +2572,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         {/* Main Content - Hidden when PiP is active on mobile */}
       <div style={{
         height: '100vh',
-          paddingTop: isMobile ? '70px' : '70px',
+          paddingTop: isMobile ? '10px' : '10px',
           display: (isMobile && isPiPVisible) ? 'none' : 'flex',
           flexDirection: 'column', // Always column layout for better organization
           backgroundColor: '#ffffff',
@@ -2621,6 +2621,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 <>
                   {/* Left Arrow */}
                   <div 
+                    key="scroll-arrow-left"
                     className="scroll-arrow scroll-arrow-left"
                     style={{
                       position: 'absolute',
@@ -2661,6 +2662,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
                   {/* Right Arrow */}
                   <div 
+                    key="scroll-arrow-right"
                     className="scroll-arrow scroll-arrow-right"
                     style={{
                       position: 'absolute',
@@ -2708,34 +2710,78 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // Get video and audio tracks from LiveKit room
                 let videoTrack = null;
                 let audioTrack = null;
+                let hasScreenShare = false;
                 
                 if (liveKitService?.room) {
                   // ✅ FIX: Use user._id as the identity since that's what LiveKit uses
                   const participantIdentity = participant.user?._id || participant.identity;
-                  const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
-                      // Video track retrieval for participant
                   
-                  if (liveKitRoomParticipant) {
-                    // Get first video track publication
-                    const videoTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())[0];
-                    videoTrack = videoTrackPub?.track;
+                  // ✅ CRITICAL FIX: Check if this is the local participant FIRST
+                  // Compare with multiple possible identity formats
+                  const isLocalParticipant = (
+                    participantIdentity === liveKitService.room.localParticipant?.identity ||
+                    participantIdentity === liveKitService.room.localParticipant?.sid ||
+                    participant._id === currentParticipant?._id ||
+                    participant.user?._id === currentParticipant?.user?._id
+                  );
+                  
+                  if (isLocalParticipant) {
+                    // ✅ LOCAL PARTICIPANT: Get camera video track for thumbnail (NOT screen share)
+                    // Try multiple ways to find camera track
+                    const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                      .find(pub => {
+                        const track = pub.track;
+                        const source = pub.source || track?.source;
+                        return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                      });
+                    videoTrack = cameraTrackPub?.track;
                     
-                    // Get first audio track publication  
-                    const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
+                    // Check if local participant has screen share active
+                    const screenSharePub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                      .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                    hasScreenShare = !!screenSharePub?.track;
+                    
+                    const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     audioTrack = audioTrackPub?.track;
                     
-                      // Track publications retrieved
+                    // Debug logging for local participant
+                    const allVideoTracks = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values());
+                    console.log('🔍 LOCAL PARTICIPANT THUMBNAIL:', {
+                      participantName: participant.displayName,
+                      cameraTrack: !!videoTrack,
+                      screenShare: hasScreenShare,
+                      videoTrackPublications: liveKitService.room.localParticipant.videoTrackPublications.size,
+                      cameraTrackPub: !!cameraTrackPub,
+                      screenSharePub: !!screenSharePub,
+                      allTracks: allVideoTracks.map(pub => ({
+                        source: pub.source,
+                        trackSource: pub.track?.source,
+                        isMuted: pub.track?.isMuted,
+                        kind: pub.track?.kind
+                      }))
+                    });
+                    
+                    // Local participant tracks retrieved
                   } else {
-                    // Check if this is the local participant
-                    if (participantIdentity === liveKitService.room.localParticipant?.identity) {
-                      // Using local participant for video tracks
-                      const videoTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())[0];
-                      videoTrack = videoTrackPub?.track;
+                    // ✅ REMOTE PARTICIPANT: Get tracks from remoteParticipants
+                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    
+                    if (liveKitRoomParticipant) {
+                      // ✅ IMPORTANT: Get ONLY camera video track for thumbnail (NOT screen share)
+                      const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
+                        .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                      videoTrack = cameraTrackPub?.track;
                       
-                      const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                      // Check if this participant has screen share active
+                      const screenSharePub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
+                        .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                      hasScreenShare = !!screenSharePub?.track;
+                      
+                      // Get first audio track publication  
+                      const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       audioTrack = audioTrackPub?.track;
                       
-                      // Local participant tracks retrieved
+                      // Track publications retrieved
                     }
                   }
                 }
@@ -2752,6 +2798,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isMuted={participant.micState === 'OFF'}
                     isVideoOff={!videoTrack} // ✅ FIX: Use actual video track presence, not backend state
                     isHost={participant.role === 'HOST'}
+                    isScreenSharing={hasScreenShare}
                     onClick={() => setSelectedParticipantId(participant._id)}
                   />
                 );
@@ -3093,6 +3140,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainVideoTrack = null;
                 let mainAudioTrack = null;
                 let mainScreenShareTrack = null;
+                let isParticipantScreenSharing = false;
 
                 if (liveKitService?.room && mainParticipant._id) {
                   const participantIdentity = mainParticipant._id;
@@ -3100,31 +3148,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   // Check if this is the local participant first
                   if (participantIdentity === liveKitService.room.localParticipant?.identity) {
                     // Local participant - get tracks from localParticipant
-                    const videoTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())[0];
-                    mainVideoTrack = videoTrackPub?.track;
+                    
+                    // Get CAMERA video track (not screen share)
+                    const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                      .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                    mainVideoTrack = cameraTrackPub?.track;
                     
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     mainAudioTrack = audioTrackPub?.track;
                     
                     // Check for screen share
                     const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
-                      .find(pub => pub.track?.source === 'screen_share');
+                      .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                     mainScreenShareTrack = screenShareTrackPub?.track;
+                    isParticipantScreenSharing = !!mainScreenShareTrack;
                   } else {
                     // Remote participant - get tracks from remoteParticipants
                     const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
                     if (liveKitRoomParticipant) {
-                      const videoTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())[0];
-                      mainVideoTrack = videoTrackPub?.track;
+                      // Get CAMERA video track (not screen share)
+                      const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
+                        .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                      mainVideoTrack = cameraTrackPub?.track;
                       
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
                       
                       // Check for screen share
                       const screenShareTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
-                        .find(pub => pub.track?.source === 'screen_share');
+                        .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                       mainScreenShareTrack = screenShareTrackPub?.track;
+                      isParticipantScreenSharing = !!mainScreenShareTrack;
                     }
                   }
                 } else {
@@ -3132,6 +3187,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   mainVideoTrack = null;
                   mainAudioTrack = null;
                   mainScreenShareTrack = null;
+                  isParticipantScreenSharing = false;
                 }
 
                 return (
@@ -3143,9 +3199,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
                     isHandRaised={mainParticipant.hasHandRaised || false}
                     isMuted={mainParticipant.micState === 'OFF' || false}
-                    isVideoOff={!mainVideoTrack} // Use actual video track presence
+                    isVideoOff={!mainVideoTrack && !isParticipantScreenSharing} // Show video if camera OR screen share is active
                     isHost={mainParticipant.role === 'HOST' || false}
-                    isScreenSharing={memoizedScreenShareMode}
+                    isScreenSharing={isParticipantScreenSharing}
                     screenShareTrack={mainScreenShareTrack}
                     connectionQuality={5} // TODO: Get actual connection quality
                     onParticipantClick={(participantId) => {
@@ -3508,7 +3564,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
             <div style={{ flex: 1, overflow: 'auto' }}>
             {activeTab === 'participants' && (
-                <div style={{ padding: '16px' }}>
+                <div key="participants-tab" style={{ padding: '16px' }}>
                   {participantsWithHandRaise.map((participant) => (
                     <div key={participant._id} style={{
                       display: 'flex',
@@ -3690,7 +3746,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   </div>
                 )}
             {activeTab === 'chat' && (
-                <div style={{
+                <div key="chat-tab" style={{
                   display: 'flex',
                   flexDirection: 'column',
                   height: '100%'
