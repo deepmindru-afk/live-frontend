@@ -15,6 +15,7 @@ interface MainStageViewProps {
   isScreenSharing?: boolean;
   screenShareTrack?: any;
   connectionQuality?: number;
+  isLocalParticipant?: boolean;
   onParticipantClick?: (participantId: string) => void;
 }
 
@@ -32,6 +33,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   isScreenSharing = false,
   screenShareTrack,
   connectionQuality = 5,
+  isLocalParticipant = false,
   onParticipantClick,
 }) => {
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -76,8 +78,8 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
-      {/* ✅ Hidden audio element for playing participant audio */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
+      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant} style={{ display: 'none' }} />
       
       {/* Main Video Container */}
       <div className={styles['main-stage-container']} onClick={handleClick}>

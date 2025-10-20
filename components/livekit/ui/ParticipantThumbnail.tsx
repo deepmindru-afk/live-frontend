@@ -13,6 +13,7 @@ interface ParticipantThumbnailProps {
   avatarUrl?: string;
   isHost?: boolean;
   isScreenSharing?: boolean;
+  isLocalParticipant?: boolean;
   onClick?: () => void;
 }
 
@@ -28,6 +29,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   avatarUrl,
   isHost = false,
   isScreenSharing = false,
+  isLocalParticipant = false,
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -86,8 +88,8 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''}`}
       onClick={onClick}
     >
-      {/* ✅ Hidden audio element for playing participant audio */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
+      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant} style={{ display: 'none' }} />
       
       <div className={styles['thumbnail-video-container']}>
         {!isVideoOff && videoTrack ? (

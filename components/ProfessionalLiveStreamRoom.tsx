@@ -760,6 +760,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
     const enterFullscreen = async () => {
       try {
+        // Force video player mode for mobile
+        setIsVideoPlayerMode(true);
+        setIsFullscreen(true);
+        // Hide controls initially for immersive experience
+        setShowControls(false);
+        
         // Request fullscreen for the document
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
@@ -783,6 +789,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           }
         }
       } catch (error) {
+        console.log('Fullscreen error:', error);
       }
     };
 
@@ -799,10 +806,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     document.addEventListener('touchstart', preventPullToRefresh, { passive: false });
     document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
 
-    // Enter fullscreen after a short delay
+    // Enter fullscreen immediately for mobile
     const timer = setTimeout(() => {
       enterFullscreen();
-    }, 500);
+    }, 100);
 
     return () => {
       clearTimeout(timer);
@@ -2194,7 +2201,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               borderBottom: isVideoPlayerMode 
                 ? (showControls ? '1px solid rgba(255, 255, 255, 0.1)' : 'none')
                 : '1px solid #e5e7eb',
-              display: (isMobile && isPiPVisible) ? 'none' : 'flex',
+              display: (isMobile && (isPiPVisible || isFullscreen)) ? 'none' : 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: isMobile ? '0 12px' : '0 24px',
@@ -2593,7 +2600,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       <div style={{
         height: '100vh',
           paddingTop: isMobile ? '10px' : '10px',
-          display: (isMobile && isPiPVisible) ? 'none' : 'flex',
+          display: (isMobile && (isPiPVisible || isFullscreen)) ? 'none' : 'flex',
           flexDirection: 'column', // Always column layout for better organization
           backgroundColor: '#ffffff',
           overflow: 'hidden'
@@ -2732,18 +2739,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let audioTrack = null;
                 let hasScreenShare = false;
                 
+                // ✅ FIX: Use user._id as the identity since that's what LiveKit uses
+                const participantIdentity = participant.user?._id || participant.identity;
+                
+                // ✅ CRITICAL FIX: Check if this is the local participant FIRST
+                // Compare with multiple possible identity formats
+                const isLocalParticipant = liveKitService?.room ? (
+                  participantIdentity === liveKitService.room.localParticipant?.identity ||
+                  participantIdentity === liveKitService.room.localParticipant?.sid ||
+                  participant._id === currentParticipant?._id ||
+                  participant.user?._id === currentParticipant?.user?._id
+                ) : false;
+                
                 if (liveKitService?.room) {
-                  // ✅ FIX: Use user._id as the identity since that's what LiveKit uses
-                  const participantIdentity = participant.user?._id || participant.identity;
-                  
-                  // ✅ CRITICAL FIX: Check if this is the local participant FIRST
-                  // Compare with multiple possible identity formats
-                  const isLocalParticipant = (
-                    participantIdentity === liveKitService.room.localParticipant?.identity ||
-                    participantIdentity === liveKitService.room.localParticipant?.sid ||
-                    participant._id === currentParticipant?._id ||
-                    participant.user?._id === currentParticipant?.user?._id
-                  );
                   
                   if (isLocalParticipant) {
                     // ✅ LOCAL PARTICIPANT: Get camera video track for thumbnail (NOT screen share)
@@ -2817,7 +2825,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isVideoOff={!videoTrack} // ✅ FIX: Use actual video track presence, not backend state
                     isHost={participant.role === 'HOST'}
                     isScreenSharing={hasScreenShare}
-                    onClick={() => setSelectedParticipantId(participant._id)}
+                    isLocalParticipant={isLocalParticipant}
+                    onClick={() => {
+                      console.log('🔍 THUMBNAIL CLICKED:', { 
+                        participantId: participant._id, 
+                        name: participant.displayName,
+                        user: participant.user?._id 
+                      });
+                      setSelectedParticipantId(participant._id);
+                    }}
                   />
                 );
               })}
@@ -3153,6 +3169,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               if (!mainParticipant) {
                 return null;
               }
+              
+              // Debug logging for main stage participant selection
+              console.log('🔍 MAIN STAGE PARTICIPANT:', {
+                selectedParticipantId: selectedParticipantId,
+                selectedParticipant: selectedParticipant ? { id: selectedParticipant._id, name: selectedParticipant.displayName } : null,
+                activeSpeaker: memoizedActiveSpeaker ? { id: memoizedActiveSpeaker._id, name: memoizedActiveSpeaker.displayName } : null,
+                mainParticipant: { id: mainParticipant._id, name: mainParticipant.displayName, user: mainParticipant.user?._id }
+              });
 
                 // Get video and audio tracks for main stage
                 let mainVideoTrack = null;
@@ -3160,11 +3184,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainScreenShareTrack = null;
                 let isParticipantScreenSharing = false;
 
+                // ✅ FIX: Use user._id as the identity since that's what LiveKit uses (same as thumbnails)
+                const participantIdentity = mainParticipant.user?._id || mainParticipant.identity;
+                
                 if (liveKitService?.room && mainParticipant._id) {
-                  const participantIdentity = mainParticipant._id;
                   
-                  // Check if this is the local participant first
-                  if (participantIdentity === liveKitService.room.localParticipant?.identity) {
+                  // ✅ CRITICAL FIX: Check if this is the local participant FIRST
+                  // Compare with multiple possible identity formats (same as thumbnails)
+                  const isLocalParticipant = (
+                    participantIdentity === liveKitService.room.localParticipant?.identity ||
+                    participantIdentity === liveKitService.room.localParticipant?.sid ||
+                    mainParticipant._id === currentParticipant?._id ||
+                    mainParticipant.user?._id === currentParticipant?.user?._id
+                  );
+                  
+                  if (isLocalParticipant) {
                     // Local participant - get tracks from localParticipant
                     
                     // Get CAMERA video track (not screen share)
@@ -3208,6 +3242,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   isParticipantScreenSharing = false;
                 }
 
+                // Check if main participant is local participant
+                const isMainParticipantLocal = liveKitService?.room ? (
+                  participantIdentity === liveKitService.room.localParticipant?.identity ||
+                  participantIdentity === liveKitService.room.localParticipant?.sid ||
+                  mainParticipant._id === currentParticipant?._id ||
+                  mainParticipant.user?._id === currentParticipant?.user?._id
+                ) : false;
+
                 return (
                   <MainStageView
                     participantId={mainParticipant._id}
@@ -3222,6 +3264,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isScreenSharing={isParticipantScreenSharing}
                     screenShareTrack={mainScreenShareTrack}
                     connectionQuality={5} // TODO: Get actual connection quality
+                    isLocalParticipant={isMainParticipantLocal}
                     onParticipantClick={(participantId) => {
                       const participant = memoizedParticipants.find(p => p._id === participantId);
                       if (participant) {
@@ -3503,21 +3546,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111827' }}>
                 Participants & Chat
               </h3>
-          <button
-              onClick={() => setSidebarOpen(false)}
-            style={{
-                  backgroundColor: 'transparent',
-                  color: '#6b7280',
-              border: 'none',
-                  fontSize: '20px',
-              cursor: 'pointer',
-                  padding: '4px',
-                  borderRadius: '4px',
-                  transition: 'all 0.2s ease'
-            }}
-          >
-              ×
-          </button>
         </div>
 
                       <div style={{
