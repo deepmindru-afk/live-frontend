@@ -27,6 +27,10 @@ import {
   TRANSFER_HOST,
   REMOVE_PARTICIPANT,
 } from '../apollo/livestream/mutations';
+import {
+  START_RECORDING,
+  STOP_RECORDING,
+} from '../graphql/live-room-mutations';
 import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
 import WebSocketChatView from './WebSocketChatView';
@@ -439,6 +443,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [lowerHand] = useMutation(LOWER_HAND);
   const [transferHost] = useMutation(TRANSFER_HOST);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
+  
+  // Recording mutations
+  const [startRecordingMutation] = useMutation(START_RECORDING);
+  const [stopRecordingMutation] = useMutation(STOP_RECORDING);
 
   // WebSocket connection for real-time features
   const webSocketToken = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
@@ -564,16 +572,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         if (!isHost) {
           if (data.type === 'start') {
             setIsRecording(true);
-            setRecordingPaused(false);
           } else if (data.type === 'stop') {
             setIsRecording(false);
-            setRecordingPaused(false);
-          } else if (data.type === 'pause') {
-            setRecordingPaused(true);
-          } else if (data.type === 'resume') {
-            setRecordingPaused(false);
           }
-        } else {
         }
         
         // Play the announcement on all participant devices
@@ -581,12 +582,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
         // Show visual notification
         Swal.fire({
-          icon: data.type === 'start' ? 'success' : 
-                data.type === 'stop' ? 'info' : 
-                data.type === 'pause' ? 'warning' : 'success',
-          title: data.type === 'start' ? 'Recording Started' :
-                 data.type === 'stop' ? 'Recording Stopped' :
-                 data.type === 'pause' ? 'Recording Paused' : 'Recording Resumed',
+          icon: data.type === 'start' ? 'success' : 'info',
+          title: data.type === 'start' ? 'Recording Started' : 'Recording Stopped',
           text: data.message,
           timer: 2000,
           showConfirmButton: false,
@@ -1840,93 +1837,188 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleRecordingToggle = async () => {
     
     if (!isRecording) {
-      setIsRecording(true);
-      setRecordingPaused(false);
-      
-      // Broadcast to all participants
-      broadcastRecordingAnnouncement('Recording in progress!', 'start');
-      
-      // Announce locally (for host)
-      announceRecordingStatus('Recording in progress!');
-      
-      // Show success notification
-      Swal.fire({
-        icon: 'success',
-        title: 'Recording Started',
-        text: 'Recording is now in progress!',
-        timer: 2000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      });
+      try {
+        // Call GraphQL mutation to start recording
+        const result = await startRecordingMutation({
+          variables: {
+            input: {
+              meetingId: actualMeetingId,
+              quality: '720p',
+              format: 'mp4'
+            }
+          }
+        });
+        
+        if (result.data && (result.data as any).startMeetingRecording?.success) {
+          setIsRecording(true);
+          
+          // Broadcast to all participants
+          broadcastRecordingAnnouncement('Recording in progress!', 'start');
+          
+          // Announce locally (for host)
+          announceRecordingStatus('Recording in progress!');
+          
+          // Show success notification
+          Swal.fire({
+            icon: 'success',
+            title: 'Recording Started',
+            text: 'Recording is now in progress and will be saved to VOD!',
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Recording Failed',
+          text: 'Failed to start recording. Please try again.',
+          timer: 3000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+      }
     } else {
-      setIsRecording(false);
-      setRecordingPaused(false);
-      
-      // Broadcast to all participants
-      broadcastRecordingAnnouncement('Recording stopped!', 'stop');
-      
-      // Announce locally (for host)
-      announceRecordingStatus('Recording stopped!');
-      
-      // Show success notification
-      Swal.fire({
-        icon: 'info',
-        title: 'Recording Stopped',
-        text: 'Recording has been stopped and saved!',
-        timer: 2000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      });
+      try {
+        // Call GraphQL mutation to stop recording
+        const result = await stopRecordingMutation({
+          variables: {
+            input: {
+              meetingId: actualMeetingId
+            }
+          }
+        });
+        
+        if (result.data && (result.data as any).stopMeetingRecording?.success) {
+          setIsRecording(false);
+          
+          // Broadcast to all participants
+          broadcastRecordingAnnouncement('Recording stopped!', 'stop');
+          
+          // Announce locally (for host)
+          announceRecordingStatus('Recording stopped!');
+          
+          // Show success notification
+          Swal.fire({
+            icon: 'success',
+            title: 'Recording Stopped',
+            text: 'Recording has been stopped and saved to VOD server!',
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to stop recording:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Stop Recording Failed',
+          text: 'Failed to stop recording. Please try again.',
+          timer: 3000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+      }
     }
   };
 
   const handleRecordingPause = async () => {
     
     const wasPaused = recordingPaused;
-    setRecordingPaused(!recordingPaused);
     
     if (wasPaused) {
       // Recording was paused, now resuming
-      const message = 'Recording resumed!';
-      const type = 'resume';
-      
-      // Broadcast to all participants
-      broadcastRecordingAnnouncement(message, type);
-      
-      // Announce locally (for host)
-      announceRecordingStatus(message);
-      
-      Swal.fire({
-        icon: 'success',
-        title: 'Recording Resumed',
-        text: 'Recording has been resumed!',
-        timer: 2000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      });
+      try {
+        const result = await resumeRecordingMutation({
+          variables: {
+            input: {
+              meetingId: actualMeetingId
+            }
+          }
+        });
+        
+        if (result.data && (result.data as any).resumeMeetingRecording?.success) {
+          setRecordingPaused(false);
+          const message = 'Recording resumed!';
+          const type = 'resume';
+          
+          // Broadcast to all participants
+          broadcastRecordingAnnouncement(message, type);
+          
+          // Announce locally (for host)
+          announceRecordingStatus(message);
+          
+          Swal.fire({
+            icon: 'success',
+            title: 'Recording Resumed',
+            text: 'Recording has been resumed!',
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to resume recording:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Resume Failed',
+          text: 'Failed to resume recording.',
+          timer: 2000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+      }
     } else {
       // Recording was active, now pausing
-      const message = 'Recording paused!';
-      const type = 'pause';
-      
-      // Broadcast to all participants
-      broadcastRecordingAnnouncement(message, type);
-      
-      // Announce locally (for host)
-      announceRecordingStatus(message);
-      
-      Swal.fire({
-        icon: 'warning',
-        title: 'Recording Paused',
-        text: 'Recording has been paused!',
-        timer: 2000,
-        showConfirmButton: false,
-        toast: true,
-        position: 'top-end'
-      });
+      try {
+        const result = await pauseRecordingMutation({
+          variables: {
+            input: {
+              meetingId: actualMeetingId
+            }
+          }
+        });
+        
+        if (result.data && (result.data as any).pauseMeetingRecording?.success) {
+          setRecordingPaused(true);
+          const message = 'Recording paused!';
+          const type = 'pause';
+          
+          // Broadcast to all participants
+          broadcastRecordingAnnouncement(message, type);
+          
+          // Announce locally (for host)
+          announceRecordingStatus(message);
+          
+          Swal.fire({
+            icon: 'warning',
+            title: 'Recording Paused',
+            text: 'Recording has been paused!',
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+          });
+        }
+      } catch (error) {
+        console.error('Failed to pause recording:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Pause Failed',
+          text: 'Failed to pause recording.',
+          timer: 2000,
+          showConfirmButton: false,
+          toast: true,
+          position: 'top-end'
+        });
+      }
     }
   };
 
@@ -2564,12 +2656,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 alignItems: 'center',
                 gap: '4px',
                 padding: isMobile ? '4px 8px' : '6px 12px',
-                backgroundColor: recordingPaused ? '#fbbf24' : '#ef4444',
+                backgroundColor: '#ef4444',
                 borderRadius: '20px',
                 fontSize: isMobile ? '10px' : '12px',
                 fontWeight: '600',
                 color: 'white',
-                animation: recordingPaused ? 'none' : 'recording 1.5s infinite'
+                animation: 'recording 1.5s infinite'
               }}>
                 <div style={{
                   width: isMobile ? '5px' : '8px',
@@ -2577,7 +2669,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   borderRadius: '50%',
                   backgroundColor: 'white'
                 }}></div>
-                {isMobile ? (recordingPaused ? 'Pause' : 'REC') : (recordingPaused ? 'Paused' : 'Recording')}
+                {isMobile ? 'REC' : 'Recording'}
               </div>
             )}
 
@@ -2612,61 +2704,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         Record
                       </button>
                     ) : (
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          onClick={handleRecordingPause}
-                          style={{
-                            backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '8px 14px',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                          }}
-                        >
-                          {recordingPaused ? (
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                              <path d="M4 2 L12 7 L4 12 Z"/>
-                            </svg>
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                              <rect x="2" y="2" width="4" height="10" rx="1"/>
-                              <rect x="8" y="2" width="4" height="10" rx="1"/>
-                            </svg>
-                          )}
-                          {recordingPaused ? 'Resume' : 'Pause'}
-                        </button>
-                        <button
-                          onClick={handleRecordingToggle}
-                          style={{
-                            backgroundColor: '#6b7280',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '8px 14px',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                            <rect x="2" y="2" width="10" height="10" rx="1"/>
-                          </svg>
-                          Stop
-                        </button>
-                      </div>
+                      <button
+                        onClick={handleRecordingToggle}
+                        style={{
+                          backgroundColor: '#6b7280',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 14px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                          <rect x="2" y="2" width="10" height="10" rx="1"/>
+                        </svg>
+                        Stop
+                      </button>
                     )}
                   </>
                 )}
@@ -2697,57 +2757,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         </svg>
                       </button>
                     ) : (
-                      <>
-                        <button
-                          onClick={handleRecordingPause}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: recordingPaused ? '#10b981' : '#fbbf24',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          {recordingPaused ? (
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                              <path d="M4 2 L11 7 L4 12 Z"/>
-                            </svg>
-                          ) : (
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                              <rect x="2" y="2" width="3.5" height="10" rx="0.5"/>
-                              <rect x="8.5" y="2" width="3.5" height="10" rx="0.5"/>
-                            </svg>
-                          )}
-                        </button>
-                        <button
-                          onClick={handleRecordingToggle}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: '#6b7280',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
-                            <rect x="2" y="2" width="8" height="8" rx="1"/>
-                          </svg>
-                        </button>
-                      </>
+                      <button
+                        onClick={handleRecordingToggle}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: '#6b7280',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
+                          <rect x="2" y="2" width="8" height="8" rx="1"/>
+                        </svg>
+                      </button>
                     )}
                   </div>
                 )}

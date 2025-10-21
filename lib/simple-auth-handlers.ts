@@ -25,8 +25,21 @@ export interface SignupData {
   password: string;
 }
 
-// GraphQL endpoint
-const GRAPHQL_ENDPOINT = process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT || process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3007/graphql';
+// GraphQL endpoint - with better fallback handling
+const GRAPHQL_ENDPOINT = (() => {
+  // Check for environment variables first
+  if (process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT) {
+    return process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT;
+  }
+  if (process.env.NEXT_PUBLIC_GRAPHQL_URL) {
+    return process.env.NEXT_PUBLIC_GRAPHQL_URL;
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:3007/graphql';
+})();
+
+console.log('🔗 GraphQL Endpoint:', GRAPHQL_ENDPOINT);
 
 // Login mutation
 const LOGIN_MUTATION = `
@@ -86,6 +99,27 @@ const TUTOR_SIGNUP_MUTATION = `
   }
 `;
 
+// SSO Login mutation
+const SSO_LOGIN_MUTATION = `
+  mutation SSOLogin($input: SSOLoginInput!) {
+    ssoLogin(input: $input) {
+      success
+      existed
+      user {
+        _id
+        user_id
+        displayName
+        email
+        systemRole
+        lastSeenAt
+        isBlocked
+      }
+      token
+      message
+    }
+  }
+`;
+
 // Get current user query
 const GET_CURRENT_USER_QUERY = `
   query GetCurrentUser {
@@ -130,15 +164,26 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   } else {
   }
   
+  console.log('📡 Making GraphQL request to:', GRAPHQL_ENDPOINT);
+  console.log('📡 Request body:', JSON.stringify(requestBody, null, 2));
+
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: 'POST',
     headers,
     body: JSON.stringify(requestBody),
   });
 
+  console.log('📡 Response status:', response.status);
+  console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('❌ GraphQL request failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: GRAPHQL_ENDPOINT,
+      error: errorText
+    });
     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
   }
 
@@ -312,6 +357,39 @@ export const handleTutorSignup = async (input: SignupData): Promise<boolean> => 
     }
   } catch (error: any) {
     // Re-throw the error so the calling function can handle it with SweetAlert
+    throw error;
+  }
+};
+
+// Handle SSO login from PHP website
+export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
+  try {
+    console.log('🔐 Starting SSO login with PHP token...');
+    
+    const data = await makeGraphQLRequest(SSO_LOGIN_MUTATION, {
+      input: {
+        token: phpToken
+      }
+    });
+
+    console.log('🔐 SSO login response:', data);
+
+    if (data.ssoLogin && data.ssoLogin.success && data.ssoLogin.token) {
+      // Save JWT to localStorage
+      setAuthToken(data.ssoLogin.token);
+      
+      // Save user data to localStorage
+      localStorage.setItem('user', JSON.stringify(data.ssoLogin.user));
+      
+      console.log(`✅ SSO login successful for ${data.ssoLogin.user.displayName} (${data.ssoLogin.existed ? 'existing' : 'new'} user)`);
+      
+      return true;
+    } else {
+      throw new Error('SSO login failed - no token received');
+    }
+  } catch (error: any) {
+    console.error('❌ SSO login failed:', error);
+    // Re-throw the error so the calling function can handle it
     throw error;
   }
 };

@@ -1,13 +1,22 @@
 import React, { useEffect } from 'react';
 import Head from 'next/head';
 import { isAuthenticated } from '../lib/simple-auth-handlers';
+import { checkAndHandleSSOLogin } from '../lib/sso-handler';
 
 const HomePage: React.FC = () => {
   useEffect(() => {
-    // Redirect to dashboard if user is already authenticated
-    if (isAuthenticated()) {
-      window.location.href = '/dashboard';
-    }
+    const handleInitialLoad = async () => {
+      // First, check for SSO login from URL parameters
+      const ssoSuccess = await checkAndHandleSSOLogin();
+      
+      // If SSO login was successful, it will redirect automatically
+      // If not, check if user is already authenticated
+      if (!ssoSuccess && isAuthenticated()) {
+        window.location.href = '/dashboard';
+      }
+    };
+
+    handleInitialLoad();
   }, []);
 
   return (
