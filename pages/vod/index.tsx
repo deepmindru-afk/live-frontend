@@ -22,6 +22,18 @@ interface VOD {
     title: string;
     status: string;
     inviteCode: string;
+    scheduledFor?: string;
+    actualStartAt?: string;
+    endedAt?: string;
+    durationMin?: number;
+    host?: {
+      _id: string;
+      email: string;
+      displayName: string;
+      systemRole: string;
+      avatarUrl?: string;
+      department?: string;
+    };
   };
 }
 
@@ -82,41 +94,9 @@ const VODPage: React.FC = () => {
         setVods(result.getAllVods.vods);
       }
     } catch (error) {
-      // Mock VOD data with new schema
-      setVods([
-        {
-          _id: 'vod-1',
-          title: 'Sample VOD 1',
-          sizeBytes: 1024000000, // 1GB
-          durationSec: 3600, // 1 hour
-          source: 'FILE',
-          storageKey: 'vod-1.mp4',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          meeting: {
-            _id: 'meeting-1',
-            title: 'Sample Meeting 1',
-            status: 'ENDED',
-            inviteCode: 'ABC123'
-          }
-        },
-        {
-          _id: 'vod-2',
-          title: 'Sample VOD 2',
-          sizeBytes: 512000000, // 512MB
-          durationSec: 1800, // 30 minutes
-          source: 'URL',
-          storageKey: 'https://example.com/vod2.mp4',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          meeting: {
-            _id: 'meeting-2',
-            title: 'Sample Meeting 2',
-            status: 'ENDED',
-            inviteCode: 'DEF456'
-          }
-        }
-      ]);
+      console.error('Failed to load VODs:', error);
+      // VOD data should come from mock service, so this should rarely be reached
+      setVods([]);
     }
   };
 
@@ -137,6 +117,32 @@ const VODPage: React.FC = () => {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatDateTime = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  const getRecordingStatus = (vod: VOD) => {
+    // Check if VOD has actual recording data
+    if (vod.storageKey && vod.sizeBytes && vod.sizeBytes > 0) {
+      return { status: 'Recorded', color: '#28a745' };
+    }
+    return { status: 'Not Recorded', color: '#dc3545' };
+  };
+
+  const getClassTime = (meeting?: VOD['meeting']) => {
+    if (!meeting) return 'N/A';
+    return formatDateTime(meeting.actualStartAt || meeting.scheduledFor);
   };
 
   const handleFileUpload = () => {
@@ -255,6 +261,32 @@ const VODPage: React.FC = () => {
     setSelectedVOD(null);
   };
 
+  const playVOD = (vodId: string) => {
+    const vod = vods.find(v => v._id === vodId);
+    if (!vod) return;
+
+    // If VOD has a recording, play it
+    if (vod.storageKey && vod.sizeBytes && vod.sizeBytes > 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Play Recording',
+        text: `Playing: ${vod.title}`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+      // Here you would typically open a video player or navigate to a player page
+      // router.push(`/vod/player/${vodId}`);
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'No Recording',
+        text: 'This lesson was not recorded.',
+        confirmButtonText: 'OK'
+      });
+    }
+    closeVODMenu();
+  };
+
   const deleteVOD = async (vodId: string) => {
     const vod = vods.find(v => v._id === vodId);
     if (!vod) return;
@@ -294,9 +326,16 @@ const VODPage: React.FC = () => {
     closeVODMenu();
   };
 
-  const filteredVODs = vods.filter(vod =>
-    vod.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVODs = vods.filter(vod => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      vod.title.toLowerCase().includes(searchLower) ||
+      vod.meeting?.title.toLowerCase().includes(searchLower) ||
+      vod.meeting?.host?.displayName.toLowerCase().includes(searchLower) ||
+      vod.meeting?.inviteCode.toLowerCase().includes(searchLower) ||
+      false
+    );
+  });
 
   if (loading) {
     return (
@@ -668,53 +707,120 @@ const VODPage: React.FC = () => {
                 }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f8f9fa' }}>
-                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>No.</th>
-                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>VOD 제목</th>
-                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>용량</th>
-                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>비고</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '5%' }}>No.</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '30%' }}>Lesson Title</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '15%' }}>Teacher</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '20%' }}>Class Time</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '12%' }}>Duration</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '13%' }}>Recording Status</th>
+                      <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', width: '5%' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredVODs.map((vod, index) => (
-                      <tr
-                        key={vod._id}
-                        style={{
-                          borderBottom: '1px solid #dee2e6',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                      >
-                        <td style={{ padding: '15px' }}>{index + 1}</td>
-                        <td style={{ padding: '15px' }}>
-                          <div>
-                            <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
-                            <div style={{ fontSize: '14px', color: '#666' }}>
-                              {vod.durationSec && formatDuration(vod.durationSec)}
-                              {vod.meeting && ` • ${vod.meeting.title}`}
-                              {vod.source === 'FILE' && ' (파일)'}
-                              {vod.source === 'URL' && ' (URL)'}
+                    {filteredVODs.map((vod, index) => {
+                      const recordingStatus = getRecordingStatus(vod);
+                      return (
+                        <tr
+                          key={vod._id}
+                          style={{
+                            borderBottom: '1px solid #dee2e6',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                        >
+                          <td style={{ padding: '15px' }}>{index + 1}</td>
+                          <td style={{ padding: '15px' }}>
+                            <div>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>
+                                {vod.meeting?.title || vod.title}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#999' }}>
+                                {vod.meeting?.inviteCode || 'N/A'}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '15px' }}>{vod.sizeBytes ? formatFileSize(vod.sizeBytes) : 'N/A'}</td>
-                        <td style={{ padding: '15px' }}>
-                          <button
-                            onClick={(e) => handleVODMenuClick(vod._id, e)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: '18px',
-                              color: '#6c757d'
-                            }}
-                          >
-                            ⋯
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td style={{ padding: '15px' }}>
+                            <div>
+                              <div style={{ fontWeight: '500' }}>
+                                {vod.meeting?.host?.displayName || 'N/A'}
+                              </div>
+                              {vod.meeting?.host?.department && (
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {vod.meeting.host.department}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '15px' }}>
+                            <div style={{ fontSize: '14px' }}>
+                              {getClassTime(vod.meeting)}
+                            </div>
+                          </td>
+                          <td style={{ padding: '15px' }}>
+                            <div style={{ fontSize: '14px' }}>
+                              {vod.durationSec ? formatDuration(vod.durationSec) : 
+                               vod.meeting?.durationMin ? `${vod.meeting.durationMin} min` : 'N/A'}
+                            </div>
+                          </td>
+                          <td style={{ padding: '15px' }}>
+                            <div style={{
+                              display: 'inline-block',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              backgroundColor: recordingStatus.status === 'Recorded' ? '#d4edda' : '#f8d7da',
+                              color: recordingStatus.color
+                            }}>
+                              {recordingStatus.status}
+                            </div>
+                          </td>
+                          <td style={{ padding: '15px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {recordingStatus.status === 'Recorded' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    playVOD(vod._id);
+                                  }}
+                                  style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#1976d2',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '14px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1976d2'}
+                                >
+                                  ▶ Play
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => handleVODMenuClick(vod._id, e)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  fontSize: '18px',
+                                  color: '#6c757d',
+                                  padding: '6px'
+                                }}
+                              >
+                                ⋯
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -948,7 +1054,7 @@ const VODPage: React.FC = () => {
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             padding: '8px 0',
-            minWidth: '200px',
+            minWidth: '220px',
             zIndex: 2001
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{
@@ -958,8 +1064,70 @@ const VODPage: React.FC = () => {
               fontWeight: '500',
               color: '#333'
             }}>
-              {selectedVOD.title}
+              {selectedVOD.meeting?.title || selectedVOD.title}
             </div>
+            
+            {selectedVOD.storageKey && selectedVOD.sizeBytes && selectedVOD.sizeBytes > 0 && (
+              <button
+                onClick={() => playVOD(selectedVOD._id)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  color: '#1976d2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <span>▶</span>
+                재생
+              </button>
+            )}
+            
+            <button
+              onClick={() => {
+                Swal.fire({
+                  title: 'Recording Details',
+                  html: `
+                    <div style="text-align: left; padding: 10px;">
+                      <p><strong>Teacher:</strong> ${selectedVOD.meeting?.host?.displayName || 'N/A'}</p>
+                      <p><strong>Department:</strong> ${selectedVOD.meeting?.host?.department || 'N/A'}</p>
+                      <p><strong>Class Time:</strong> ${getClassTime(selectedVOD.meeting)}</p>
+                      <p><strong>Duration:</strong> ${selectedVOD.durationSec ? formatDuration(selectedVOD.durationSec) : 'N/A'}</p>
+                      <p><strong>File Size:</strong> ${selectedVOD.sizeBytes ? formatFileSize(selectedVOD.sizeBytes) : 'N/A'}</p>
+                      <p><strong>Status:</strong> ${getRecordingStatus(selectedVOD).status}</p>
+                    </div>
+                  `,
+                  confirmButtonText: 'Close'
+                });
+                closeVODMenu();
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <span>ℹ️</span>
+              상세 정보
+            </button>
             
             <button
               onClick={() => deleteVOD(selectedVOD._id)}
@@ -974,7 +1142,8 @@ const VODPage: React.FC = () => {
                 color: '#dc3545',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '8px',
+                borderTop: '1px solid #eee'
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}

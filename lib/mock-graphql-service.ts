@@ -579,42 +579,96 @@ export async function mockGraphQLRequest(query: string, variables: any = {}) {
         vods: [
           {
             _id: 'vod-1',
-            title: 'Sample VOD 1',
+            title: 'Introduction to Web Development',
             meetingId: 'meeting-1',
             source: 'FILE',
             storageKey: 'vod-1.mp4',
             sizeBytes: 1024000000, // 1GB
             durationSec: 3600, // 1 hour
-            notes: 'Sample VOD file',
+            notes: 'Introduction to Web Development course recording',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             meeting: {
               _id: 'meeting-1',
-              title: 'Sample Meeting 1',
+              title: 'Introduction to Web Development',
               status: 'ENDED',
-              inviteCode: 'ABC123'
+              inviteCode: 'ABC123',
+              scheduledFor: '2025-10-20T10:00:00.000Z',
+              actualStartAt: '2025-10-20T10:05:00.000Z',
+              endedAt: '2025-10-20T11:05:00.000Z',
+              durationMin: 60,
+              host: {
+                _id: 'teacher-1',
+                email: 'teacher1@example.com',
+                displayName: 'Prof. Kim',
+                systemRole: 'INSTRUCTOR',
+                avatarUrl: '',
+                department: 'Computer Science'
+              }
             }
           },
           {
             _id: 'vod-2',
-            title: 'Sample VOD 2',
+            title: 'Advanced JavaScript Concepts',
             meetingId: 'meeting-2',
-            source: 'URL',
-            storageKey: 'https://example.com/vod2.mp4',
+            source: 'FILE',
+            storageKey: 'vod-2.mp4',
             sizeBytes: 512000000, // 512MB
             durationSec: 1800, // 30 minutes
-            notes: 'Sample VOD URL',
+            notes: 'Advanced JavaScript Concepts course recording',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             meeting: {
               _id: 'meeting-2',
-              title: 'Sample Meeting 2',
+              title: 'Advanced JavaScript Concepts',
               status: 'ENDED',
-              inviteCode: 'DEF456'
+              inviteCode: 'DEF456',
+              scheduledFor: '2025-10-21T14:00:00.000Z',
+              actualStartAt: '2025-10-21T14:00:00.000Z',
+              endedAt: '2025-10-21T14:30:00.000Z',
+              durationMin: 30,
+              host: {
+                _id: 'teacher-1',
+                email: 'teacher1@example.com',
+                displayName: 'Prof. Kim',
+                systemRole: 'INSTRUCTOR',
+                avatarUrl: '',
+                department: 'Computer Science'
+              }
+            }
+          },
+          {
+            _id: 'vod-3',
+            title: 'Database Design Fundamentals',
+            meetingId: 'meeting-3',
+            source: 'FILE',
+            storageKey: '',
+            sizeBytes: 0,
+            durationSec: 0,
+            notes: 'Database Design Fundamentals course - not recorded',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            meeting: {
+              _id: 'meeting-3',
+              title: 'Database Design Fundamentals',
+              status: 'ENDED',
+              inviteCode: 'GHI789',
+              scheduledFor: '2025-10-19T09:00:00.000Z',
+              actualStartAt: '2025-10-19T09:00:00.000Z',
+              endedAt: '2025-10-19T10:30:00.000Z',
+              durationMin: 90,
+              host: {
+                _id: 'teacher-2',
+                email: 'teacher2@example.com',
+                displayName: 'Prof. Lee',
+                systemRole: 'INSTRUCTOR',
+                avatarUrl: '',
+                department: 'Information Systems'
+              }
             }
           }
         ],
-        total: 2,
+        total: 3,
         hasMore: false
       }
     };

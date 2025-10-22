@@ -30,11 +30,12 @@ import {
 import {
   START_RECORDING,
   STOP_RECORDING,
+  PAUSE_RECORDING,
+  RESUME_RECORDING,
 } from '../graphql/live-room-mutations';
 import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
 import WebSocketChatView from './WebSocketChatView';
-import ChatDebug from './ChatDebug';
 import MinimalistChat from './MinimalistChat';
 import PictureInPicture from './PictureInPicture';
 import { usePictureInPicture } from '../hooks/usePictureInPicture';
@@ -108,6 +109,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingInProgress, setIsRecordingInProgress] = useState(false);
   const [recordingPaused, setRecordingPaused] = useState(false);
   const [isLive, setIsLive] = useState(false);
   // Read audio/video preferences from prejoin page (stored in sessionStorage)
@@ -447,6 +449,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Recording mutations
   const [startRecordingMutation] = useMutation(START_RECORDING);
   const [stopRecordingMutation] = useMutation(STOP_RECORDING);
+  const [pauseRecordingMutation] = useMutation(PAUSE_RECORDING);
+  const [resumeRecordingMutation] = useMutation(RESUME_RECORDING);
 
   // WebSocket connection for real-time features
   const webSocketToken = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
@@ -1835,71 +1839,79 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleRecordingToggle = async () => {
+    // Prevent multiple rapid clicks
+    if (isRecordingInProgress) {
+      console.log('Recording operation already in progress, please wait...');
+      return;
+    }
     
-    if (!isRecording) {
-      try {
-        // Call GraphQL mutation to start recording
-        const result = await startRecordingMutation({
-          variables: {
-            input: {
-              meetingId: actualMeetingId,
-              quality: '720p',
-              format: 'mp4'
+    setIsRecordingInProgress(true);
+    
+    try {
+      if (!isRecording) {
+        try {
+          // Call GraphQL mutation to start recording
+          const result = await startRecordingMutation({
+            variables: {
+              input: {
+                meetingId: actualMeetingId,
+                quality: '720p',
+                format: 'mp4'
+              }
             }
+          });
+          
+          if (result.data && (result.data as any).startMeetingRecording?.success) {
+            setIsRecording(true);
+            
+            // Broadcast to all participants
+            broadcastRecordingAnnouncement('Recording in progress!', 'start');
+            
+            // Announce locally (for host)
+            announceRecordingStatus('Recording in progress!');
+            
+            // Show success notification
+            Swal.fire({
+              icon: 'success',
+              title: 'Recording Started',
+              text: 'Recording is now in progress and will be saved to VOD!',
+              timer: 3000,
+              showConfirmButton: false,
+              toast: true,
+              position: 'top-end'
+            });
           }
-        });
-        
-        if (result.data && (result.data as any).startMeetingRecording?.success) {
-          setIsRecording(true);
-          
-          // Broadcast to all participants
-          broadcastRecordingAnnouncement('Recording in progress!', 'start');
-          
-          // Announce locally (for host)
-          announceRecordingStatus('Recording in progress!');
-          
-          // Show success notification
+        } catch (error) {
+          console.error('Failed to start recording:', error);
           Swal.fire({
-            icon: 'success',
-            title: 'Recording Started',
-            text: 'Recording is now in progress and will be saved to VOD!',
+            icon: 'error',
+            title: 'Recording Failed',
+            text: 'Failed to start recording. Please try again.',
             timer: 3000,
             showConfirmButton: false,
             toast: true,
             position: 'top-end'
           });
         }
-      } catch (error) {
-        console.error('Failed to start recording:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Recording Failed',
-          text: 'Failed to start recording. Please try again.',
-          timer: 3000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
-      }
-    } else {
-      try {
-        // Call GraphQL mutation to stop recording
-        const result = await stopRecordingMutation({
-          variables: {
-            input: {
-              meetingId: actualMeetingId
+      } else {
+        try {
+          // Call GraphQL mutation to stop recording
+          const result = await stopRecordingMutation({
+            variables: {
+              input: {
+                meetingId: actualMeetingId
+              }
             }
-          }
-        });
-        
-        if (result.data && (result.data as any).stopMeetingRecording?.success) {
-          setIsRecording(false);
+          });
           
-          // Broadcast to all participants
-          broadcastRecordingAnnouncement('Recording stopped!', 'stop');
-          
-          // Announce locally (for host)
-          announceRecordingStatus('Recording stopped!');
+          if (result.data && (result.data as any).stopMeetingRecording?.success) {
+            setIsRecording(false);
+            
+            // Broadcast to all participants
+            broadcastRecordingAnnouncement('Recording stopped!', 'stop');
+            
+            // Announce locally (for host)
+            announceRecordingStatus('Recording stopped!');
           
           // Show success notification
           Swal.fire({
@@ -1924,6 +1936,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           position: 'top-end'
         });
       }
+    }
+    } finally {
+      // Always reset the progress state
+      setIsRecordingInProgress(false);
     }
   };
 
@@ -3050,6 +3066,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   index: index
                 });
 
+                // Debug: Log thumbnail video track status
+                console.log('🔍 THUMBNAIL VIDEO DEBUG:', {
+                  participantId: participant._id,
+                  name: participant.displayName,
+                  hasVideoTrack: !!videoTrack,
+                  videoTrackSource: videoTrack?.source,
+                  isVideoOff: !videoTrack,
+                  isScreenSharing: hasScreenShare
+                });
+
                 return (
                   <ParticipantThumbnail
                     key={`${participant._id}-${index}`}
@@ -3060,7 +3086,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={isSpeaking}
                     isHandRaised={participant.hasHandRaised}
                     isMuted={participant.micState === 'OFF'}
-                    isVideoOff={!videoTrack} // ✅ FIX: Use actual video track presence, not backend state
+                    isVideoOff={!videoTrack || !cameraEnabled} // Show video only if track exists AND camera is enabled
                     isHost={participant.role === 'HOST'}
                     isScreenSharing={hasScreenShare}
                     isLocalParticipant={isLocalParticipant}
@@ -3488,6 +3514,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   mainParticipant.user?._id === currentParticipant?.user?._id
                 ) : false;
 
+                // Debug: Log video track status
+                console.log('🔍 MAIN STAGE VIDEO DEBUG:', {
+                  participantId: mainParticipant._id,
+                  name: mainParticipant.displayName,
+                  hasVideoTrack: !!mainVideoTrack,
+                  videoTrackSource: mainVideoTrack?.source,
+                  isVideoOff: !mainVideoTrack,
+                  isScreenSharing: isParticipantScreenSharing
+                });
+
                 return (
                   <MainStageView
                     participantId={mainParticipant._id}
@@ -3497,7 +3533,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
                     isHandRaised={mainParticipant.hasHandRaised || false}
                     isMuted={mainParticipant.micState === 'OFF' || false}
-                    isVideoOff={!mainVideoTrack && !isParticipantScreenSharing} // Show video if camera OR screen share is active
+                    isVideoOff={!mainVideoTrack || !cameraEnabled} // Show video only if track exists AND camera is enabled
                     isHost={mainParticipant.role === 'HOST' || false}
                     isScreenSharing={isParticipantScreenSharing}
                     screenShareTrack={mainScreenShareTrack}
