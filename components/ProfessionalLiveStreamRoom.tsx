@@ -108,6 +108,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingInProgress, setIsRecordingInProgress] = useState(false);
+  const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [isLive, setIsLive] = useState(false);
   // Read audio/video preferences from prejoin page (stored in sessionStorage)
   const getPrejoinPreference = (key: string, defaultValue: boolean): boolean => {
@@ -246,18 +248,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const selectedParticipantRef = useRef<any>(null);
   
   const selectedParticipant = useMemo(() => {
-    console.log('🔍 SELECTED PARTICIPANT LOGIC:', {
-      selectedParticipantId,
-      isMobile,
-      queueStateParticipantsLength: queueState.participants.length,
-      queueStateParticipants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
-    });
     
     if (!selectedParticipantId) {
       // ✅ MOBILE FIX: If no participant selected and on mobile, use first participant
       if (isMobile && queueState.participants.length > 0) {
         const firstParticipant = queueState.participants[0];
-        console.log('📱 MOBILE FALLBACK SELECTED:', firstParticipant);
         selectedParticipantRef.current = firstParticipant;
         return firstParticipant;
       }
@@ -272,7 +267,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // ✅ MOBILE FALLBACK: If selected participant not found and on mobile, use first participant
       if (isMobile && queueState.participants.length > 0) {
         const firstParticipant = queueState.participants[0];
-        console.log('📱 MOBILE FALLBACK NOT FOUND:', firstParticipant);
         selectedParticipantRef.current = firstParticipant;
         return firstParticipant;
       }
@@ -410,9 +404,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [isLiveKitConnected, liveKitParticipants, liveKitService]);
   
-  // Debug: Track recording state changes
+  // Recording duration timer
   useEffect(() => {
-  }, [isRecording]);
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (isRecording && recordingStartTime) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const duration = Math.floor((now.getTime() - recordingStartTime.getTime()) / 1000);
+        setRecordingDuration(duration);
+      }, 1000);
+    } else {
+      setRecordingDuration(0);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isRecording, recordingStartTime]);
   
   // GraphQL Queries
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
@@ -587,7 +598,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (socket && wsConnected) {
       
       const handleRecordingAnnouncement = (data: { message: string; type: string }) => {
-        console.log('📢 RECORDING ANNOUNCEMENT RECEIVED:', data);
 
         // 🔄 Update local recording state for everyone
         if (data.type === 'start') {
@@ -599,16 +609,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         // 🔊 Play voice announcement on all participant devices
         announceRecordingStatus(data.message);
 
-        // 🔔 Visual feedback
-        Swal.fire({
-          icon: data.type === 'start' ? 'success' : 'info',
-          title: data.type === 'start' ? 'Recording Started' : 'Recording Stopped',
-          text: data.message,
-          timer: 2500,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
+        // 🔔 Visual feedback - only show info for stop, no success alerts
+        if (data.type === 'stop') {
+          Swal.fire({
+            icon: 'info',
+            title: 'Recording Stopped',
+            text: data.message,
+            timer: 2500,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+          });
+        }
       };
 
       const handleTestBroadcast = (data: any) => {
@@ -772,26 +784,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // ✅ MOBILE FIX: Auto-select first participant for main stage on mobile
   useEffect(() => {
-    console.log('📱 MOBILE AUTO-SELECT CHECK:', {
-      isMobile,
-      memoizedParticipantsLength: memoizedParticipants.length,
-      queueStateParticipantsLength: queueState.participants.length,
-      selectedParticipantId,
-      memoizedParticipants: memoizedParticipants.map(p => ({ id: p._id, name: p.displayName })),
-      queueStateParticipants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
-    });
     
     // Try memoizedParticipants first, then fallback to queueState.participants
     const participantsToUse = memoizedParticipants.length > 0 ? memoizedParticipants : queueState.participants;
     
     if (isMobile && participantsToUse.length > 0 && !selectedParticipantId) {
       const firstParticipant = participantsToUse[0];
-      console.log('📱 MOBILE AUTO-SELECT TRIGGERED:', {
-        participantId: firstParticipant._id,
-        name: firstParticipant.displayName,
-        totalParticipants: participantsToUse.length,
-        source: memoizedParticipants.length > 0 ? 'memoized' : 'queueState'
-      });
       setSelectedParticipantId(firstParticipant._id);
     }
   }, [isMobile, memoizedParticipants, queueState.participants, selectedParticipantId]);
@@ -802,13 +800,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     const isProduction = process.env.NODE_ENV === 'production';
     
     if (isProduction) {
-      // Disable console logs in production
-      console.log = () => {};
-      console.warn = () => {};
-      console.info = () => {};
-      
-      // Only keep console.error for debugging
-      console.error = console.error;
     }
   }, []);
 
@@ -861,7 +852,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           setShowControls(false);
         }, 1000);
       } catch (error) {
-        console.log('Fullscreen error:', error);
       }
     };
 
@@ -929,7 +919,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         });
       } else {
         // In production, just log the error
-        console.error('Mobile error:', event.error);
       }
     };
 
@@ -948,7 +937,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         });
       } else {
         // In production, just log the error
-        console.error('Unhandled promise rejection:', event.reason);
       }
     };
 
@@ -1222,7 +1210,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       disconnectionTimer = setTimeout(async () => {
         // Double check still disconnected
         if (liveKitConnectionState === 'disconnected') {
-          console.log('🔴 HOST DISCONNECTED - Ending meeting for all participants');
           
           try {
             // End the meeting
@@ -1248,7 +1235,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               }, 3500);
             }
           } catch (error) {
-            console.error('Failed to end meeting on host disconnect:', error);
           }
         }
       }, DISCONNECTION_TIMEOUT);
@@ -1525,13 +1511,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         });
         setMeetingStatus('LIVE');
         setIsLive(true);
-      Swal.fire({
-        icon: 'success',
-        title: 'Meeting Started',
-        text: 'The meeting has been started successfully!',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      // Meeting started successfully - no notification needed
       } catch (error) {
       Swal.fire({
         icon: 'error',
@@ -1692,13 +1672,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               }
             });
             
-            Swal.fire({
-              icon: 'success',
-              title: 'Host Transferred',
-            text: `Host role has been transferred to ${selectedParticipant.displayName || selectedParticipant.user?.displayName || 'the selected participant'}.`,
-              timer: 2000,
-              showConfirmButton: false
-            });
+            // Host transferred successfully - no notification needed
             
             setTimeout(() => {
               window.location.href = '/';
@@ -1837,6 +1811,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
+  // Format recording duration
+  const formatRecordingDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+  };
+
   // Speech synthesis function for recording announcements
   const announceRecordingStatus = (message: string) => {
     try {
@@ -1870,7 +1857,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
       }, 300);
     } catch (error) {
-      console.warn('announceRecordingStatus error:', error);
     }
   };
 
@@ -1916,7 +1902,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleRecordingToggle = async () => {
     // Prevent multiple rapid clicks
     if (isRecordingInProgress) {
-      console.log('Recording operation already in progress, please wait...');
       return;
     }
     
@@ -1938,6 +1923,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           if (result.data?.startRecording?.success || (result.data as any).startMeetingRecording?.success) {
             setIsRecording(true);
+            setRecordingStartTime(new Date());
             
             // Broadcast to all participants
             broadcastRecordingAnnouncement('Recording in progress!', 'start');
@@ -1945,19 +1931,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             // Announce locally (for host)
             announceRecordingStatus('Recording in progress!');
             
-            // Show success notification
-            Swal.fire({
-              icon: 'success',
-              title: 'Recording Started',
-              text: 'Recording is now in progress and will be saved to VOD!',
-              timer: 3000,
-              showConfirmButton: false,
-              toast: true,
-              position: 'top-end'
-            });
+            // Recording started successfully - no notification needed
           }
         } catch (error) {
-          console.error('Failed to start recording:', error);
           Swal.fire({
             icon: 'error',
             title: 'Recording Failed',
@@ -1981,6 +1957,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           if (result.data?.stopRecording?.success || (result.data as any).stopMeetingRecording?.success) {
             setIsRecording(false);
+            setRecordingStartTime(null);
             
             // Broadcast to all participants
             broadcastRecordingAnnouncement('Recording stopped!', 'stop');
@@ -1988,19 +1965,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             // Announce locally (for host)
             announceRecordingStatus('Recording stopped!');
           
-          // Show success notification
-          Swal.fire({
-            icon: 'success',
-            title: 'Recording Stopped',
-            text: 'Recording has been stopped and saved to VOD server!',
-            timer: 3000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-          });
+          // Recording stopped successfully - no notification needed
         }
       } catch (error) {
-        console.error('Failed to stop recording:', error);
         Swal.fire({
           icon: 'error',
           title: 'Stop Recording Failed',
@@ -2108,13 +2075,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           });
         }
         
-      Swal.fire({
-        icon: 'success',
-        title: 'Participant Removed',
-        text: 'The participant has been removed from the meeting.',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      // Participant removed successfully - no notification needed
       } else {
         throw new Error((result.data as any)?.removeParticipant?.message || 'Unknown error');
       }
@@ -2174,13 +2135,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         reason: 'Lowered by host'
       });
 
-      Swal.fire({
-        icon: 'success',
-        title: 'Success',
-        text: 'Hand lowered successfully',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      // Hand lowered successfully - no notification needed
     } catch (error) {
       Swal.fire({
         icon: 'error',
@@ -2198,6 +2153,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     currentUser?.systemRole === 'TUTOR' ||
     currentUser?.systemRole === 'ADMIN';
 
+
   // Auto-start meeting for host
   useEffect(() => {
     if (isHost && meeting?.status === 'CREATED' && !isLive) {
@@ -2211,14 +2167,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Enhance participants with real-time hand raise status using the helper hook
   const participantsWithHandRaise = useParticipantsWithHandRaise(participants, wsRaisedHands);
   
-  // Debug: Check for duplicate participants
+  // Check for duplicate participants
   useEffect(() => {
-    console.log('🔍 PARTICIPANTS DEBUG:', {
-      participantsCount: participants.length,
-      participantsWithHandRaiseCount: participantsWithHandRaise.length,
-      participants: participants.map(p => ({ id: p._id, name: p.displayName })),
-      participantsWithHandRaise: participantsWithHandRaise.map(p => ({ id: p._id, name: p.displayName }))
-    });
   }, [participants, participantsWithHandRaise]);
 
   // Loading state
@@ -2736,10 +2686,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   backgroundColor: 'white'
                 }}></div>
                 {isMobile ? 'REC' : 'Recording'}
+                {recordingDuration > 0 && (
+                  <span style={{ marginLeft: '4px', fontFamily: 'monospace' }}>
+                    {formatRecordingDuration(recordingDuration)}
+                  </span>
+                )}
               </div>
             )}
 
-            {/* Recording Controls - ONLY for HOST */}
+            {/* Recording Controls - ONLY for HOST - Participants should NOT see these buttons */}
             {isHost && (
               <>
                 {/* Desktop Controls */}
@@ -2863,13 +2818,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🎯 THUMBNAIL TOGGLE CLICKED:', { thumbnailPanelOpen, isMobile });
                 setThumbnailPanelOpen(!thumbnailPanelOpen);
               }}
               onTouchStart={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🎯 THUMBNAIL TOGGLE TOUCH START:', { thumbnailPanelOpen, isMobile });
                 setThumbnailPanelOpen(!thumbnailPanelOpen);
               }}
               style={{
@@ -3087,13 +3040,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     audioTrack = audioTrackPub?.track;
                     
-                    // Debug logging for local participant (reduced)
-                    console.log('🔍 LOCAL PARTICIPANT THUMBNAIL:', {
-                      participantName: participant.displayName,
-                      cameraTrack: !!videoTrack,
-                      screenShare: hasScreenShare,
-                      trackCount: liveKitService.room.localParticipant.videoTrackPublications.size
-                    });
                     
                     // Local participant tracks retrieved
                   } else {
@@ -3120,22 +3066,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   }
                 }
                 
-                // Debug: Check for duplicate participants
-                console.log(`🔍 RENDERING PARTICIPANT THUMBNAIL ${index}:`, {
-                  participantId: participant._id,
-                  name: participant.displayName,
-                  index: index
-                });
 
-                // Debug: Log thumbnail video track status
-                console.log('🔍 THUMBNAIL VIDEO DEBUG:', {
-                  participantId: participant._id,
-                  name: participant.displayName,
-                  hasVideoTrack: !!videoTrack,
-                  videoTrackSource: videoTrack?.source,
-                  isVideoOff: !videoTrack,
-                  isScreenSharing: hasScreenShare
-                });
 
                 return (
                   <ParticipantThumbnail
@@ -3152,11 +3083,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isScreenSharing={hasScreenShare}
                     isLocalParticipant={isLocalParticipant}
                     onClick={() => {
-                      console.log('🔍 THUMBNAIL CLICKED:', { 
-                        participantId: participant._id, 
-                        name: participant.displayName,
-                        user: participant.user?._id 
-                      });
                       setSelectedParticipantId(participant._id);
                     }}
                   />
@@ -3497,16 +3423,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 return null;
               }
               
-              // Debug logging for main stage participant selection
-              console.log('🔍 MAIN STAGE PARTICIPANT:', {
-                selectedParticipantId: selectedParticipantId,
-                selectedParticipant: selectedParticipant ? { id: selectedParticipant._id, name: selectedParticipant.displayName } : null,
-                activeSpeaker: memoizedActiveSpeaker ? { id: memoizedActiveSpeaker._id, name: memoizedActiveSpeaker.displayName } : null,
-                mainParticipant: { id: mainParticipant._id, name: mainParticipant.displayName, user: mainParticipant.user?._id },
-                isMobile: isMobile,
-                totalParticipants: queueState.participants.length,
-                participants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
-              });
 
                 // Get video and audio tracks for main stage
                 let mainVideoTrack = null;
@@ -3584,15 +3500,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   mainParticipant.identity === currentParticipant?._id
                 ) : false;
 
-                // Debug: Log video track status
-                console.log('🔍 MAIN STAGE VIDEO DEBUG:', {
-                  participantId: mainParticipant._id,
-                  name: mainParticipant.displayName,
-                  hasVideoTrack: !!mainVideoTrack,
-                  videoTrackSource: mainVideoTrack?.source,
-                  isVideoOff: !mainVideoTrack,
-                  isScreenSharing: isParticipantScreenSharing
-                });
 
                 return (
                   <MainStageView
