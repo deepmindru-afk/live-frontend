@@ -57,13 +57,18 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     if (audioRef.current && audioTrack) {
       audioTrack.attach(audioRef.current);
       
+      // CRITICAL FIX: Always mute local participant audio to prevent echo
+      if (isLocalParticipant || participantId === 'local') {
+        audioRef.current.muted = true;
+      }
+      
       return () => {
         if (audioTrack && audioRef.current) {
           audioTrack.detach(audioRef.current);
         }
       };
     }
-  }, [audioTrack, participantId]);
+  }, [audioTrack, participantId, isLocalParticipant]);
 
   // Shake animation when hand is raised
   useEffect(() => {
@@ -89,7 +94,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       onClick={onClick}
     >
       {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
-      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant} style={{ display: 'none' }} />
+      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant || participantId === 'local'} style={{ display: 'none' }} />
       
       <div className={styles['thumbnail-video-container']}>
         {!isVideoOff && videoTrack ? (

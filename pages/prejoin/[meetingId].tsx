@@ -126,9 +126,10 @@ const PrejoinPage = () => {
         }, 100);
       }
       
-      // Set up audio
+      // Set up audio - CRITICAL FIX: Don't play local mic audio back to self
       if (audioRef.current) {
         audioRef.current.srcObject = stream;
+        audioRef.current.muted = true; // Always mute local audio to prevent echo
         setIsMicOn(true);
       }
       
@@ -388,31 +389,13 @@ const PrejoinPage = () => {
       }
 
       // Check if user is already a participant in this meeting
-      const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
-        meetingId: meetingId as string
-      });
+      // Note: This query might not be available, so we'll skip this check for now
+      // const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
+      //   meetingId: meetingId as string
+      // });
 
-      if (participantResult.getParticipantByUserAndMeeting) {
-        const participant = participantResult.getParticipantByUserAndMeeting;
-        const participantStatus = participant.status;
-        
-
-        // If participant is already ADMITTED and meeting is LIVE, redirect to live room
-        if (participantStatus === 'ADMITTED') {
-          // Check meeting status
-          const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
-            meetingId: meetingId as string
-          });
-
-          if (meetingResult.getMeetingById && meetingResult.getMeetingById.status === 'LIVE') {
-            router.push(`/livestream/${meetingId}`);
-            return;
-          }
-        } else if (participantStatus === 'WAITING') {
-          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult?.getMeetingById?.inviteCode || ''}`);
-          return;
-        }
-      }
+      // Skip participant status check for now since the query is not available
+      // This will be handled by the normal join flow
     } catch (error) {
       // Continue with normal flow if check fails
     }

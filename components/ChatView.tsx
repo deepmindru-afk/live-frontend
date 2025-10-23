@@ -58,10 +58,13 @@ const ChatView: React.FC<ChatViewProps> = ({
     if (!socket) return;
 
     const handleNewMessage = (message: any) => {
-      // PERFORMANCE FIX: Add deduplication to prevent duplicate messages from WebSocket + polling
+      // CRITICAL FIX: Add deduplication to prevent duplicate messages from WebSocket + polling
       setMessages(prev => {
-        // Check if message already exists by _id
-        const exists = prev.some(m => m._id === message._id);
+        // Check if message already exists by _id or timestamp + text combination
+        const exists = prev.some(m => 
+          m._id === message._id || 
+          (m.text === message.text && m.timestamp === message.timestamp)
+        );
         if (exists) {
           return prev;
         }

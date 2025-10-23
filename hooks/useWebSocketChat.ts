@@ -181,71 +181,72 @@ export const useWebSocketChat = ({
       (newSocket as any).heartbeatInterval = heartbeatInterval;
     });
 
-    newSocket.on('CHAT_MESSAGE', (message: ChatMessage) => {
-      setMessages(prev => [...prev, message]);
-      callbacksRef.current.onMessage?.(message);
-    });
-
-    newSocket.on('CHAT_MESSAGE_DELETED', (data) => {
-      setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
-    });
-
-    newSocket.on('KICKED', (data) => {
-      // Redirect to dashboard when kicked
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
-    });
-
-    newSocket.on('USER_JOINED_CHAT', (participant: ChatParticipant) => {
-      setParticipants(prev => {
-        const exists = prev.find(p => p.userId === participant.userId);
-        if (exists) return prev;
-        return [...prev, participant];
-      });
-      onParticipantJoined?.(participant);
-    });
-
-    newSocket.on('USER_LEFT_CHAT', (participant: ChatParticipant) => {
-      setParticipants(prev => prev.filter(p => p.userId !== participant.userId));
-      onParticipantLeft?.(participant);
-    });
-
-    newSocket.on('CHAT_PEER_LIST', (data) => {
-      setParticipants(data.participants);
-    });
-
-    newSocket.on('CHAT_MESSAGES_LOADED', (data: { messages: ChatMessage[] }) => {
-      setMessages(data.messages || []);
-    });    
-
-    newSocket.on('PONG', (data) => {
-    });
-
-    // Add heartbeat acknowledgment listener
-    newSocket.on('HEARTBEAT_ACK', (data) => {
-      if (data.dbUpdated) {
-      } else {
+    // CRITICAL FIX: Store event handlers to prevent duplicate subscriptions
+    const eventHandlers = {
+      CHAT_MESSAGE: (message: ChatMessage) => {
+        setMessages(prev => [...prev, message]);
+        callbacksRef.current.onMessage?.(message);
+      },
+      CHAT_MESSAGE_DELETED: (data: any) => {
+        setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+      },
+      KICKED: (data: any) => {
+        // Redirect to dashboard when kicked
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1000);
+      },
+      USER_JOINED_CHAT: (participant: ChatParticipant) => {
+        setParticipants(prev => {
+          const exists = prev.find(p => p.userId === participant.userId);
+          if (exists) return prev;
+          return [...prev, participant];
+        });
+        callbacksRef.current.onParticipantJoined?.(participant);
+      },
+      USER_LEFT_CHAT: (participant: ChatParticipant) => {
+        setParticipants(prev => prev.filter(p => p.userId !== participant.userId));
+        callbacksRef.current.onParticipantLeft?.(participant);
+      },
+      CHAT_PEER_LIST: (data: any) => {
+        setParticipants(data.participants);
+      },
+      CHAT_MESSAGES_LOADED: (data: { messages: ChatMessage[] }) => {
+        setMessages(data.messages || []);
+      },
+      PONG: (data: any) => {
+        // Heartbeat response
+      },
+      HEARTBEAT_ACK: (data: any) => {
+        if (data.dbUpdated) {
+          // Database updated
+        } else {
+          // No database update
+        }
+      },
+      MEETING_JOIN_SUCCESS: (data: any) => {
+        // Meeting join successful
+      },
+      PARTICIPANT_JOINED: (participant: any) => {
+        callbacksRef.current.onParticipantJoined?.(participant);
+      },
+      PARTICIPANT_LEFT: (data: any) => {
+        callbacksRef.current.onParticipantLeft?.(data);
+      },
+      NEW_MESSAGE: (message: any) => {
+        // Handle as chat message
+        setMessages(prev => [...prev, message]);
+        callbacksRef.current.onMessage?.(message);
       }
+    };
+
+    // Register all event handlers
+    Object.entries(eventHandlers).forEach(([event, handler]) => {
+      newSocket.on(event, handler);
     });
 
-    newSocket.on('MEETING_JOIN_SUCCESS', (data) => {
-    });
-
-    // Add meeting event listeners for participant management
-    newSocket.on('PARTICIPANT_JOINED', (participant) => {
-      callbacksRef.current.onParticipantJoined?.(participant);
-    });
-
-    newSocket.on('PARTICIPANT_LEFT', (data) => {
-      callbacksRef.current.onParticipantLeft?.(data);
-    });
-
-    newSocket.on('NEW_MESSAGE', (message) => {
-      // Handle as chat message
-      setMessages(prev => [...prev, message]);
-      callbacksRef.current.onMessage?.(message);
-    });
+    // Store handlers for cleanup
+    (newSocket as any).eventHandlers = eventHandlers;
 
       setSocket(newSocket);
     } catch (error) {
@@ -273,7 +274,15 @@ export const useWebSocketChat = ({
       
       socket.emit('LEAVE_CHAT_ROOM', { meetingId });
       
-      // CRITICAL: Remove all event listeners before disconnecting
+      // CRITICAL FIX: Remove specific event handlers to prevent duplicate subscriptions
+      if ((socket as any).eventHandlers) {
+        Object.entries((socket as any).eventHandlers).forEach(([event, handler]) => {
+          socket.off(event, handler as any);
+        });
+        (socket as any).eventHandlers = null;
+      }
+      
+      // Remove all remaining listeners as fallback
       socket.removeAllListeners();
       
       socket.disconnect();
@@ -322,7 +331,7 @@ export const useWebSocketChat = ({
     } else {
     }
 
-    // Only disconnect if we're actually changing the connection parameters
+    // CRITICAL FIX: Cleanup function to prevent duplicate subscriptions
     return () => {
       if (socket && isConnected) {
         disconnect();

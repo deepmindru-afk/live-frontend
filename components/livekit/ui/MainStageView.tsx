@@ -64,11 +64,17 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   useEffect(() => {
     if (audioRef.current && audioTrack) {
       audioTrack.attach(audioRef.current);
+      
+      // CRITICAL FIX: Always mute local participant audio to prevent echo
+      if (isLocalParticipant || participantId === 'local') {
+        audioRef.current.muted = true;
+      }
+      
       return () => {
         audioTrack.detach(audioRef.current);
       };
     }
-  }, [audioTrack, participantId]);
+  }, [audioTrack, participantId, isLocalParticipant]);
 
   const handleClick = () => {
     if (onParticipantClick && participantId) {
@@ -79,7 +85,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
       {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
-      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant} style={{ display: 'none' }} />
+      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant || participantId === 'local'} style={{ display: 'none' }} />
       
       {/* Main Video Container */}
       <div className={styles['main-stage-container']} onClick={handleClick}>

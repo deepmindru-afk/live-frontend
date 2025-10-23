@@ -139,6 +139,12 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
   // Add participant to queue
   const addParticipant = useCallback((participant: Participant) => {
     setQueueState(prev => {
+      // CRITICAL FIX: Check if participant already exists to prevent duplicates
+      const exists = prev.participants.some(p => p._id === participant._id || p.identity === participant.identity);
+      if (exists) {
+        return prev; // Don't add duplicate
+      }
+      
       const newParticipant = {
         ...participant,
         originalJoinOrder: prev.participants.length,
@@ -237,8 +243,9 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
   // Update participant data
   const updateParticipant = useCallback((participantId: string, updates: Partial<Participant>) => {
     setQueueState(prev => {
+      // CRITICAL FIX: Use functional update to prevent race conditions
       const updatedParticipants = prev.participants.map(p => 
-        p._id === participantId 
+        p._id === participantId || p.identity === participantId
           ? { ...p, ...updates, lastActivity: new Date().toISOString() }
           : p
       );

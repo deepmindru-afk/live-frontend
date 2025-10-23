@@ -3002,7 +3002,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   participantIdentity === liveKitService.room.localParticipant?.identity ||
                   participantIdentity === liveKitService.room.localParticipant?.sid ||
                   participant._id === currentParticipant?._id ||
-                  participant.user?._id === currentParticipant?.user?._id
+                  participant.user?._id === currentParticipant?.user?._id ||
+                  participant.userId === currentParticipant?.user?._id ||
+                  participant.identity === currentParticipant?._id
                 ) : false;
                 
                 if (liveKitService?.room) {
@@ -3459,7 +3461,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     participantIdentity === liveKitService.room.localParticipant?.identity ||
                     participantIdentity === liveKitService.room.localParticipant?.sid ||
                     mainParticipant._id === currentParticipant?._id ||
-                    mainParticipant.user?._id === currentParticipant?.user?._id
+                    mainParticipant.user?._id === currentParticipant?.user?._id ||
+                    mainParticipant.userId === currentParticipant?.user?._id ||
+                    mainParticipant.identity === currentParticipant?._id
                   );
                   
                   if (isLocalParticipant) {
@@ -3511,7 +3515,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   participantIdentity === liveKitService.room.localParticipant?.identity ||
                   participantIdentity === liveKitService.room.localParticipant?.sid ||
                   mainParticipant._id === currentParticipant?._id ||
-                  mainParticipant.user?._id === currentParticipant?.user?._id
+                  mainParticipant.user?._id === currentParticipant?.user?._id ||
+                  mainParticipant.userId === currentParticipant?.user?._id ||
+                  mainParticipant.identity === currentParticipant?._id
                 ) : false;
 
                 // Debug: Log video track status

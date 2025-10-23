@@ -344,6 +344,17 @@ export class LiveKitService {
       return; // Prevent infinite recursion
     }
     
+    // CRITICAL FIX: Prevent local audio echo - don't play back local mic audio to self
+    // Check if this is the local participant by comparing with room's localParticipant
+    const isLocalParticipant = this._room?.localParticipant && 
+      (participant.identity === this._room.localParticipant.identity || 
+       participant === this._room.localParticipant ||
+       participant.sid === this._room.localParticipant.sid);
+    
+    if (isLocalParticipant && track.kind === 'audio') {
+      return; // Don't process local audio tracks to prevent echo
+    }
+    
     try {
       this.isHandlingTrackSubscribed = true;
       this.emit('trackSubscribed', { track, publication, participant });
