@@ -13,8 +13,8 @@ const nextConfig: NextConfig = {
     // Skip ESLint during build - development only  
     ignoreDuringBuilds: true,
   },
-  // Production optimizations
-  output: 'standalone',
+  // Production optimizations - only for production builds
+  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   experimental: {
     // Enable modern features
     esmExternals: true,

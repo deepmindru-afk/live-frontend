@@ -23,8 +23,12 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 .participant-thumbnail {
   position: relative;
-  width: 160px;
-  height: 120px;
+  width: 25vw; // Even bigger for better visibility
+  height: 18vw; // Even bigger for better visibility
+  min-width: 160px; // Bigger minimum size
+  min-height: 120px; // Bigger minimum size
+  max-width: 250px; // Bigger maximum size
+  max-height: 180px; // Bigger maximum size
   background: linear-gradient(135deg, $card-bg 0%, rgba($primary-blue, 0.2) 100%);
   border-radius: 12px;
   overflow: hidden;
@@ -285,7 +289,7 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 300px;
+  min-height: 50vh; // Responsive minimum height - bigger for main content
   max-height: 100vh;
   background: linear-gradient(135deg, $dark-bg 0%, rgba($primary-blue, 0.1) 100%);
   border-radius: 16px;
@@ -348,10 +352,16 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   max-height: 100%;
 
   &.screen-share-video {
-    object-fit: contain;
-    background: #000000;
-    max-width: 100%;
-    max-height: 100%;
+    object-fit: contain !important; // Show full content without cropping
+    object-position: center !important;
+    background: #000000 !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }
 
@@ -735,8 +745,58 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 768px) {
   .main-stage-view {
-    min-height: 250px;
-    max-height: 70vh;
+    min-height: 45vh; // Responsive minimum height for mobile - bigger
+    max-height: 80vh; // Responsive maximum height for mobile
+  }
+  
+  // ✅ MOBILE VIDEO FIXES
+  .main-stage-video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1 !important;
+    position: relative !important;
+    background: #000000 !important;
+  }
+  
+  // ✅ MOBILE SCREEN SHARE FIXES
+  .main-stage-video.screen-share-video {
+    object-fit: contain !important; // Show full screen share content
+    object-position: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    background: #000000 !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 1 !important;
+    position: relative !important;
+  }
+  
+  .main-stage-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 45vh !important; // Responsive minimum height - bigger
+    position: relative !important;
+    overflow: hidden !important;
+  }
+  
+  // Ensure main stage view has proper dimensions
+  .main-stage-view {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 45vh !important; // Responsive minimum height - bigger
+    position: relative !important;
   }
 
   .main-stage-top-bar {
@@ -792,8 +852,8 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 480px) {
   .main-stage-view {
-    min-height: 200px;
-    max-height: 60vh;
+    min-height: 40vh; // Responsive minimum height for small mobile - bigger
+    max-height: 75vh; // Responsive maximum height for small mobile
   }
 
   .main-stage-top-bar {
@@ -829,8 +889,12 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 768px) {
   .participant-thumbnail {
-    width: 120px;
-    height: 90px;
+    width: 30vw; // Even bigger for mobile
+    height: 22vw; // Even bigger for mobile
+    min-width: 140px; // Bigger minimum size for mobile
+    min-height: 105px; // Bigger minimum size for mobile
+    max-width: 220px; // Bigger maximum size for mobile
+    max-height: 165px; // Bigger maximum size for mobile
 
     .participant-name {
       font-size: 11px;
@@ -851,8 +915,12 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 480px) {
   .participant-thumbnail {
-    width: 100px;
-    height: 75px;
+    width: 35vw; // Even bigger for small mobile
+    height: 26vw; // Even bigger for small mobile
+    min-width: 120px; // Bigger minimum size for small mobile
+    min-height: 90px; // Bigger minimum size for small mobile
+    max-width: 180px; // Bigger maximum size for small mobile
+    max-height: 135px; // Bigger maximum size for small mobile
 
     .participant-name {
       font-size: 10px;

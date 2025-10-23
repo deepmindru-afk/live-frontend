@@ -249,7 +249,21 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const selectedParticipantRef = useRef<any>(null);
   
   const selectedParticipant = useMemo(() => {
+    console.log('🔍 SELECTED PARTICIPANT LOGIC:', {
+      selectedParticipantId,
+      isMobile,
+      queueStateParticipantsLength: queueState.participants.length,
+      queueStateParticipants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
+    });
+    
     if (!selectedParticipantId) {
+      // ✅ MOBILE FIX: If no participant selected and on mobile, use first participant
+      if (isMobile && queueState.participants.length > 0) {
+        const firstParticipant = queueState.participants[0];
+        console.log('📱 MOBILE FALLBACK SELECTED:', firstParticipant);
+        selectedParticipantRef.current = firstParticipant;
+        return firstParticipant;
+      }
       selectedParticipantRef.current = null;
       return null;
     }
@@ -258,6 +272,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     // Only update the ref if the participant ID changed or the participant object is different
     if (!found) {
+      // ✅ MOBILE FALLBACK: If selected participant not found and on mobile, use first participant
+      if (isMobile && queueState.participants.length > 0) {
+        const firstParticipant = queueState.participants[0];
+        console.log('📱 MOBILE FALLBACK NOT FOUND:', firstParticipant);
+        selectedParticipantRef.current = firstParticipant;
+        return firstParticipant;
+      }
       selectedParticipantRef.current = null;
       return null;
     }
@@ -269,7 +290,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     // Always return the cached reference to prevent prop changes
     return selectedParticipantRef.current;
-  }, [selectedParticipantId, queueState.participants]);
+  }, [selectedParticipantId, queueState.participants, isMobile]);
   
   // Track if useParticipantQueue functions are changing
   const prevQueueFunctionsRef = useRef({ addToQueue, removeFromQueue, updateQueueParticipant });
@@ -735,6 +756,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [isLiveKitConnected, isMobile]);
 
+  // ✅ MOBILE FIX: Auto-select first participant for main stage on mobile
+  useEffect(() => {
+    console.log('📱 MOBILE AUTO-SELECT CHECK:', {
+      isMobile,
+      memoizedParticipantsLength: memoizedParticipants.length,
+      queueStateParticipantsLength: queueState.participants.length,
+      selectedParticipantId,
+      memoizedParticipants: memoizedParticipants.map(p => ({ id: p._id, name: p.displayName })),
+      queueStateParticipants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
+    });
+    
+    // Try memoizedParticipants first, then fallback to queueState.participants
+    const participantsToUse = memoizedParticipants.length > 0 ? memoizedParticipants : queueState.participants;
+    
+    if (isMobile && participantsToUse.length > 0 && !selectedParticipantId) {
+      const firstParticipant = participantsToUse[0];
+      console.log('📱 MOBILE AUTO-SELECT TRIGGERED:', {
+        participantId: firstParticipant._id,
+        name: firstParticipant.displayName,
+        totalParticipants: participantsToUse.length,
+        source: memoizedParticipants.length > 0 ? 'memoized' : 'queueState'
+      });
+      setSelectedParticipantId(firstParticipant._id);
+    }
+  }, [isMobile, memoizedParticipants, queueState.participants, selectedParticipantId]);
+
   // Production environment checks
   useEffect(() => {
     // Check if we're in production
@@ -765,11 +812,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
     const enterFullscreen = async () => {
       try {
+        // ✅ FIX 1: Show controls initially to prevent black screen
+        setShowControls(true);
+        
         // Force video player mode for mobile
         setIsVideoPlayerMode(true);
         setIsFullscreen(true);
-        // Hide controls initially for immersive experience
-        setShowControls(false);
         
         // Request fullscreen for the document
         const elem = document.documentElement;
@@ -786,13 +834,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         // Try to hide address bar on mobile browsers
         window.scrollTo(0, 1);
         
-        // Lock screen orientation to landscape (optional)
-        if (screen.orientation && (screen.orientation as any).lock) {
+        // ✅ FIX 4: Disable iOS orientation lock to prevent render freeze
+        if (screen.orientation && (screen.orientation as any).lock && !/iPhone|iPad|iPod/.test(navigator.userAgent)) {
           try {
             (screen.orientation as any).lock?.('landscape').catch(() => {});
           } catch (e) {
           }
         }
+        
+        // ✅ FIX 2: Delay hiding controls to prevent instant black screen
+        setTimeout(() => {
+          setShowControls(false);
+        }, 1000);
       } catch (error) {
         console.log('Fullscreen error:', error);
       }
@@ -811,10 +864,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     document.addEventListener('touchstart', preventPullToRefresh, { passive: false });
     document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
 
-    // Enter fullscreen immediately for mobile
-    const timer = setTimeout(() => {
-      enterFullscreen();
-    }, 100);
+    // ✅ FIX 1: Delay fullscreen until LiveKit is connected and has participants
+    const enterFullscreenWhenReady = () => {
+      if (isLiveKitConnected && liveKitParticipants.size > 0) {
+        setTimeout(() => enterFullscreen(), 500);
+      } else {
+        // Retry after 1 second if not ready
+        setTimeout(enterFullscreenWhenReady, 1000);
+      }
+    };
+
+    // Start checking for readiness
+    const timer = setTimeout(enterFullscreenWhenReady, 100);
 
     return () => {
       clearTimeout(timer);
@@ -831,7 +892,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         document.exitFullscreen().catch(() => {});
       }
     };
-  }, [isMobile]);
+  }, [isMobile, isLiveKitConnected, liveKitParticipants.size]);
 
   // Mobile error handling
   useEffect(() => {
@@ -2345,6 +2406,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             background: #000000 !important;
             color: #ffffff !important;
           }
+          
+          /* Mobile Loading Spinner Animation */
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          /* ✅ FIX 5: Mobile-specific video player mode improvements */
+          @media (max-width: 768px) {
+            .video-player-mode {
+              -webkit-overflow-scrolling: touch;
+              overscroll-behavior: none;
+            }
+            
+            .video-player-mode body {
+              -webkit-text-size-adjust: 100%;
+              -ms-text-size-adjust: 100%;
+              touch-action: manipulation;
+            }
+            
+            .video-player-mode #__next {
+              background: #000000 !important;
+              z-index: 9999 !important;
+            }
+            
+            /* Ensure video elements are visible on mobile */
+            .video-player-mode video {
+              object-fit: cover !important;
+              width: 100% !important;
+              height: 100% !important;
+            }
+          }
 
           .video-player-mode body {
             overflow: hidden;
@@ -2396,26 +2489,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             opacity: 1;
           }
         
-          /* Custom scrollbar for participant thumbnails */
+          /* Invisible scrollbar for participant thumbnails */
           .participant-thumbnails::-webkit-scrollbar {
-            height: 4px;
+            display: none; /* Hide scrollbar completely */
           }
           
-          .participant-thumbnails::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          
-          .participant-thumbnails::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 2px;
-          }
-          
-          .participant-thumbnails::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-          }
-          
-          /* Smooth scrolling */
           .participant-thumbnails {
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
           }
@@ -2479,6 +2560,51 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             })
           }}>
           
+          {/* ✅ FIX 3: Mobile loading fallback overlay */}
+          {isMobile && !isLiveKitConnected && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: '#000000',
+              color: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              padding: '20px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                border: '3px solid #333',
+                borderTop: '3px solid #007bff',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginBottom: '20px'
+              }}></div>
+              <h2 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                marginBottom: '10px',
+                color: '#ffffff'
+              }}>
+                Connecting to Meeting...
+              </h2>
+              <p style={{ 
+                fontSize: '14px', 
+                color: 'rgba(255, 255, 255, 0.7)',
+                margin: 0
+              }}>
+                Please wait while we establish the connection
+              </p>
+            </div>
+          )}
+          
           {/* Main Content Area - Takes remaining space */}
           <div style={{
             flex: 1,
@@ -2517,7 +2643,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               borderBottom: isVideoPlayerMode 
                 ? (showControls ? '1px solid rgba(255, 255, 255, 0.1)' : 'none')
                 : '1px solid #e5e7eb',
-              display: (isMobile && (isPiPVisible || isFullscreen)) ? 'none' : 'flex',
+              display: (isMobile && isPiPVisible) ? 'none' : 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: isMobile ? '0 12px' : '0 24px',
@@ -2854,7 +2980,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       <div style={{
         height: '100vh',
           paddingTop: isMobile ? '10px' : '10px',
-          display: (isMobile && (isPiPVisible || isFullscreen)) ? 'none' : 'flex',
+          display: (isMobile && isPiPVisible) ? 'none' : 'flex',
           flexDirection: 'column', // Always column layout for better organization
           backgroundColor: '#ffffff',
           overflow: 'hidden'
@@ -2876,15 +3002,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 if (rightArrow) rightArrow.style.opacity = '0';
               }}
               style={{
-                height: isMobile ? '120px' : '140px',
+                height: isMobile ? '15vh' : '18vh', // Responsive height using viewport units
                 width: '100%',
               backgroundColor: '#ffffff',
                 borderTop: !isMobile ? '1px solid #e5e7eb' : 'none',
                 borderBottom: isMobile ? '1px solid #e5e7eb' : 'none',
               display: 'flex',
               alignItems: 'center',
-                padding: isMobile ? '0 12px' : '0 24px',
-                gap: isMobile ? '12px' : '14px',
+                padding: isMobile ? '0 8px' : '0 16px',
+                gap: isMobile ? '12px' : '16px',
+                justifyContent: 'flex-start', // Start from left side
                 overflowX: isMobile ? 'auto' : 'hidden',
               overflowY: 'hidden',
               marginTop: '0',
@@ -3088,7 +3215,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={isSpeaking}
                     isHandRaised={participant.hasHandRaised}
                     isMuted={participant.micState === 'OFF'}
-                    isVideoOff={!videoTrack || !cameraEnabled} // Show video only if track exists AND camera is enabled
+                    isVideoOff={!videoTrack || (isLocalParticipant && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={participant.role === 'HOST'}
                     isScreenSharing={hasScreenShare}
                     isLocalParticipant={isLocalParticipant}
@@ -3107,20 +3234,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             </div>
           )}
           
-          {/* Main Video Area */}
+          {/* Main Video Area - Responsive sizing based on thumbnail panel */}
           <div style={{
-            flex: 1, // Take up remaining space
+            flex: thumbnailPanelOpen ? 1 : 1.2, // Bigger when thumbnails closed
             backgroundColor: queueState.screenShareMode ? '#000000' : '#f3f4f6',
             display: 'flex',
             flexDirection: 'column',
-            minHeight: 0, // Allow flex shrinking
-            alignItems: 'center',
-            justifyContent: 'center',
+            minHeight: '60vh', // Responsive minimum height
+            maxHeight: '85vh', // Responsive maximum height
+            alignItems: queueState.screenShareMode ? 'stretch' : 'center', // Stretch for screen share
+            justifyContent: queueState.screenShareMode ? 'stretch' : 'center', // Stretch for screen share
             position: 'relative',
-            padding: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
-            paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '20px' : '40px'),
+            padding: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
+            paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
             marginTop: '0',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'flex 0.3s ease' // Smooth transition when toggling
           }}>
             {/* Toggle Thumbnail Panel Button - Desktop Only */}
             {!isMobile && viewMode === 'speaker' && (
@@ -3441,7 +3570,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 selectedParticipantId: selectedParticipantId,
                 selectedParticipant: selectedParticipant ? { id: selectedParticipant._id, name: selectedParticipant.displayName } : null,
                 activeSpeaker: memoizedActiveSpeaker ? { id: memoizedActiveSpeaker._id, name: memoizedActiveSpeaker.displayName } : null,
-                mainParticipant: { id: mainParticipant._id, name: mainParticipant.displayName, user: mainParticipant.user?._id }
+                mainParticipant: { id: mainParticipant._id, name: mainParticipant.displayName, user: mainParticipant.user?._id },
+                isMobile: isMobile,
+                totalParticipants: queueState.participants.length,
+                participants: queueState.participants.map(p => ({ id: p._id, name: p.displayName }))
               });
 
                 // Get video and audio tracks for main stage
@@ -3539,7 +3671,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
                     isHandRaised={mainParticipant.hasHandRaised || false}
                     isMuted={mainParticipant.micState === 'OFF' || false}
-                    isVideoOff={!mainVideoTrack || !cameraEnabled} // Show video only if track exists AND camera is enabled
+                    isVideoOff={!mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={mainParticipant.role === 'HOST' || false}
                     isScreenSharing={isParticipantScreenSharing}
                     screenShareTrack={mainScreenShareTrack}

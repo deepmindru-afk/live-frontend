@@ -43,7 +43,29 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   // Attach video track
   useEffect(() => {
     if (mainVideoRef.current && videoTrack && !isScreenSharing) {
+      console.log('🎥 MAIN STAGE VIDEO ATTACH:', {
+        participantId,
+        name,
+        hasVideoTrack: !!videoTrack,
+        videoElement: !!mainVideoRef.current,
+        isVideoOff,
+        isScreenSharing,
+        videoElementVisible: mainVideoRef.current.offsetWidth > 0 && mainVideoRef.current.offsetHeight > 0
+      });
+      
       videoTrack.attach(mainVideoRef.current);
+      
+      // Mobile debugging
+      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+        console.log('📱 MOBILE VIDEO DEBUG:', {
+          videoElement: mainVideoRef.current,
+          videoElementStyle: window.getComputedStyle(mainVideoRef.current),
+          videoElementRect: mainVideoRef.current.getBoundingClientRect(),
+          videoElementDisplay: mainVideoRef.current.style.display,
+          videoElementVisibility: mainVideoRef.current.style.visibility
+        });
+      }
+      
       return () => {
         videoTrack.detach(mainVideoRef.current);
       };
@@ -97,6 +119,19 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
             autoPlay
             playsInline
             muted
+            style={{
+              // Mobile screen share fixes
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain', // Show full content without cropping
+              objectPosition: 'center',
+              background: '#000000',
+              display: 'block',
+              visibility: 'visible',
+              opacity: 1,
+              zIndex: 1,
+              position: 'relative'
+            }}
           />
         ) : (
           <>
@@ -108,6 +143,17 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 autoPlay
                 playsInline
                 muted
+                style={{
+                  // Mobile-specific fixes
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: 1,
+                  zIndex: 1,
+                  position: 'relative'
+                }}
               />
             ) : (
               /* Beautiful Name Display When No Video */
@@ -130,6 +176,28 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
               </div>
             )}
           </>
+        )}
+
+        {/* Mobile Video Debug Overlay */}
+        {typeof window !== 'undefined' && window.innerWidth <= 768 && videoTrack && !isVideoOff && (
+          <div style={{
+            position: 'absolute',
+            top: '1vh',
+            right: '1vw',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '0.8vh',
+            borderRadius: '0.4vh',
+            fontSize: '1.2vh',
+            zIndex: 1000,
+            fontFamily: 'monospace'
+          }}>
+            Video: {mainVideoRef.current ? 'Attached' : 'Not Attached'}
+            <br />
+            Size: {mainVideoRef.current ? `${mainVideoRef.current.offsetWidth}x${mainVideoRef.current.offsetHeight}` : 'N/A'}
+            <br />
+            Viewport: {typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'N/A'}
+          </div>
         )}
 
         {/* Overlay Information */}
