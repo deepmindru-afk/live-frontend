@@ -124,8 +124,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     return defaultValue;
   };
 
-  const [micEnabled, setMicEnabled] = useState(() => getPrejoinPreference('prejoin_audio_enabled', true));
-  const [cameraEnabled, setCameraEnabled] = useState(() => getPrejoinPreference('prejoin_video_enabled', true));
+  const [micEnabled, setMicEnabled] = useState(() => getPrejoinPreference('prejoin_audio_enabled', false));
+  const [cameraEnabled, setCameraEnabled] = useState(() => getPrejoinPreference('prejoin_video_enabled', false));
   const [screenSharing, setScreenSharing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');
   const [gridSize, setGridSize] = useState<'2x2' | '3x3' | '4x4'>('2x2');
@@ -587,25 +587,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (socket && wsConnected) {
       
       const handleRecordingAnnouncement = (data: { message: string; type: string }) => {
-        
-        // Update recording state for participants
-        if (!isHost) {
-          if (data.type === 'start') {
-            setIsRecording(true);
-          } else if (data.type === 'stop') {
-            setIsRecording(false);
-          }
+        console.log('📢 RECORDING ANNOUNCEMENT RECEIVED:', data);
+
+        // 🔄 Update local recording state for everyone
+        if (data.type === 'start') {
+          setIsRecording(true);
+        } else if (data.type === 'stop') {
+          setIsRecording(false);
         }
-        
-        // Play the announcement on all participant devices
+
+        // 🔊 Play voice announcement on all participant devices
         announceRecordingStatus(data.message);
-        
-        // Show visual notification
+
+        // 🔔 Visual feedback
         Swal.fire({
           icon: data.type === 'start' ? 'success' : 'info',
           title: data.type === 'start' ? 'Recording Started' : 'Recording Stopped',
           text: data.message,
-          timer: 2000,
+          timer: 2500,
           showConfirmButton: false,
           toast: true,
           position: 'top-end'
@@ -619,14 +618,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       socket.on('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
       socket.on('TEST_BROADCAST', handleTestBroadcast);
       
+      // 🚨 Handle being kicked from meeting
+      const handleKicked = async (data: any) => {
+        if (!currentUser) return;
+        const kickedUserId = currentUser._id || currentUser.id;
+        if (data.userId === kickedUserId) {
+          Swal.fire({
+            icon: 'error',
+            title: 'Removed from Meeting',
+            text: data.reason || 'You have been removed by the host.',
+            confirmButtonText: 'OK',
+            confirmButtonColor: '#ef4444'
+          }).then(async () => {
+            if (liveKitDisconnect) await liveKitDisconnect();
+            window.location.href = '/member/dashboard';
+          });
+        }
+      };
+
+      socket.on('KICKED', handleKicked);
 
       return () => {
         socket.off('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
         socket.off('TEST_BROADCAST', handleTestBroadcast);
+        socket.off('KICKED', handleKicked);
       };
     } else {
     }
-  }, [socket, wsConnected]);
+  }, [socket, wsConnected, currentUser, liveKitDisconnect]);
 
   // Initialize meeting ID and authentication
   useEffect(() => {
@@ -1060,7 +1079,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       try {
         // Check if user is host - if yes, end meeting instead of just leaving
-        const isHost = currentParticipant?.role === 'HOST';
+        const isHost =
+          currentParticipant?.role === 'HOST' ||
+          role === 'HOST' ||
+          currentUser?.systemRole === 'TUTOR' ||
+          currentUser?.systemRole === 'ADMIN';
         
         if (isHost) {
           // Host leaving - end the meeting for everyone
@@ -1136,7 +1159,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         isLeavingIntentionally = true;
         
         // Check if user is host
-        const isHost = currentParticipant?.role === 'HOST';
+        const isHost =
+          currentParticipant?.role === 'HOST' ||
+          role === 'HOST' ||
+          currentUser?.systemRole === 'TUTOR' ||
+          currentUser?.systemRole === 'ADMIN';
         
         if (isHost) {
           // Host leaving - end the meeting for everyone
@@ -1727,20 +1754,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (isLiveKitConnected) {
       try {
         await liveKitToggleMicrophone();
-        setMicEnabled(!micEnabled);
+        const newMicEnabled = !micEnabled;
+        setMicEnabled(newMicEnabled);
+
+        // 🔄 Sync participant mic state to match UI
+        setParticipants(prev => prev.map(p => {
+          if (p._id === currentParticipant?._id) {
+            return { ...p, micState: newMicEnabled ? 'ON' : 'OFF' };
+          }
+          return p;
+        }));
       } catch (error: any) {
-        
-        // Show user-friendly error message
         Swal.fire({
           icon: 'error',
           title: 'Microphone Error',
-          text: error?.message || 'Failed to toggle microphone. Please check microphone permissions.',
-          timer: 3000
+          text: error?.message || 'Failed to toggle microphone.'
         });
-        
       }
     } else {
-      setMicEnabled(!micEnabled);
+      const newMicEnabled = !micEnabled;
+      setMicEnabled(newMicEnabled);
+      setParticipants(prev => prev.map(p => {
+        if (p._id === currentParticipant?._id) {
+          return { ...p, micState: newMicEnabled ? 'ON' : 'OFF' };
+        }
+        return p;
+      }));
     }
   };
 
@@ -1748,21 +1787,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (isLiveKitConnected) {
       try {
         await liveKitToggleCamera();
-        setCameraEnabled(!cameraEnabled);
+        const newCameraEnabled = !cameraEnabled;
+        setCameraEnabled(newCameraEnabled);
+
+        // 🔄 Sync participant camera state
+        setParticipants(prev => prev.map(p => {
+          if (p._id === currentParticipant?._id) {
+            return { ...p, cameraState: newCameraEnabled ? 'ON' : 'OFF' };
+          }
+          return p;
+        }));
       } catch (error: any) {
-        
-        // Show user-friendly error message
         Swal.fire({
           icon: 'error',
           title: 'Camera Error',
-          text: error?.message || 'Failed to toggle camera. Please check camera permissions and try again.',
-          timer: 3000
+          text: error?.message || 'Failed to toggle camera.'
         });
-        
-        // Don't update state if operation failed
       }
     } else {
-      setCameraEnabled(!cameraEnabled);
+      const newCameraEnabled = !cameraEnabled;
+      setCameraEnabled(newCameraEnabled);
+      setParticipants(prev => prev.map(p => {
+        if (p._id === currentParticipant?._id) {
+          return { ...p, cameraState: newCameraEnabled ? 'ON' : 'OFF' };
+        }
+        return p;
+      }));
     }
   };
 
@@ -1789,69 +1839,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Speech synthesis function for recording announcements
   const announceRecordingStatus = (message: string) => {
-    if ('speechSynthesis' in window) {
-      try {
-        const utterance = new SpeechSynthesisUtterance(message);
-        utterance.volume = 0.8;
-        utterance.rate = 0.9;
-        utterance.pitch = 1.0;
-        
-        // Try to use a female voice for better clarity
-        const voices = speechSynthesis.getVoices();
-        
-        const femaleVoice = voices.find(voice => 
-          voice.name.includes('Female') || 
-          voice.name.includes('Samantha') || 
-          voice.name.includes('Karen') ||
-          voice.name.includes('Susan') ||
-          voice.name.includes('Victoria') ||
-          voice.name.includes('Zira') ||
-          voice.name.includes('Hazel')
-        );
-        
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
-        } else {
-        }
-        
-        // Add unique identifier and event listeners
-        const utteranceId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-        };
-        utterance.onend = () => {
-          setIsSpeaking(false);
-        };
-        utterance.onerror = (event) => {
-          setIsSpeaking(false);
-        };
-        
-        // Add a small delay to prevent conflicts between multiple utterances
-        setTimeout(() => {
+    try {
+      // 🔊 Play short beep before announcement (non-blocking)
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880; // Hz
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15); // short beep 150ms
+
+      // 🗣️ Then speak after slight delay
+      setTimeout(() => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(message);
+          utterance.volume = 0.8;
+          utterance.rate = 0.9;
+          utterance.pitch = 1.0;
+
+          const voices = speechSynthesis.getVoices();
+          const preferredVoice =
+            voices.find(v => v.name.includes('Female')) ||
+            voices.find(v => v.name.includes('Samantha') || v.name.includes('Zira'));
+          if (preferredVoice) utterance.voice = preferredVoice;
+
           speechSynthesis.speak(utterance);
-        }, Math.random() * 100); // Random delay 0-100ms
-      } catch (error) {
-        // Fallback: show a more prominent notification
-        Swal.fire({
-          icon: 'info',
-          title: 'Recording Status',
-          text: message,
-          timer: 3000,
-          showConfirmButton: false,
-          position: 'center'
-        });
-      }
-    } else {
-      // Fallback notification
-      Swal.fire({
-        icon: 'info',
-        title: 'Recording Status',
-        text: message,
-        timer: 3000,
-        showConfirmButton: false,
-        position: 'center'
-      });
+        }
+      }, 300);
+    } catch (error) {
+      console.warn('announceRecordingStatus error:', error);
     }
   };
 
@@ -2173,7 +2192,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Get meeting data
   const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
-  const isHost = currentParticipant?.role === 'HOST';
+  const isHost =
+    currentParticipant?.role === 'HOST' ||
+    role === 'HOST' ||
+    currentUser?.systemRole === 'TUTOR' ||
+    currentUser?.systemRole === 'ADMIN';
 
   // Auto-start meeting for host
   useEffect(() => {
@@ -3692,13 +3715,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
                 {micEnabled ? (
-                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2z"/>
                   </svg>
                 ) : (
-                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
-                    <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M19 11h-1.7a6.97 6.97 0 0 1-.43 2.05l1.23 1.23a8.994 8.994 0 0 0 .9-3.28zM12 3a3 3 0 0 0-3 3v.18l6 6V6a3 3 0 0 0-3-3zM4.27 3L3 4.27l6.01 6.01V11a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52a5 5 0 0 1-5-5H5a7 7 0 0 0 11.29 5.29L19.73 21 21 19.73 4.27 3z"/>
                   </svg>
                 )}
               </button>
@@ -3723,12 +3746,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
                 {cameraEnabled ? (
-                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
-                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/>
                   </svg>
                 ) : (
-                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
-                    <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                    <path d="M21 6.5l-4 4V7a1 1 0 0 0-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
                   </svg>
                 )}
               </button>
@@ -4022,12 +4045,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         >
                           {participant.micState === 'ON' ? (
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                              <path d="M12 14c1.66 0 3-1.34 3-3V5a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3z"/>
+                              <path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2z"/>
                             </svg>
                           ) : (
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                              <path d="M19 11h-1.7a6.97 6.97 0 0 1-.43 2.05l1.23 1.23a8.994 8.994 0 0 0 .9-3.28zM12 3a3 3 0 0 0-3 3v.18l6 6V6a3 3 0 0 0-3-3zM4.27 3L3 4.27l6.01 6.01V11a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52a5 5 0 0 1-5-5H5a7 7 0 0 0 11.29 5.29L19.73 21 21 19.73 4.27 3z"/>
                             </svg>
                           )}
                         </div>
@@ -4048,11 +4071,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         >
                           {participant.cameraState === 'ON' ? (
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                              <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/>
                             </svg>
                           ) : (
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                              <path d="M21 6.5l-4 4V7a1 1 0 0 0-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
                             </svg>
                           )}
                         </div>
