@@ -30,8 +30,6 @@ import {
 import {
   START_RECORDING,
   STOP_RECORDING,
-  PAUSE_RECORDING,
-  RESUME_RECORDING,
 } from '../graphql/live-room-mutations';
 import ParticipantView from './ParticipantView';
 import ChatView from './ChatView';
@@ -110,7 +108,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingInProgress, setIsRecordingInProgress] = useState(false);
-  const [recordingPaused, setRecordingPaused] = useState(false);
   const [isLive, setIsLive] = useState(false);
   // Read audio/video preferences from prejoin page (stored in sessionStorage)
   const getPrejoinPreference = (key: string, defaultValue: boolean): boolean => {
@@ -415,7 +412,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   
   // Debug: Track recording state changes
   useEffect(() => {
-  }, [isRecording, recordingPaused]);
+  }, [isRecording]);
   
   // GraphQL Queries
   const { data: meetingData, loading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery(GET_MEETING_BY_ID, {
@@ -470,8 +467,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Recording mutations
   const [startRecordingMutation] = useMutation(START_RECORDING);
   const [stopRecordingMutation] = useMutation(STOP_RECORDING);
-  const [pauseRecordingMutation] = useMutation(PAUSE_RECORDING);
-  const [resumeRecordingMutation] = useMutation(RESUME_RECORDING);
 
   // WebSocket connection for real-time features
   const webSocketToken = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
@@ -1922,7 +1917,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             }
           });
           
-          if (result.data && (result.data as any).startMeetingRecording?.success) {
+          if (result.data?.startRecording?.success || (result.data as any).startMeetingRecording?.success) {
             setIsRecording(true);
             
             // Broadcast to all participants
@@ -1965,7 +1960,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             }
           });
           
-          if (result.data && (result.data as any).stopMeetingRecording?.success) {
+          if (result.data?.stopRecording?.success || (result.data as any).stopMeetingRecording?.success) {
             setIsRecording(false);
             
             // Broadcast to all participants
@@ -2004,100 +1999,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
-  const handleRecordingPause = async () => {
-    
-    const wasPaused = recordingPaused;
-    
-    if (wasPaused) {
-      // Recording was paused, now resuming
-      try {
-        const result = await resumeRecordingMutation({
-          variables: {
-            input: {
-              meetingId: actualMeetingId
-            }
-          }
-        });
-        
-        if (result.data && (result.data as any).resumeMeetingRecording?.success) {
-          setRecordingPaused(false);
-          const message = 'Recording resumed!';
-          const type = 'resume';
-          
-          // Broadcast to all participants
-          broadcastRecordingAnnouncement(message, type);
-          
-          // Announce locally (for host)
-          announceRecordingStatus(message);
-          
-          Swal.fire({
-            icon: 'success',
-            title: 'Recording Resumed',
-            text: 'Recording has been resumed!',
-            timer: 2000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-          });
-        }
-      } catch (error) {
-        console.error('Failed to resume recording:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Resume Failed',
-          text: 'Failed to resume recording.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
-      }
-    } else {
-      // Recording was active, now pausing
-      try {
-        const result = await pauseRecordingMutation({
-          variables: {
-            input: {
-              meetingId: actualMeetingId
-            }
-          }
-        });
-        
-        if (result.data && (result.data as any).pauseMeetingRecording?.success) {
-          setRecordingPaused(true);
-          const message = 'Recording paused!';
-          const type = 'pause';
-          
-          // Broadcast to all participants
-          broadcastRecordingAnnouncement(message, type);
-          
-          // Announce locally (for host)
-          announceRecordingStatus(message);
-          
-          Swal.fire({
-            icon: 'warning',
-            title: 'Recording Paused',
-            text: 'Recording has been paused!',
-            timer: 2000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-          });
-        }
-      } catch (error) {
-        console.error('Failed to pause recording:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Pause Failed',
-          text: 'Failed to pause recording.',
-          timer: 2000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
-      }
-    }
-  };
 
   // Screen share handlers
   const handleStartScreenShare = useCallback(() => {
@@ -2879,41 +2780,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     {!isRecording ? (
                       <button
                         onClick={handleRecordingToggle}
+                        onTouchStart={handleRecordingToggle}
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '40px',
+                          height: '40px',
                           borderRadius: '50%',
                           backgroundColor: '#ef4444',
-                          border: 'none',
+                          border: '3px solid white',
                           cursor: 'pointer',
                           color: 'white',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
-                          transition: 'all 0.2s ease'
+                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.6)',
+                          transition: 'all 0.2s ease',
+                          zIndex: 1000,
+                          position: 'relative',
+                          touchAction: 'manipulation'
                         }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                        <svg width="18" height="18" viewBox="0 0 14 14" fill="white">
                           <circle cx="7" cy="7" r="6"/>
                         </svg>
                       </button>
                     ) : (
                       <button
                         onClick={handleRecordingToggle}
+                        onTouchStart={handleRecordingToggle}
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '40px',
+                          height: '40px',
                           borderRadius: '50%',
                           backgroundColor: '#6b7280',
-                          border: 'none',
+                          border: '3px solid white',
                           cursor: 'pointer',
                           color: 'white',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                          transition: 'all 0.2s ease'
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                          transition: 'all 0.2s ease',
+                          zIndex: 1000,
+                          position: 'relative',
+                          touchAction: 'manipulation'
                         }}
                       >
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
@@ -2931,19 +2840,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('🎯 THUMBNAIL TOGGLE CLICKED:', { thumbnailPanelOpen, isMobile });
                 setThumbnailPanelOpen(!thumbnailPanelOpen);
               }}
               onTouchStart={(e) => {
                 e.preventDefault();
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
+                console.log('🎯 THUMBNAIL TOGGLE TOUCH START:', { thumbnailPanelOpen, isMobile });
                 setThumbnailPanelOpen(!thumbnailPanelOpen);
               }}
               style={{
-                backgroundColor: 'transparent',
-                border: 'none',
+                touchAction: 'manipulation',
+                backgroundColor: isMobile ? 'rgba(255, 0, 0, 0.3)' : 'transparent', // Debug: red background on mobile
+                border: isMobile ? '2px solid red' : 'none', // Debug: red border on mobile
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2951,9 +2860,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 padding: '8px',
                 minWidth: isMobile ? '44px' : 'auto',
                 minHeight: isMobile ? '44px' : 'auto',
-                touchAction: 'manipulation',
                 WebkitTapHighlightColor: 'transparent',
-                zIndex: 1001
+                zIndex: 1001,
+                position: 'relative' // Ensure proper positioning
               }}
             >
               <svg 
@@ -4224,6 +4133,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           )}
           </div>
         </div>
+        
+        {/* Mobile Debug Overlay */}
+        {isMobile && (
+          <div style={{
+            position: 'fixed',
+            top: '10px',
+            left: '10px',
+            background: 'rgba(0,0,0,0.8)',
+            color: 'white',
+            padding: '8px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            zIndex: 9999,
+            fontFamily: 'monospace'
+          }}>
+            MOBILE MODE ACTIVE<br/>
+            Recording: {isRecording ? 'ON' : 'OFF'}<br/>
+            PiP: {isPiPVisible ? 'ON' : 'OFF'}<br/>
+            Fullscreen: {isFullscreen ? 'ON' : 'OFF'}<br/>
+            LiveKit: {isLiveKitConnected ? 'CONNECTED' : 'DISCONNECTED'}<br/>
+            Participants: {liveKitParticipants.size}<br/>
+            Thumbnails: {thumbnailPanelOpen ? 'OPEN' : 'CLOSED'}
+          </div>
+        )}
       </>
     );
   });
