@@ -251,8 +251,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     if (!selectedParticipantId) {
       // ✅ MOBILE FIX: If no participant selected and on mobile, use first participant
-      if (isMobile && queueState.participants.length > 0) {
-        const firstParticipant = queueState.participants[0];
+      if (isMobile && memoizedParticipants.length > 0) {
+        const firstParticipant = memoizedParticipants[0];
         selectedParticipantRef.current = firstParticipant;
         return firstParticipant;
       }
@@ -260,13 +260,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       return null;
     }
     
-    const found = queueState.participants.find(p => p._id === selectedParticipantId);
+    // ✅ FIX: Look in memoizedParticipants instead of queueState.participants
+    // because memoizedParticipants has the correct _id structure that matches what we set from thumbnails
+    console.log('🔍 Looking for participant:', selectedParticipantId, 'in', memoizedParticipants.map(p => p._id));
+    const found = memoizedParticipants.find(p => p._id === selectedParticipantId);
+    console.log('✅ Found participant:', found);
     
     // Only update the ref if the participant ID changed or the participant object is different
     if (!found) {
       // ✅ MOBILE FALLBACK: If selected participant not found and on mobile, use first participant
-      if (isMobile && queueState.participants.length > 0) {
-        const firstParticipant = queueState.participants[0];
+      if (isMobile && memoizedParticipants.length > 0) {
+        const firstParticipant = memoizedParticipants[0];
         selectedParticipantRef.current = firstParticipant;
         return firstParticipant;
       }
@@ -281,7 +285,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     // Always return the cached reference to prevent prop changes
     return selectedParticipantRef.current;
-  }, [selectedParticipantId, queueState.participants, isMobile]);
+  }, [selectedParticipantId, memoizedParticipants, isMobile]);
   
   // Track if useParticipantQueue functions are changing
   const prevQueueFunctionsRef = useRef({ addToQueue, removeFromQueue, updateQueueParticipant });
@@ -308,12 +312,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   
   // Memoize callback functions to prevent new function references on every render
   const handleParticipantClick = useCallback((participant: any) => {
+    console.log('🎯 Participant clicked:', participant._id, participant.displayName);
     setSelectedParticipantId(participant._id);
-    
-    // Navigate to main page after selection
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 500); // Small delay to ensure state is updated
+    // Participant selection only updates the main video display - no navigation needed
   }, []);
   
   // Hand raise status update callback
@@ -3146,17 +3147,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </>
               )}
 
-              {(isMobile ? participantsWithHandRaise.slice(0, 2) : participantsWithHandRaise).map((participant, index) => {
+              {(isMobile ? memoizedParticipants.slice(0, 2) : memoizedParticipants).map((participant, index) => {
                 // Check if participant is speaking (from audio level detection)
                 const isSpeaking = participant.audioLevel > 0.1 || false;
+                
+                // Check hand raise status from wsRaisedHands
+                const hasHandRaised = wsRaisedHands.some(hand => hand.userId === participant._id) || false;
                 
                 // Get video and audio tracks from LiveKit room
                 let videoTrack = null;
                 let audioTrack = null;
                 let hasScreenShare = false;
                 
-                // ✅ FIX: Use user._id as the identity since that's what LiveKit uses
-                const participantIdentity = participant.user?._id || participant.identity;
+                // ✅ CRITICAL FIX: LiveKit uses displayName as identity, not user._id
+                // Try multiple identity formats to match with LiveKit participants
+                const participantIdentity = participant.displayName || participant.user?._id || participant.identity;
+                console.log('🎥 Thumbnail - Participant:', participant.displayName, 'Identity:', participantIdentity, 'User ID:', participant.user?._id);
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
                 // Compare with multiple possible identity formats
@@ -3170,6 +3176,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 ) : false;
                 
                 if (liveKitService?.room) {
+                  // Debug: Log available LiveKit participants
+                  console.log('🔍 Available LiveKit participants:', Array.from(liveKitService.room.remoteParticipants.keys()));
+                  console.log('🔍 Local participant identity:', liveKitService.room.localParticipant?.identity);
+                  console.log('🔍 All participant identities in room:', [
+                    liveKitService.room.localParticipant?.identity,
+                    ...Array.from(liveKitService.room.remoteParticipants.keys())
+                  ]);
+                  
+                  // Debug: Log detailed participant info
+                  console.log('🔍 LiveKit remote participants details:', 
+                    Array.from(liveKitService.room.remoteParticipants.entries()).map(([identity, participant]) => ({
+                      identity,
+                      name: participant.name,
+                      sid: participant.sid
+                    }))
+                  );
                   
                   if (isLocalParticipant) {
                     // ✅ LOCAL PARTICIPANT: Get camera video track for thumbnail (NOT screen share)
@@ -3194,13 +3216,42 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     // Local participant tracks retrieved
                   } else {
                     // ✅ REMOTE PARTICIPANT: Get tracks from remoteParticipants
-                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    console.log('🔍 Looking for remote participant with identity:', participantIdentity);
+                    let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    
+                    // ✅ FALLBACK: Try alternative identity formats if not found
+                    if (!liveKitRoomParticipant) {
+                      // Try with participant.user._id
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.user?._id);
+                      console.log('🔍 Fallback 1 - Using participant.user._id:', participant.user?._id, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with participant._id directly
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant._id);
+                      console.log('🔍 Fallback 2 - Using participant._id:', participant._id, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with participant.identity
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.identity);
+                      console.log('🔍 Fallback 3 - Using participant.identity:', participant.identity, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with participant.userId
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.userId);
+                      console.log('🔍 Fallback 4 - Using participant.userId:', participant.userId, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    console.log('🔍 Final result - Found remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
                       // ✅ IMPORTANT: Get ONLY camera video track for thumbnail (NOT screen share)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
                         .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
                       videoTrack = cameraTrackPub?.track;
+                      console.log('🎥 Thumbnail video track assigned:', !!videoTrack, 'Source:', cameraTrackPub?.source);
                       
                       // Check if this participant has screen share active
                       const screenSharePub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
@@ -3212,12 +3263,35 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       audioTrack = audioTrackPub?.track;
                       
                       // Track publications retrieved
+                    } else {
+                      // ✅ FALLBACK: If no remote participant found, try local participant as last resort
+                      console.log('🔍 No remote participant found, trying local participant as fallback');
+                      
+                      // Check if this participant matches the local participant by name
+                      const localParticipantName = liveKitService.room.localParticipant?.name;
+                      const participantName = participant.displayName;
+                      
+                      if (localParticipantName === participantName) {
+                        console.log('🔍 Found matching local participant by name:', participantName);
+                        const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                          .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                        videoTrack = cameraTrackPub?.track;
+                        console.log('🎥 Using local participant video track:', !!videoTrack);
+                        
+                        const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                        audioTrack = audioTrackPub?.track;
+                      } else {
+                        console.log('🔍 No matching participant found for:', participantName, 'Local participant name:', localParticipantName);
+                      }
                     }
                   }
                 }
                 
 
 
+                // Check if this participant is currently selected
+                const isSelected = selectedParticipantId === participant._id;
+                
                 return (
                   <ParticipantThumbnail
                     key={`${participant._id}-${index}`}
@@ -3226,18 +3300,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     videoTrack={videoTrack}
                     audioTrack={audioTrack}
                     isSpeaking={isSpeaking}
-                    isHandRaised={participant.hasHandRaised}
+                    isHandRaised={hasHandRaised}
                     isMuted={participant.micState === 'OFF'}
                     isVideoOff={!videoTrack || (isLocalParticipant && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={participant.role === 'HOST'}
                     isScreenSharing={hasScreenShare}
                     isLocalParticipant={isLocalParticipant}
+                    isSelected={isSelected} // Add selection indicator
                     onClick={() => {
+                      console.log('🎯 Thumbnail clicked - participant:', participant.displayName, 'ID:', participant._id);
                       setSelectedParticipantId(participant._id);
-                      // Navigate to main page after selection
-                      setTimeout(() => {
-                        window.location.href = '/';
-                      }, 500);
+                      // Participant selection only updates the main video display - no navigation needed
                     }}
                   />
                 );
@@ -3577,6 +3650,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               
               // Get the participant for main stage (selected or active speaker or first available)
               const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
+              console.log('🎬 Main video participant:', mainParticipant?.displayName, 'ID:', mainParticipant?._id, 'Selected:', !!selectedParticipant);
               if (!mainParticipant) {
                 return null;
               }
@@ -3588,8 +3662,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainScreenShareTrack = null;
                 let isParticipantScreenSharing = false;
 
-                // ✅ FIX: Use user._id as the identity since that's what LiveKit uses (same as thumbnails)
-                const participantIdentity = mainParticipant.user?._id || mainParticipant.identity;
+                // ✅ CRITICAL FIX: LiveKit uses displayName as identity, not user._id
+                // Try multiple identity formats to match with LiveKit participants
+                const participantIdentity = mainParticipant.displayName || mainParticipant.user?._id || mainParticipant.identity;
+                console.log('🎬 Main Video - Participant:', mainParticipant.displayName, 'Identity:', participantIdentity, 'User ID:', mainParticipant.user?._id);
                 
                 if (liveKitService?.room && mainParticipant._id) {
                   
@@ -3622,13 +3698,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isParticipantScreenSharing = !!mainScreenShareTrack;
                   } else {
                     // Remote participant - get tracks from remoteParticipants
+                    console.log('🎬 Looking for main video remote participant with identity:', participantIdentity);
                     const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    console.log('🎬 Found main video remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
                       // Get CAMERA video track (not screen share)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
                         .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
                       mainVideoTrack = cameraTrackPub?.track;
+                      console.log('🎬 Main video track assigned:', !!mainVideoTrack, 'Source:', cameraTrackPub?.source);
                       
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
@@ -3678,10 +3757,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       const participant = memoizedParticipants.find(p => p._id === participantId);
                       if (participant) {
                         setSelectedParticipantId(participantId);
-                        // Navigate to main page after selection
-                        setTimeout(() => {
-                          window.location.href = '/';
-                        }, 500);
+                        // Participant selection only updates the main video display - no navigation needed
                       }
                     }}
                   />
@@ -3696,10 +3772,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 selectedParticipant={selectedParticipant}
                 onParticipantClick={(participant) => {
                   setSelectedParticipantId(participant._id);
-                  // Navigate to main page after selection
-                  setTimeout(() => {
-                    window.location.href = '/';
-                  }, 500);
+                  // Participant selection only updates the main video display - no navigation needed
                 }}
                 onHandRaiseClick={(participant) => {
                   updateHandRaiseStatus(participant._id, false);

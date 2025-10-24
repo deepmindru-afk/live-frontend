@@ -14,6 +14,7 @@ interface ParticipantThumbnailProps {
   isHost?: boolean;
   isScreenSharing?: boolean;
   isLocalParticipant?: boolean;
+  isSelected?: boolean;
   onClick?: () => void;
 }
 
@@ -30,6 +31,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   isHost = false,
   isScreenSharing = false,
   isLocalParticipant = false,
+  isSelected = false,
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -90,8 +92,14 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
 
   return (
     <div 
-      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''}`}
+      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''} ${isSelected ? styles['selected'] : ''}`}
       onClick={onClick}
+      style={{
+        border: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
+        boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : 'none',
+        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+        transition: 'all 0.3s ease'
+      }}
     >
       {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
       <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant || participantId === 'local'} style={{ display: 'none' }} />
@@ -119,8 +127,22 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       </div>
 
       <div className={styles['thumbnail-info']}>
-        <div className={styles['participant-name']}>
+        <div className={styles['participant-name']} style={{
+          color: isSelected ? '#3b82f6' : 'inherit',
+          fontWeight: isSelected ? 'bold' : 'normal'
+        }}>
           {isHost && <span className={styles['host-badge']}>HOST</span>}
+          {isSelected && (
+            <span style={{ 
+              marginRight: '6px',
+              width: '8px',
+              height: '8px',
+              backgroundColor: '#3b82f6',
+              borderRadius: '50%',
+              display: 'inline-block',
+              verticalAlign: 'middle'
+            }}></span>
+          )}
           {name}
         </div>
         
