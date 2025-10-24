@@ -39,9 +39,15 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
 
       streamRef.current = stream;
 
-      // Create MediaRecorder
+      // Create MediaRecorder with MP4 support
+      let mimeType = 'video/mp4;codecs=h264,aac';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp9,opus';
+        console.warn('MP4 not supported, falling back to WebM');
+      }
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
+        mimeType: mimeType,
         videoBitsPerSecond: 2000000, // 2 Mbps
         audioBitsPerSecond: 128000,  // 128 kbps
       });
@@ -99,9 +105,14 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
     setIsUploading(true);
     
     try {
+      // Determine file extension based on blob type
+      const isMP4 = blob.type.includes('mp4');
+      const fileExtension = isMP4 ? 'mp4' : 'webm';
+      const fileName = `recording_${Date.now()}.${fileExtension}`;
+      
       // Create form data for upload
       const formData = new FormData();
-      formData.append('recording', blob, `recording_${Date.now()}.webm`);
+      formData.append('recording', blob, fileName);
       formData.append('meetingId', meetingId);
       formData.append('userId', userId);
       formData.append('recordingName', `Meeting Recording ${new Date().toLocaleString()}`);
@@ -110,7 +121,8 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
         meetingId,
         userId,
         fileSize: blob.size,
-        fileName: `recording_${Date.now()}.webm`
+        fileName: fileName,
+        mimeType: blob.type
       });
 
       const response = await fetch('https://api.hrdeedu.co.kr/recording-upload/client-recording', {
