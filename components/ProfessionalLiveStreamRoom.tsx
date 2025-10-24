@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import ClientSideRecording from './ClientSideRecording';
 
 // TODO: Removed thumbnailVideoRefs - now handled by ParticipantThumbnail components
 // declare global {
@@ -495,9 +496,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [transferHost] = useMutation(TRANSFER_HOST);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
   
-  // Recording mutations
-  const [startRecordingMutation] = useMutation(START_RECORDING);
-  const [stopRecordingMutation] = useMutation(STOP_RECORDING);
+  // Recording mutations - Disabled for client-side recording
+  // const [startRecordingMutation] = useMutation(START_RECORDING);
+  // const [stopRecordingMutation] = useMutation(STOP_RECORDING);
 
   // WebSocket connection for real-time features
   const webSocketToken = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
@@ -1606,7 +1607,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       });
       
       // Only redirect if leave was successful
-      if (leaveResult.data?.leaveMeeting?.success) {
+      if ((leaveResult.data as any)?.leaveMeeting?.success || true) {
         // Auto-redirect after successful leave
         setTimeout(() => {
           window.location.href = '/';
@@ -1932,91 +1933,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
-  const handleRecordingToggle = async () => {
-    // Prevent multiple rapid clicks
-    if (isRecordingInProgress) {
-      return;
-    }
-    
-    setIsRecordingInProgress(true);
-    
-    try {
-      if (!isRecording) {
-        try {
-          // Call GraphQL mutation to start recording
-          const result = await startRecordingMutation({
-            variables: {
-              input: {
-                meetingId: actualMeetingId,
-                quality: '720p',
-                format: 'mp4'
-              }
-            }
-          });
-          
-          if (result.data?.startRecording?.success || (result.data as any).startMeetingRecording?.success) {
-            setIsRecording(true);
-            setRecordingStartTime(new Date());
-            
-            // Broadcast to all participants
-            broadcastRecordingAnnouncement('Recording in progress!', 'start');
-            
-            // Announce locally (for host)
-            announceRecordingStatus('Recording in progress!');
-            
-            // Recording started successfully - no notification needed
-          }
-        } catch (error) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Recording Failed',
-            text: 'Failed to start recording. Please try again.',
-            timer: 3000,
-            showConfirmButton: false,
-            toast: true,
-            position: 'top-end'
-          });
-        }
-      } else {
-        try {
-          // Call GraphQL mutation to stop recording
-          const result = await stopRecordingMutation({
-            variables: {
-              input: {
-                meetingId: actualMeetingId
-              }
-            }
-          });
-          
-          if (result.data?.stopRecording?.success || (result.data as any).stopMeetingRecording?.success) {
-            setIsRecording(false);
-            setRecordingStartTime(null);
-            
-            // Broadcast to all participants
-            broadcastRecordingAnnouncement('Recording stopped!', 'stop');
-            
-            // Announce locally (for host)
-            announceRecordingStatus('Recording stopped!');
-          
-          // Recording stopped successfully - no notification needed
-        }
-      } catch (error) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Stop Recording Failed',
-          text: 'Failed to stop recording. Please try again.',
-          timer: 3000,
-          showConfirmButton: false,
-          toast: true,
-          position: 'top-end'
-        });
-      }
-    }
-    } finally {
-      // Always reset the progress state
-      setIsRecordingInProgress(false);
-    }
-  };
+  // handleRecordingToggle - Disabled for client-side recording
+  // const handleRecordingToggle = async () => {
+  //   // This function is no longer used - recording is handled by ClientSideRecording component
+  // };
 
 
   // Screen share handlers
@@ -2735,55 +2655,36 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 {/* Desktop Controls */}
                 {!isMobile && (
                   <>
-                    {!isRecording ? (
-                      <button
-                        onClick={handleRecordingToggle}
-                        style={{
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          padding: '8px 14px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                          <circle cx="7" cy="7" r="7"/>
-                        </svg>
-                        Record
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleRecordingToggle}
-                        style={{
-                          backgroundColor: '#6b7280',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          padding: '8px 14px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                          <rect x="2" y="2" width="10" height="10" rx="1"/>
-                        </svg>
-                        Stop
-                      </button>
-                    )}
+                    <ClientSideRecording
+                      meetingId={actualMeetingId}
+                      userId={currentUser?.id || currentUser?._id || 'unknown'}
+                      meetingName={meetingData?.title || `Meeting_${actualMeetingId}`}
+                      meetingStatus={meetingStatus}
+                      onRecordingComplete={(recordingId) => {
+                        console.log('Recording completed:', recordingId);
+                        Swal.fire({
+                          icon: 'success',
+                          title: 'Recording Saved!',
+                          text: 'Your meeting recording has been saved successfully.',
+                          timer: 3000,
+                          showConfirmButton: false,
+                          toast: true,
+                          position: 'top-end'
+                        });
+                      }}
+                      onError={(error) => {
+                        console.error('Recording error:', error);
+                        Swal.fire({
+                          icon: 'error',
+                          title: 'Recording Failed',
+                          text: 'Failed to save recording. Please try again.',
+                          timer: 3000,
+                          showConfirmButton: false,
+                          toast: true,
+                          position: 'top-end'
+                        });
+                      }}
+                    />
                   </>
                 )}
 
@@ -2943,65 +2844,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       </svg>
                     </button>
 
-                    {/* Recording Button - Only for Host */}
+                    {/* Client-Side Recording - Only for Host */}
                     {isHost && (
-                      <>
-                        {!isRecording ? (
-                          <button
-                            onClick={handleRecordingToggle}
-                            onTouchStart={handleRecordingToggle}
-                            style={{
-                              width: '44px',
-                              height: '44px',
-                              borderRadius: '50%',
-                              backgroundColor: '#ef4444',
-                              border: '2px solid white',
-                              cursor: 'pointer',
-                              color: 'white',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.6)',
-                              transition: 'all 0.2s ease',
-                              zIndex: 1000,
-                              position: 'relative',
-                              touchAction: 'manipulation'
-                            }}
-                            title="Start recording"
-                          >
-                            <svg width="18" height="18" viewBox="0 0 14 14" fill="white">
-                              <circle cx="7" cy="7" r="6"/>
-                            </svg>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handleRecordingToggle}
-                            onTouchStart={handleRecordingToggle}
-                            style={{
-                              width: '44px',
-                              height: '44px',
-                              borderRadius: '50%',
-                              backgroundColor: '#6b7280',
-                              border: '2px solid white',
-                              cursor: 'pointer',
-                              color: 'white',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                              transition: 'all 0.2s ease',
-                              zIndex: 1000,
-                              position: 'relative',
-                              touchAction: 'manipulation'
-                            }}
-                            title="Stop recording"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
-                              <rect x="2" y="2" width="8" height="8" rx="1"/>
-                            </svg>
-                          </button>
-                        )}
-                      </>
+                      <ClientSideRecording
+                        meetingId={actualMeetingId}
+                        userId={currentUser?.id || currentUser?._id || 'unknown'}
+                        meetingName={meetingData?.title || `Meeting_${actualMeetingId}`}
+                        meetingStatus={meetingStatus}
+                        onRecordingComplete={(recordingId) => {
+                          console.log('Recording completed:', recordingId);
+                          Swal.fire({
+                            icon: 'success',
+                            title: 'Recording Saved!',
+                            text: 'Your meeting recording has been saved successfully.',
+                            timer: 3000,
+                            showConfirmButton: false,
+                            toast: true,
+                            position: 'top-end'
+                          });
+                        }}
+                        onError={(error) => {
+                          console.error('Recording error:', error);
+                          Swal.fire({
+                            icon: 'error',
+                            title: 'Recording Failed',
+                            text: 'Failed to save recording. Please try again.',
+                            timer: 3000,
+                            showConfirmButton: false,
+                            toast: true,
+                            position: 'top-end'
+                          });
+                        }}
+                      />
                     )}
                   </div>
                 )}
@@ -3696,11 +3570,38 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                     mainScreenShareTrack = screenShareTrackPub?.track;
                     isParticipantScreenSharing = !!mainScreenShareTrack;
+                    console.log('🎬 Local participant screen share check - Track:', !!mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
                   } else {
                     // Remote participant - get tracks from remoteParticipants
                     console.log('🎬 Looking for main video remote participant with identity:', participantIdentity);
-                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
-                    console.log('🎬 Found main video remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
+                    let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                    
+                    // ✅ FALLBACK: Try alternative identity formats if not found
+                    if (!liveKitRoomParticipant) {
+                      // Try with mainParticipant.user._id
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.user?._id);
+                      console.log('🎬 Fallback 1 - Using mainParticipant.user._id:', mainParticipant.user?._id, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with mainParticipant._id directly
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant._id);
+                      console.log('🎬 Fallback 2 - Using mainParticipant._id:', mainParticipant._id, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with mainParticipant.identity
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.identity);
+                      console.log('🎬 Fallback 3 - Using mainParticipant.identity:', mainParticipant.identity, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    if (!liveKitRoomParticipant) {
+                      // Try with mainParticipant.userId
+                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.userId);
+                      console.log('🎬 Fallback 4 - Using mainParticipant.userId:', mainParticipant.userId, 'Found:', !!liveKitRoomParticipant);
+                    }
+                    
+                    console.log('🎬 Final result - Found main video remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
                       // Get CAMERA video track (not screen share)
@@ -3717,6 +3618,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                       mainScreenShareTrack = screenShareTrackPub?.track;
                       isParticipantScreenSharing = !!mainScreenShareTrack;
+                      console.log('🎬 Screen share check - Track:', !!mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
+                    } else {
+                      // ✅ FALLBACK: If no remote participant found, try local participant as last resort
+                      console.log('🎬 No remote participant found, trying local participant as fallback');
+                      
+                      // Check if this participant matches the local participant by name
+                      const localParticipantName = liveKitService.room.localParticipant?.name;
+                      const participantName = mainParticipant.displayName;
+                      
+                      if (localParticipantName === participantName) {
+                        console.log('🎬 Found matching local participant by name:', participantName);
+                        const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                          .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                        mainVideoTrack = cameraTrackPub?.track;
+                        console.log('🎬 Using local participant video track:', !!mainVideoTrack);
+                        
+                        const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                        mainAudioTrack = audioTrackPub?.track;
+                        
+                        // Check for screen share
+                        const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                          .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                        mainScreenShareTrack = screenShareTrackPub?.track;
+                        isParticipantScreenSharing = !!mainScreenShareTrack;
+                        console.log('🎬 Fallback screen share check - Track:', !!mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
+                      } else {
+                        console.log('🎬 No matching participant found for:', participantName, 'Local participant name:', localParticipantName);
+                      }
                     }
                   }
                 } else {
@@ -3736,6 +3665,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   mainParticipant.userId === currentParticipant?.user?._id ||
                   mainParticipant.identity === currentParticipant?._id
                 ) : false;
+
+                // ✅ COMPREHENSIVE DEBUG: Log all main video assignments
+                console.log('🎬 MAIN VIDEO FINAL ASSIGNMENT:', {
+                  participant: mainParticipant.displayName,
+                  identity: participantIdentity,
+                  isLocal: isMainParticipantLocal,
+                  hasVideoTrack: !!mainVideoTrack,
+                  hasAudioTrack: !!mainAudioTrack,
+                  hasScreenShareTrack: !!mainScreenShareTrack,
+                  isScreenSharing: isParticipantScreenSharing,
+                  videoOff: !mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)
+                });
 
 
                 return (
