@@ -105,7 +105,7 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
           style={{
             width: '100%',
             height: '100%',
-            objectFit: isScreenSharing ? 'contain' : 'cover',
+            objectFit: 'cover', // Always cover to fill whole thumbnail
             backgroundColor: isScreenSharing ? '#000000' : '#1f2937',
             borderRadius: isScreenSharing ? '0' : (isMainStage ? '10px' : '6px'),
             minWidth: '100%',

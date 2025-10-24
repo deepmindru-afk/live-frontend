@@ -120,7 +120,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
             playsInline
             muted
             style={{
-              // Mobile screen share fixes
+              // Beautiful screen share styling - no margins or borders
               width: '100%',
               height: '100%',
               objectFit: 'contain', // Show full content without cropping
@@ -130,7 +130,13 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
               visibility: 'visible',
               opacity: 1,
               zIndex: 1,
-              position: 'relative'
+              position: 'relative',
+              border: 'none', // Remove any borders
+              margin: 0, // Remove margins
+              padding: 0, // Remove padding
+              borderRadius: 0, // Remove border radius for full screen effect
+              boxShadow: 'none', // Remove any shadows
+              outline: 'none' // Remove outline
             }}
           />
         ) : (

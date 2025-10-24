@@ -309,6 +309,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Memoize callback functions to prevent new function references on every render
   const handleParticipantClick = useCallback((participant: any) => {
     setSelectedParticipantId(participant._id);
+    
+    // Navigate to main page after selection
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500); // Small delay to ensure state is updated
   }, []);
   
   // Hand raise status update callback
@@ -338,6 +343,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       setThumbnailPanelOpen(true);
     }
   }, [queueState.screenShareMode]);
+
   const [isPiPVisible, setIsPiPVisible] = useState(false);
   const [isPageHidden, setIsPageHidden] = useState(false);
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -382,6 +388,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onError: (error) => {
     }
   });
+
+  // ✅ CRITICAL FIX: Sync LiveKit screen sharing state with queue state
+  useEffect(() => {
+    if (isLiveKitConnected && currentParticipant?._id) {
+      if (liveKitIsScreenSharing && !queueState.screenShareMode) {
+        // LiveKit started screen sharing, update queue state
+        startQueueScreenShare(currentParticipant._id);
+      } else if (!liveKitIsScreenSharing && queueState.screenShareMode) {
+        // LiveKit stopped screen sharing, update queue state
+        stopQueueScreenShare();
+      }
+    }
+  }, [liveKitIsScreenSharing, isLiveKitConnected, currentParticipant?._id, queueState.screenShareMode, startQueueScreenShare, stopQueueScreenShare]);
   
   // Track LiveKit state changes
   const prevLiveKitRef = useRef({
@@ -1577,7 +1596,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           return;
         }
 
-      await leaveMeeting({
+      const leaveResult = await leaveMeeting({
         variables: { 
           input: { 
               participantId: currentParticipant._id
@@ -1585,10 +1604,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
       });
       
-        // Auto-redirect immediately after leaving
-      setTimeout(() => {
-        window.location.href = '/';
-        }, 500);
+      // Only redirect if leave was successful
+      if (leaveResult.data?.leaveMeeting?.success) {
+        // Auto-redirect after successful leave
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1000);
+      } else {
+        throw new Error('Leave meeting failed');
+      }
       }
               } catch (error) {
       Swal.fire({
@@ -1794,7 +1818,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (isLiveKitConnected) {
       try {
         await liveKitToggleScreenShare();
-        setScreenSharing(!screenSharing);
+        // ✅ FIX: Don't manually set screenSharing state - let the useEffect handle it
+        // The LiveKit state change will trigger the useEffect to update queue state
       } catch (error: any) {
         
         // Show user-friendly error message
@@ -1807,7 +1832,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
       }
     } else {
-      setScreenSharing(!screenSharing);
+      // Fallback for when LiveKit is not connected
+      if (currentParticipant?._id) {
+        if (queueState.screenShareMode) {
+          stopQueueScreenShare();
+        } else {
+          startQueueScreenShare(currentParticipant._id);
+        }
+      }
     }
   };
 
@@ -2421,13 +2453,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           style={{
             display: 'flex',
             flexDirection: 'column', // Ensure column layout for proper structure
-            height: '100vh',
+            height: isMobile ? '100vh' : '100vh',
             width: '100vw', // Use full viewport width
             backgroundColor: isVideoPlayerMode ? '#000000' : '#ffffff',
             color: isVideoPlayerMode ? '#ffffff' : '#333333',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             position: 'relative',
             overflow: 'hidden',
+            maxHeight: isMobile ? '100vh' : '100vh', // Ensure it doesn't exceed viewport
             // Video player mode styling
             ...(isVideoPlayerMode && {
               background: 'linear-gradient(135deg, #000000 0%, #1a1a2e 100%)'
@@ -2488,7 +2521,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             overflow: 'hidden',
             // Reserve space for fixed header and bottom bar
             paddingTop: isMobile ? '56px' : '70px',
-            paddingBottom: isMobile ? '70px' : '80px'
+            paddingBottom: isMobile ? '100px' : '80px', // Increased bottom padding for mobile controls
+            minHeight: 0 // Allow flex item to shrink
           }}>
             {/* Mobile Picture-in-Picture Mode */}
             {isPiPVisible && isMobile && (
@@ -2752,112 +2786,227 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   </>
                 )}
 
-                {/* Mobile Controls - Icon Only */}
-                {isMobile && (
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    {!isRecording ? (
-                      <button
-                        onClick={handleRecordingToggle}
-                        onTouchStart={handleRecordingToggle}
+                {/* Mobile Controls - REMOVED FROM TOP HEADER - Now only in bottom control bar */}
+                {false && isMobile && (
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '8px', 
+                    alignItems: 'center',
+                    padding: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    borderRadius: '25px',
+                    backdropFilter: 'blur(10px)',
+                    flexShrink: 0, // Prevent shrinking
+                    minWidth: 'fit-content', // Ensure it doesn't get compressed
+                    overflow: 'visible' // Allow content to be visible
+                  }}>
+                    {/* Microphone Button */}
+                    <button
+                      onClick={handleMicToggle}
+                      onTouchStart={handleMicToggle}
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        backgroundColor: micEnabled ? '#22c55e' : '#ef4444',
+                        border: '2px solid white',
+                        cursor: 'pointer',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        transition: 'all 0.2s ease',
+                        zIndex: 1000,
+                        position: 'relative',
+                        touchAction: 'manipulation'
+                      }}
+                      title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+                    >
+                      {micEnabled ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                          <path d="M12 14c1.66 0 3-1.34 3-3V5a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3z"/>
+                          <path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2z"/>
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                          <path d="M19 11h-1.7a6.97 6.97 0 0 1-.43 2.05l1.23 1.23a8.994 8.994 0 0 0 .9-3.28zM12 3a3 3 0 0 0-3 3v.18l6 6V6a3 3 0 0 0-3-3zM4.27 3L3 4.27l6.01 6.01V11a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52a5 5 0 0 1-5-5H5a7 7 0 0 0 11.29 5.29L19.73 21 21 19.73 4.27 3z"/>
+                        </svg>
+                      )}
+                    </button>
+
+                    {/* Camera Button */}
+                    <button
+                      onClick={handleCameraToggle}
+                      onTouchStart={handleCameraToggle}
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        backgroundColor: cameraEnabled ? '#22c55e' : '#ef4444',
+                        border: '2px solid white',
+                        cursor: 'pointer',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        transition: 'all 0.2s ease',
+                        zIndex: 1000,
+                        position: 'relative',
+                        touchAction: 'manipulation'
+                      }}
+                      title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
+                    >
+                      {cameraEnabled ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                          <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/>
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                          <path d="M21 6.5l-4 4V7a1 1 0 0 0-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                        </svg>
+                      )}
+                    </button>
+
+                    {/* Screen Share Button */}
+                    <button
+                      onClick={handleStopScreenShare}
+                      onTouchStart={handleStopScreenShare}
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        backgroundColor: screenSharing ? '#3b82f6' : '#6b7280',
+                        border: '2px solid white',
+                        cursor: 'pointer',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        transition: 'all 0.2s ease',
+                        zIndex: 1000,
+                        position: 'relative',
+                        touchAction: 'manipulation'
+                      }}
+                      title={screenSharing ? 'Stop sharing' : 'Share screen'}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </button>
+
+                    {/* Thumbnail Toggle Button */}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setThumbnailPanelOpen(!thumbnailPanelOpen);
+                      }}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setThumbnailPanelOpen(!thumbnailPanelOpen);
+                      }}
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        backgroundColor: thumbnailPanelOpen ? '#3b82f6' : '#6b7280',
+                        border: '2px solid white',
+                        cursor: 'pointer',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        transition: 'all 0.2s ease',
+                        zIndex: 1000,
+                        position: 'relative',
+                        touchAction: 'manipulation'
+                      }}
+                      title={thumbnailPanelOpen ? 'Hide participants' : 'Show participants'}
+                    >
+                      <svg 
+                        width="20" 
+                        height="20" 
+                        viewBox="0 0 24 24" 
+                        fill="white"
                         style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '50%',
-                          backgroundColor: '#ef4444',
-                          border: '3px solid white',
-                          cursor: 'pointer',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.6)',
-                          transition: 'all 0.2s ease',
-                          zIndex: 1000,
-                          position: 'relative',
-                          touchAction: 'manipulation'
+                          transform: thumbnailPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
                         }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 14 14" fill="white">
-                          <circle cx="7" cy="7" r="6"/>
-                        </svg>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleRecordingToggle}
-                        onTouchStart={handleRecordingToggle}
-                        style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '50%',
-                          backgroundColor: '#6b7280',
-                          border: '3px solid white',
-                          cursor: 'pointer',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                          transition: 'all 0.2s ease',
-                          zIndex: 1000,
-                          position: 'relative',
-                          touchAction: 'manipulation'
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
-                          <rect x="2" y="2" width="8" height="8" rx="1"/>
-                        </svg>
-                      </button>
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </button>
+
+                    {/* Recording Button - Only for Host */}
+                    {isHost && (
+                      <>
+                        {!isRecording ? (
+                          <button
+                            onClick={handleRecordingToggle}
+                            onTouchStart={handleRecordingToggle}
+                            style={{
+                              width: '44px',
+                              height: '44px',
+                              borderRadius: '50%',
+                              backgroundColor: '#ef4444',
+                              border: '2px solid white',
+                              cursor: 'pointer',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.6)',
+                              transition: 'all 0.2s ease',
+                              zIndex: 1000,
+                              position: 'relative',
+                              touchAction: 'manipulation'
+                            }}
+                            title="Start recording"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 14 14" fill="white">
+                              <circle cx="7" cy="7" r="6"/>
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleRecordingToggle}
+                            onTouchStart={handleRecordingToggle}
+                            style={{
+                              width: '44px',
+                              height: '44px',
+                              borderRadius: '50%',
+                              backgroundColor: '#6b7280',
+                              border: '2px solid white',
+                              cursor: 'pointer',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                              transition: 'all 0.2s ease',
+                              zIndex: 1000,
+                              position: 'relative',
+                              touchAction: 'manipulation'
+                            }}
+                            title="Stop recording"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
+                              <rect x="2" y="2" width="8" height="8" rx="1"/>
+                            </svg>
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
               </>
             )}
             
-            {/* Toggle Thumbnail Panel Arrow */}
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setThumbnailPanelOpen(!thumbnailPanelOpen);
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setThumbnailPanelOpen(!thumbnailPanelOpen);
-              }}
-              style={{
-                touchAction: 'manipulation',
-                backgroundColor: isMobile ? 'rgba(255, 0, 0, 0.3)' : 'transparent', // Debug: red background on mobile
-                border: isMobile ? '2px solid red' : 'none', // Debug: red border on mobile
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '8px',
-                minWidth: isMobile ? '44px' : 'auto',
-                minHeight: isMobile ? '44px' : 'auto',
-                WebkitTapHighlightColor: 'transparent',
-                zIndex: 1001,
-                position: 'relative' // Ensure proper positioning
-              }}
-            >
-              <svg 
-                width="24" 
-                height="24" 
-                viewBox="0 0 24 24" 
-                fill="none"
-                stroke="#374151"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  transform: thumbnailPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease'
-                }}
-              >
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </button>
         </div>
       </div>
 
@@ -2887,14 +3036,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 if (rightArrow) rightArrow.style.opacity = '0';
               }}
               style={{
-                height: isMobile ? '15vh' : '18vh', // Responsive height using viewport units
+                height: isMobile ? '15vh' : '20vh', // Increased height for desktop to accommodate padding
                 width: '100%',
               backgroundColor: '#ffffff',
                 borderTop: !isMobile ? '1px solid #e5e7eb' : 'none',
                 borderBottom: isMobile ? '1px solid #e5e7eb' : 'none',
               display: 'flex',
               alignItems: 'center',
-                padding: isMobile ? '0 8px' : '0 16px',
+                padding: isMobile ? '0 8px' : '8px 16px', // Added top/bottom padding for desktop
                 gap: isMobile ? '12px' : '16px',
                 justifyContent: 'flex-start', // Start from left side
                 overflowX: isMobile ? 'auto' : 'hidden',
@@ -2907,7 +3056,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
                 flexDirection: 'row', // Always horizontal for better desktop layout
                 minWidth: 'auto',
-                maxWidth: '100%'
+                maxWidth: '100%',
+                boxSizing: 'border-box' // Ensure padding is included in height calculation
               }}>
               {/* Desktop Hover Arrows */}
               {!isMobile && (
@@ -3084,6 +3234,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isLocalParticipant={isLocalParticipant}
                     onClick={() => {
                       setSelectedParticipantId(participant._id);
+                      // Navigate to main page after selection
+                      setTimeout(() => {
+                        window.location.href = '/';
+                      }, 500);
                     }}
                   />
                 );
@@ -3105,7 +3259,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             position: 'relative',
             padding: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
             paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
+            margin: queueState.screenShareMode ? '0' : '0', // Remove margins during screen share
             marginTop: '0',
+            border: queueState.screenShareMode ? 'none' : 'none', // Remove borders during screen share
+            borderRadius: queueState.screenShareMode ? '0' : '0', // Remove border radius during screen share
+            boxShadow: queueState.screenShareMode ? 'none' : 'none', // Remove shadows during screen share
             overflow: 'hidden',
             transition: 'flex 0.3s ease' // Smooth transition when toggling
           }}>
@@ -3520,7 +3678,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       const participant = memoizedParticipants.find(p => p._id === participantId);
                       if (participant) {
                         setSelectedParticipantId(participantId);
-                        // Main stage participant selected
+                        // Navigate to main page after selection
+                        setTimeout(() => {
+                          window.location.href = '/';
+                        }, 500);
                       }
                     }}
                   />
@@ -3535,6 +3696,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 selectedParticipant={selectedParticipant}
                 onParticipantClick={(participant) => {
                   setSelectedParticipantId(participant._id);
+                  // Navigate to main page after selection
+                  setTimeout(() => {
+                    window.location.href = '/';
+                  }, 500);
                 }}
                 onHandRaiseClick={(participant) => {
                   updateHandRaiseStatus(participant._id, false);
@@ -3552,7 +3717,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
           {/* Video Player Control Bar - Auto-hide */}
           <div style={{
-            height: isMobile ? '70px' : '80px',
+            height: isMobile ? '80px' : '80px', // Increased height for mobile
             backgroundColor: isVideoPlayerMode 
               ? (showControls ? 'rgba(0, 0, 0, 0.9)' : 'transparent')
               : '#ffffff',
@@ -3562,7 +3727,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: isMobile ? '0 12px' : '0 24px',
+            padding: isMobile ? '8px 12px' : '0 24px', // Added top padding for mobile
             boxShadow: isVideoPlayerMode 
               ? (showControls ? '0 -2px 10px rgba(0,0,0,0.3)' : 'none')
               : '0 -2px 8px rgba(0,0,0,0.1)',
@@ -3576,9 +3741,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             transform: isVideoPlayerMode 
               ? (showControls ? 'translateY(0)' : 'translateY(100%)')
               : 'translateY(0)',
-            backdropFilter: isVideoPlayerMode && showControls ? 'blur(10px)' : 'none'
+            backdropFilter: isVideoPlayerMode && showControls ? 'blur(10px)' : 'none',
+            // Ensure mobile controls are always visible
+            minHeight: isMobile ? '80px' : '80px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '16px' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: isMobile ? '10px' : '16px',
+              width: '100%',
+              justifyContent: 'center',
+              flexWrap: isMobile ? 'nowrap' : 'wrap', // Prevent wrapping on mobile
+              overflow: 'visible' // Ensure content is visible
+            }}>
               {/* Participant Count */}
               <div style={{
                 width: '44px',
@@ -4064,27 +4239,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           </div>
         </div>
         
-        {/* Mobile Debug Overlay */}
+        {/* Mobile Debug Overlay - Simplified */}
         {isMobile && (
           <div style={{
             position: 'fixed',
             top: '10px',
             left: '10px',
-            background: 'rgba(0,0,0,0.8)',
+            background: 'rgba(0,0,0,0.7)',
             color: 'white',
-            padding: '8px',
-            borderRadius: '4px',
-            fontSize: '12px',
+            padding: '6px 8px',
+            borderRadius: '6px',
+            fontSize: '11px',
             zIndex: 9999,
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            backdropFilter: 'blur(5px)'
           }}>
-            MOBILE MODE ACTIVE<br/>
-            Recording: {isRecording ? 'ON' : 'OFF'}<br/>
-            PiP: {isPiPVisible ? 'ON' : 'OFF'}<br/>
-            Fullscreen: {isFullscreen ? 'ON' : 'OFF'}<br/>
-            LiveKit: {isLiveKitConnected ? 'CONNECTED' : 'DISCONNECTED'}<br/>
-            Participants: {liveKitParticipants.size}<br/>
-            Thumbnails: {thumbnailPanelOpen ? 'OPEN' : 'CLOSED'}
+            📱 Mobile | 🎥 {isRecording ? 'REC' : 'LIVE'} | 👥 {liveKitParticipants.size} | 📋 {thumbnailPanelOpen ? 'SHOW' : 'HIDE'}
           </div>
         )}
       </>
