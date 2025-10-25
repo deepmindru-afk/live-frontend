@@ -49,6 +49,7 @@ const Dashboard: React.FC = () => {
   
   // VOD state
   const [vods, setVods] = useState<VOD[]>([]);
+  const [vodAccessDenied, setVodAccessDenied] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showURLModal, setShowURLModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -172,6 +173,46 @@ const Dashboard: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showVODMenu]);
+
+  // Load VODs when VOD tab is selected
+  useEffect(() => {
+    if (activeTab === 'VOD') {
+      console.log('📹 VOD tab selected - attempting to load VODs');
+      // Define loadVODs inline to avoid dependency issues
+      const fetchVODs = async () => {
+        try {
+          const result = await enhancedMakeGraphQLRequest(GET_VODS, {
+            input: { limit: 50, offset: 0 }
+          });
+          
+          if (result && result.getAllVods && result.getAllVods.vods) {
+            console.log('📊 Raw VODs data:', JSON.stringify(result.getAllVods.vods, null, 2));
+            setVods(result.getAllVods.vods);
+            console.log('✅ VODs loaded successfully, count:', result.getAllVods.vods.length);
+            
+            // Log each VOD's meetingId
+            result.getAllVods.vods.forEach((vod: any, idx: number) => {
+              console.log(`📹 VOD ${idx + 1}: title="${vod.title}", meetingId="${vod.meetingId}" (type: ${typeof vod.meetingId})`);
+            });
+          } else {
+            console.log('⚠️ No VODs found');
+            setVods([]);
+          }
+        } catch (error: any) {
+          // Handle role permission error gracefully
+          if (error && (error.message === 'ONLY_SPECIFIC_ROLES_ALLOWED' || error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || error.status === 403)) {
+            console.warn('⚠️ Instructor role cannot access VOD API - recording status unavailable');
+            setVods([]);
+            setVodAccessDenied(true); // Mark that VOD access is denied
+            return;
+          }
+          console.error('❌ Failed to load VODs:', error);
+          setVods([]);
+        }
+      };
+      fetchVODs();
+    }
+  }, [activeTab]);
 
   const testBackendConnection = async () => {
     try {
@@ -1119,6 +1160,30 @@ const Dashboard: React.FC = () => {
               {activeTab === 'VOD' ? (
                 /* VOD Management Section */
                 <div>
+                  {/* Warning Banner for VOD Access */}
+                  {vodAccessDenied && (
+                    <div style={{
+                      backgroundColor: '#fff3cd',
+                      border: '1px solid #ffc107',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginBottom: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <span style={{ fontSize: '20px' }}>⚠️</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '600', color: '#856404', fontSize: '14px', marginBottom: '4px' }}>
+                          기록 상태 확인 불가
+                        </div>
+                        <div style={{ color: '#856404', fontSize: '13px' }}>
+                          강사 권한으로는 녹화 상태를 확인할 수 없습니다. 관리자에게 문의하세요.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Meetings Table with Recording Status - Responsive */}
                   <div className="meetings-table" style={{ overflowX: 'auto' }}>
                     {filteredMeetings.length > 0 ? (
@@ -1136,7 +1201,13 @@ const Dashboard: React.FC = () => {
                             </thead>
                             <tbody>
                               {filteredMeetings.map((meeting, index) => {
-                                const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
+                                const hasRecording = vods.some(vod => {
+                                  const match = vod.meetingId === meeting._id;
+                                  if (index < 3) { // Log first 3 meetings
+                                    console.log(`🔍 Meeting "${meeting.title}": id="${meeting._id}" (${typeof meeting._id}) vs VOD meetingId="${vod.meetingId}" (${typeof vod.meetingId}) → ${match ? '✅ MATCH' : '❌ NO MATCH'}`);
+                                  }
+                                  return match;
+                                });
                                 return (
                                   <tr key={meeting._id} style={{ borderBottom: '1px solid #dee2e6' }}>
                                     <td style={{ padding: '12px' }}>{index + 1}</td>
@@ -1145,20 +1216,37 @@ const Dashboard: React.FC = () => {
                                       {formatDate(meeting.createdAt)}
                                     </td>
                                     <td style={{ padding: '12px' }}>
-                                      <span
-                                        style={{
-                                          padding: '6px 12px',
-                                          borderRadius: '20px',
-                                          fontSize: '13px',
-                                          fontWeight: '600',
-                                          backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
-                                          color: hasRecording ? '#28a745' : '#dc3545',
-                                          border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`,
-                                          display: 'inline-block'
-                                        }}
-                                      >
-                                        {hasRecording ? '✅ 기록됨' : '❌ 기록 안됨'}
-                                      </span>
+                                      {vodAccessDenied ? (
+                                        <span
+                                          style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '20px',
+                                            fontSize: '13px',
+                                            fontWeight: '600',
+                                            backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                                            color: '#6c757d',
+                                            border: '1px solid #6c757d',
+                                            display: 'inline-block'
+                                          }}
+                                        >
+                                          ⚠️ 확인 불가
+                                        </span>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '20px',
+                                            fontSize: '13px',
+                                            fontWeight: '600',
+                                            backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                                            color: hasRecording ? '#28a745' : '#dc3545',
+                                            border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`,
+                                            display: 'inline-block'
+                                          }}
+                                        >
+                                          {hasRecording ? '✅ 기록됨' : '❌ 기록 안됨'}
+                                        </span>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -1194,12 +1282,12 @@ const Dashboard: React.FC = () => {
                                       borderRadius: '20px',
                                       fontSize: '11px',
                                       fontWeight: '600',
-                                      backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
-                                      color: hasRecording ? '#28a745' : '#dc3545',
-                                      border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`
+                                      backgroundColor: vodAccessDenied ? 'rgba(108, 117, 125, 0.1)' : (hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)'),
+                                      color: vodAccessDenied ? '#6c757d' : (hasRecording ? '#28a745' : '#dc3545'),
+                                      border: `1px solid ${vodAccessDenied ? '#6c757d' : (hasRecording ? '#28a745' : '#dc3545')}`
                                     }}
                                   >
-                                    {hasRecording ? '✅' : '❌'}
+                                    {vodAccessDenied ? '⚠️' : (hasRecording ? '✅' : '❌')}
                                   </span>
                                 </div>
                                 <div style={{ fontSize: '13px', color: '#666' }}>
