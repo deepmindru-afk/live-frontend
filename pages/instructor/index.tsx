@@ -186,14 +186,8 @@ const Dashboard: React.FC = () => {
           });
           
           if (result && result.getAllVods && result.getAllVods.vods) {
-            console.log('📊 Raw VODs data:', JSON.stringify(result.getAllVods.vods, null, 2));
             setVods(result.getAllVods.vods);
             console.log('✅ VODs loaded successfully, count:', result.getAllVods.vods.length);
-            
-            // Log each VOD's meetingId
-            result.getAllVods.vods.forEach((vod: any, idx: number) => {
-              console.log(`📹 VOD ${idx + 1}: title="${vod.title}", meetingId="${vod.meetingId}" (type: ${typeof vod.meetingId})`);
-            });
           } else {
             console.log('⚠️ No VODs found');
             setVods([]);
@@ -1201,13 +1195,7 @@ const Dashboard: React.FC = () => {
                             </thead>
                             <tbody>
                               {filteredMeetings.map((meeting, index) => {
-                                const hasRecording = vods.some(vod => {
-                                  const match = vod.meetingId === meeting._id;
-                                  if (index < 3) { // Log first 3 meetings
-                                    console.log(`🔍 Meeting "${meeting.title}": id="${meeting._id}" (${typeof meeting._id}) vs VOD meetingId="${vod.meetingId}" (${typeof vod.meetingId}) → ${match ? '✅ MATCH' : '❌ NO MATCH'}`);
-                                  }
-                                  return match;
-                                });
+                                const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
                                 return (
                                   <tr key={meeting._id} style={{ borderBottom: '1px solid #dee2e6' }}>
                                     <td style={{ padding: '12px' }}>{index + 1}</td>
