@@ -225,6 +225,20 @@ const AttendancePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantAttendance | null>(null);
   const [showParticipantModal, setShowParticipantModal] = useState(false);
+  const [screenWidth, setScreenWidth] = useState<number>(0);
+
+  useEffect(() => {
+    // Set initial width
+    setScreenWidth(typeof window !== 'undefined' ? window.innerWidth : 0);
+    
+    // Handle resize
+    const handleResize = () => {
+      setScreenWidth(window.innerWidth);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (router.isReady && meetingId) {
@@ -768,7 +782,7 @@ const AttendancePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Attendance Table with Glassmorphism */}
+        {/* Attendance Table with Glassmorphism - Responsive */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -782,10 +796,12 @@ const AttendancePage: React.FC = () => {
             overflow: 'hidden'
           }}
         >
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse'
-          }}>
+          {/* Desktop Table */}
+          <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse'
+            }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa' }}>
                 <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>No.</th>
@@ -968,6 +984,176 @@ const AttendancePage: React.FC = () => {
               })}
             </tbody>
           </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
+            {filteredParticipants.map((participant, index) => {
+              const totalMeetingDuration = getTotalMeetingDuration();
+              const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+              
+              return (
+                <div
+                  key={participant._id}
+                  onClick={() => handleParticipantClick(participant)}
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                    border: '1px solid #e9ecef',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)';
+                  }}
+                >
+                  {/* Header with avatar and name */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    {participant.avatarUrl ? (
+                      <img 
+                        src={participant.avatarUrl} 
+                        alt={participant.displayName}
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          border: '2px solid #e9ecef'
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: '20px',
+                        fontWeight: 'bold'
+                      }}>
+                        {participant.displayName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '600', fontSize: '16px', color: '#333', marginBottom: '4px' }}>
+                        {participant.displayName}
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          backgroundColor: participant.status === 'ONLINE' ? 'rgba(40, 167, 69, 0.1)' : 
+                                         participant.status === 'PRESENT' ? 'rgba(23, 162, 184, 0.1)' : 
+                                         participant.status === 'LEFT' ? 'rgba(108, 117, 125, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                          color: participant.status === 'ONLINE' ? '#28a745' : 
+                                 participant.status === 'PRESENT' ? '#17a2b8' : 
+                                 participant.status === 'LEFT' ? '#6c757d' : '#dc3545'
+                        }}>
+                          {participant.status === 'ONLINE' ? '🟢 온라인' : 
+                           participant.status === 'PRESENT' ? '🔵 참석' : 
+                           participant.status === 'LEFT' ? '⚪ 퇴장' : '🔴 미정'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info Cards Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                    {/* 참석 시간 */}
+                    <div style={{
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>⏰ 참석</div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>
+                        {formatTime(participant.joinedAt).split(' ').slice(-2).join(' ')}
+                      </div>
+                    </div>
+
+                    {/* 퇴장 시간 */}
+                    <div style={{
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>🚪 퇴장</div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>
+                        {participant.leftAt ? formatTime(participant.leftAt).split(' ').slice(-2).join(' ') : '진행 중'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Attendance Rate with Progress Bar */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>📊 출석률</span>
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: attendancePercentage >= 80 ? '#28a745' : 
+                               attendancePercentage >= 50 ? '#ffc107' : '#dc3545'
+                      }}>
+                        {attendancePercentage}%
+                      </span>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '10px',
+                      backgroundColor: '#e9ecef',
+                      borderRadius: '10px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${Math.min(attendancePercentage, 100)}%`,
+                        height: '100%',
+                        background: attendancePercentage >= 80 ? 'linear-gradient(90deg, #28a745 0%, #20c997 100%)' :
+                                   attendancePercentage >= 50 ? 'linear-gradient(90deg, #ffc107 0%, #ffb300 100%)' :
+                                   'linear-gradient(90deg, #dc3545 0%, #c82333 100%)',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                      참여: {formatDuration(participant.totalTime)}
+                    </div>
+                  </div>
+
+                  {/* Mic/Camera Status */}
+                  <div style={{ display: 'flex', justifyContent: 'space-around', paddingTop: '8px', borderTop: '1px solid #e9ecef' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '16px' }}>{participant.micState === 'ON' ? '🎤' : '🔇'}</span>
+                      <span style={{ fontSize: '12px', color: '#666' }}>마이크</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '16px' }}>{participant.cameraState === 'ON' ? '📹' : '📷'}</span>
+                      <span style={{ fontSize: '12px', color: '#666' }}>카메라</span>
+                    </div>
+                    {participant.hasHandRaised && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '16px' }}>✋</span>
+                        <span style={{ fontSize: '12px', color: '#ffc107', fontWeight: '600' }}>손들기</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </motion.div>
 
         {/* Participant Detail Modal */}

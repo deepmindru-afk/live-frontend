@@ -5,7 +5,7 @@ import { isAuthenticated, getCurrentUser } from '../../lib/simple-auth-handlers'
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS } from '../../apollo/meeting/queries';
-import ProfileDropdown from '../../components/ProfileDropdown';
+import { handleLogout } from '../../lib/simple-auth-handlers';
 
 interface Meeting {
   _id: string;
@@ -241,9 +241,46 @@ const SimpleDashboard: React.FC = () => {
           <div className="logo">
             <h1>HRDe Live</h1>
           </div>
-          <div className="user-info">
-            {user && <ProfileDropdown user={user} />}
-          </div>
+          <button
+            onClick={async () => {
+              try {
+                await handleLogout();
+                router.push('/');
+              } catch (error) {
+                console.error('Logout failed:', error);
+              }
+            }}
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(10px)',
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16,17 21,12 16,7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>로그아웃</span>
+          </button>
         </div>
 
         <div className="dashboard-content">

@@ -8,7 +8,7 @@ import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateM
 import { GET_TUTOR_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { GET_VODS } from '../../apollo/vod/queries';
 import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../apollo/vod/mutations';
-import ProfileDropdown from '../../components/ProfileDropdown';
+import { handleLogout } from '../../lib/simple-auth-handlers';
 import Swal from 'sweetalert2';
 import { isValidObjectId } from '../../lib/validation';
 
@@ -59,41 +59,97 @@ const Dashboard: React.FC = () => {
   
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Screen width for responsive design
+  const [screenWidth, setScreenWidth] = useState<number>(0);
+
+  useEffect(() => {
+    // Set initial width
+    setScreenWidth(typeof window !== 'undefined' ? window.innerWidth : 0);
+    
+    // Handle resize
+    const handleResize = () => {
+      setScreenWidth(window.innerWidth);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (isAuthenticated()) {
-          const userData = await getCurrentUser();
-          
-          // Only allow TUTOR role to access this instructor dashboard
-          if (userData && userData.systemRole === 'TUTOR') {
-            setUser(userData);
-            await testBackendConnection();
-            await fetchMeetings();
-            // Load VODs with error handling
-            try {
-              await loadVODs();
-            } catch (vodError: any) {
-              console.warn('⚠️ VOD loading failed (non-critical):', vodError.message);
-              setVods([]); // Set empty VOD list
-            }
-          } else {
-            // Redirect based on role
-            if (userData && userData.systemRole === 'MEMBER') {
-              window.location.href = '/member';
-            } else if (userData && userData.systemRole === 'ADMIN') {
-              window.location.href = '/dashboard';
-            } else {
-              // User not found or invalid role
-              await showErrorAlert('Authentication Error', 'User not found or invalid role. Please log in again.');
-              window.location.href = '/login';
-            }
-          }
-        } else {
+        console.log('🔍 Instructor page - Starting auth check...');
+        
+        // Add a delay to ensure localStorage is accessible after redirect
+        // Increased delay to allow token to be properly saved
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check if user is authenticated
+        const authStatus = isAuthenticated();
+        console.log('🔍 Instructor page - isAuthenticated():', authStatus);
+        
+        if (!authStatus) {
+          console.log('❌ No authentication found, clearing stale tokens and redirecting to login');
+          // Clear any stale/invalid tokens
+          localStorage.removeItem('jwt');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
           window.location.href = '/login';
+          return;
+        }
+
+        // Get user data directly from localStorage (no API call)
+        // This is faster and avoids token race conditions
+        let userData = null;
+        const userStr = localStorage.getItem('user');
+        
+        if (userStr) {
+          try {
+            userData = JSON.parse(userStr);
+            console.log('✅ Got user from localStorage:', userData);
+          } catch (e) {
+            console.error('❌ Failed to parse user from localStorage:', e);
+          }
+        }
+        
+        console.log('🔍 Instructor page - userData:', userData ? 'found' : 'null');
+        
+        if (!userData) {
+          console.log('❌ No user data in localStorage, clearing and redirecting to login');
+          // Clear any stale data
+          localStorage.removeItem('jwt');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+          return;
+        }
+
+        console.log('✅ User authenticated:', userData);
+        
+        // Only allow TUTOR role to access this instructor dashboard
+        if (userData.systemRole === 'TUTOR') {
+          setUser(userData);
+          await testBackendConnection();
+          await fetchMeetings();
+          // Skip loading VODs since we only show meetings in VOD tab now
+          // Set empty VOD list to avoid errors
+          setVods([]);
+        } else {
+          // Redirect based on role
+          console.log('⚠️ Wrong role, redirecting user with role:', userData.systemRole);
+          if (userData.systemRole === 'MEMBER') {
+            window.location.href = '/member';
+          } else if (userData.systemRole === 'ADMIN') {
+            window.location.href = '/dashboard';
+          } else {
+            // User not found or invalid role
+            await showErrorAlert('Authentication Error', 'Invalid user role. Please log in again.');
+            window.location.href = '/login';
+          }
         }
       } catch (error: any) {
+        console.error('❌ Authentication check failed:', error);
         await showErrorAlert('Authentication Error', 'Failed to verify user. Please log in again.');
         window.location.href = '/login';
       } finally {
@@ -150,6 +206,19 @@ const Dashboard: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
+      // Add a small delay to ensure token is saved
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check if token exists
+      const { getAuthToken } = await import('../../lib/simple-auth-handlers');
+      const token = getAuthToken();
+      console.log('🔍 Token in fetchMeetings:', token ? 'Found' : 'Missing');
+      
+      if (!token) {
+        console.error('❌ No token found, cannot fetch meetings');
+        setMeetings([]);
+        return;
+      }
       
       // Get current user info
       const userStr = localStorage.getItem('user');
@@ -171,12 +240,19 @@ const Dashboard: React.FC = () => {
           }
         });
         
+        // Check if result is null
+        if (!result) {
+          console.warn('⚠️ GraphQL returned null - showing empty meetings list');
+          // Don't redirect to login - just show empty state
+          // The actual GraphQL error handling happens in makeGraphQLRequest
+          setMeetings([]);
+          return;
+        }
         
         if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
           const meetings: Meeting[] = result.getMeetings.meetings.map((meeting: any) => {
             // Check if current user is still the host of this meeting
-            const isCurrentUserHost = meeting.hostId === currentUserId || 
-                                    (meeting.host && meeting.host._id === currentUserId);
+            const isCurrentUserHost = meeting.host && meeting.host._id === currentUserId;
             
             // Debug logging
             
@@ -211,71 +287,16 @@ const Dashboard: React.FC = () => {
           setMeetings(meetings);
           return;
         }
-      } catch (graphqlError) {
+      } catch (graphqlError: any) {
+        console.error('❌ Meeting loading failed:', graphqlError);
         
-        // Try without hostId filter to see if there are any meetings
-        try {
-          const { makeGraphQLRequest: fallbackMakeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
-          const fallbackResult = await fallbackMakeGraphQLRequest(GET_TUTOR_MEETINGS, {
-            input: {
-              limit: 50,
-              page: 1
-            }
-          });
-          
-          
-          if (fallbackResult.getMeetings && fallbackResult.getMeetings.meetings && Array.isArray(fallbackResult.getMeetings.meetings)) {
-            const meetings: Meeting[] = fallbackResult.getMeetings.meetings.map((meeting: any) => {
-              // Check if current user is still the host of this meeting
-              const isCurrentUserHost = meeting.hostId === currentUserId || 
-                                      (meeting.host && meeting.host._id === currentUserId);
-              
-              // Determine status based on whether user is still host
-              let status: 'LIVE' | 'STARTED' | 'SCHEDULED' | 'ENDED';
-              if (isCurrentUserHost) {
-                // User is still the host, show actual meeting status
-                status = meeting.status === 'LIVE' ? 'LIVE' :
-                        meeting.status === 'CREATED' ? 'LIVE' : 
-                        meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                        meeting.status === 'ENDED' ? 'ENDED' : 'LIVE';
-              } else {
-                // User is no longer the host (transferred), show as ENDED
-                status = 'ENDED';
-              }
-              
-              return {
-                _id: meeting._id,
-                title: meeting.title,
-                status: status,
-                schedule: meeting.scheduledFor,
-                inviteCode: meeting.inviteCode,
-                createdAt: meeting.createdAt,
-                updatedAt: meeting.updatedAt || meeting.createdAt,
-                participantCount: meeting.participantCount || 0,
-                duration: meeting.durationMin,
-                isCurrentUserHost: isCurrentUserHost // Add this for debugging
-              };
-            });
-            
-            setMeetings(meetings);
-            return;
-          }
-        } catch (fallbackError) {
-          console.error('❌ Meeting loading failed:', fallbackError);
-          
-          // Final fallback: Show empty state without blocking the UI
-          setMeetings([]);
-          
-          // Check if it's an authentication error
-          if (fallbackError instanceof Error && 
-              (fallbackError.message?.includes('TOKEN_NOT_EXIST') || 
-               fallbackError.message?.includes('Authentication'))) {
-            // Don't show error modal for auth issues - user can still use other features
-            console.warn('⚠️ Authentication required for loading meetings');
-            return;
-          }
-          
-          // Only show error modal for actual connection issues
+        // For ALL errors, just show empty state - don't redirect
+        // The auth check at page load will handle authentication issues
+        console.warn('⚠️ Failed to load meetings - showing empty state');
+        setMeetings([]);
+        
+        // Only show error modal for actual connection issues (not auth issues)
+        if (!graphqlError.message?.includes('TOKEN_NOT_EXIST') && !graphqlError.message?.includes('Authentication')) {
           Swal.fire({
             title: 'Unable to Load Meetings',
             text: 'There was an issue connecting to the server. Please check your connection and try again.',
@@ -292,15 +313,8 @@ const Dashboard: React.FC = () => {
     } catch (error: any) {
       console.error('❌ fetchMeetings error:', error);
       
-      // Check if it's an authentication error
-      if (error && (error.message?.includes('TOKEN_NOT_EXIST') || error.message?.includes('Authentication'))) {
-        console.warn('⚠️ Authentication required for loading meetings');
-        setMeetings([]);
-        return;
-      }
-      
-      // Show error but don't block the UI for other errors
-      console.warn('⚠️ Server connection issue - showing empty meetings list');
+      // For ALL errors, just show empty state - don't redirect
+      console.warn('⚠️ Failed to load meetings - showing empty state');
       setMeetings([]);
     }
   };
@@ -799,46 +813,39 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-
-    const result = await Swal.fire({
-      title: 'VOD 삭제',
-      text: `"${vod.title}"을(를) 삭제하시겠습니까?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '삭제',
-      cancelButtonText: '취소',
-      confirmButtonColor: '#dc3545'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const deleteResult = await enhancedMakeGraphQLRequest(DELETE_VOD, { id: vodId });
-        
-        await Swal.fire({
-          icon: 'success',
-          title: '삭제 완료',
-          text: 'VOD가 성공적으로 삭제되었습니다.',
-          timer: 2000,
-          showConfirmButton: false
-        });
-        
-        loadVODs();
-      } catch (error) {
-        await Swal.fire({
-          icon: 'error',
-          title: '삭제 실패',
-          text: 'VOD 삭제 중 오류가 발생했습니다.',
-          confirmButtonText: '확인'
-        });
-      }
-    } else {
+    try {
+      const deleteResult = await enhancedMakeGraphQLRequest(DELETE_VOD, { id: vodId });
+      
+      await Swal.fire({
+        icon: 'success',
+        title: '삭제 완료',
+        text: 'VOD가 성공적으로 삭제되었습니다.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+      
+      loadVODs();
+    } catch (error) {
+      await Swal.fire({
+        icon: 'error',
+        title: '삭제 실패',
+        text: 'VOD 삭제 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
     }
     closeVODMenu();
   };
 
   const filteredMeetings = meetings.filter(meeting => {
-    // Filter by status
-    if (activeTab === 'VOD') return false;
+    // For VOD tab, show all meetings (no status filter)
+    if (activeTab === 'VOD') {
+      const searchMatch = !searchQuery || 
+        meeting.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        meeting.inviteCode.toLowerCase().includes(searchQuery.toLowerCase());
+      return searchMatch;
+    }
+    
+    // Filter by status for other tabs
     if (activeTab !== 'LIVE' && activeTab !== 'SCHEDULED' && activeTab !== 'ENDED') return true;
     
     // Map statuses for filtering
@@ -879,19 +886,82 @@ const Dashboard: React.FC = () => {
       
       <div className="dashboard-container">
         {/* Header */}
-        <div className="dashboard-header">
-          <div className="logo" onClick={() => router.push('/dashboard')}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '20px 30px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
+        }}>
+          <div 
+            onClick={() => router.push('/dashboard')}
+            style={{ cursor: 'pointer' }}
+          >
             <Image
               src="/logoHRDe.png"
               alt="HRDe Live"
               width={120}
               height={40}
-              className="logo-image"
+              style={{ objectFit: 'contain' }}
             />
           </div>
-          <div className="user-info">
-            {user && <ProfileDropdown user={user} />}
-          </div>
+          <button
+            onClick={async () => {
+              try {
+                // Ask for confirmation before logout
+                const result = await Swal.fire({
+                  title: '로그아웃 하시겠습니까?',
+                  text: '정말 로그아웃 하시겠습니까?',
+                  icon: 'warning',
+                  showCancelButton: true,
+                  confirmButtonText: '예, 로그아웃',
+                  cancelButtonText: '취소',
+                  confirmButtonColor: '#d33',
+                  cancelButtonColor: '#3085d6'
+                });
+
+                // Only logout if user confirmed
+                if (result.isConfirmed) {
+                  await handleLogout();
+                  router.push('/');
+                }
+              } catch (error) {
+                console.error('Logout failed:', error);
+              }
+            }}
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              backdropFilter: 'blur(10px)',
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '12px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16,17 21,12 16,7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>로그아웃</span>
+          </button>
         </div>
 
         <div className="dashboard-content">
@@ -933,31 +1003,98 @@ const Dashboard: React.FC = () => {
           {/* Main Content */}
           <div className="dashboard-main">
             <div className="meetings-panel">
-              {/* Tabs */}
-              <div className="tabs">
+              {/* Tabs with Icons - Single Line */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px', 
+                flexWrap: 'wrap',
+                marginBottom: '20px',
+                paddingBottom: '12px',
+                borderBottom: '2px solid #e9ecef'
+              }}>
                 <button
-                  className={`tab ${activeTab === 'LIVE' ? 'active' : ''}`}
                   onClick={() => setActiveTab('LIVE')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    backgroundColor: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                    background: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
+                    color: activeTab === 'LIVE' ? 'white' : '#666',
+                  }}
                 >
-                  진행중 회의
+                  <span>📹</span>
+                  <span>진행중</span>
                 </button>
                 <button
-                  className={`tab ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
                   onClick={() => setActiveTab('SCHEDULED')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    backgroundColor: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                    background: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
+                    color: activeTab === 'SCHEDULED' ? 'white' : '#666',
+                  }}
                 >
-                  예약된 회의
+                  <span>📅</span>
+                  <span>예약됨</span>
                 </button>
                 <button
-                  className={`tab ${activeTab === 'ENDED' ? 'active' : ''}`}
                   onClick={() => setActiveTab('ENDED')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    backgroundColor: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                    background: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
+                    color: activeTab === 'ENDED' ? 'white' : '#666',
+                  }}
                 >
-                  종료된 회의
+                  <span>✅</span>
+                  <span>종료됨</span>
                 </button>
                 <button
-                  className={`tab ${activeTab === 'VOD' ? 'active' : ''}`}
                   onClick={() => setActiveTab('VOD')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    backgroundColor: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+                    background: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
+                    color: activeTab === 'VOD' ? 'white' : '#666',
+                  }}
                 >
-                  VOD 관리
+                  <span>🎬</span>
+                  <span>VOD</span>
                 </button>
               </div>
 
@@ -982,177 +1119,193 @@ const Dashboard: React.FC = () => {
               {activeTab === 'VOD' ? (
                 /* VOD Management Section */
                 <div>
-                  {/* Upload Options */}
-                  <div style={{ display: 'flex', gap: '15px', marginBottom: '30px' }}>
-                    <button
-                      onClick={handleFileUpload}
-                      style={{
-                        padding: '12px 24px',
-                        backgroundColor: 'white',
-                        border: '2px solid #1976d2',
-                        borderRadius: '8px',
-                        color: '#1976d2',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '16px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      📁 파일 등록
-                    </button>
-                    <button
-                      onClick={handleURLUpload}
-                      style={{
-                        padding: '12px 24px',
-                        backgroundColor: 'white',
-                        border: '2px solid #1976d2',
-                        borderRadius: '8px',
-                        color: '#1976d2',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        fontSize: '16px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      🔗 URL 등록
-                    </button>
-                  </div>
+                  {/* Meetings Table with Recording Status - Responsive */}
+                  <div className="meetings-table" style={{ overflowX: 'auto' }}>
+                    {filteredMeetings.length > 0 ? (
+                      <>
+                        {/* Desktop Table */}
+                        <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>No.</th>
+                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>회의 제목</th>
+                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>회의시간</th>
+                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>기록 상태</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredMeetings.map((meeting, index) => {
+                                const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
+                                return (
+                                  <tr key={meeting._id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                                    <td style={{ padding: '12px' }}>{index + 1}</td>
+                                    <td style={{ padding: '12px', fontWeight: '500' }}>{meeting.title}</td>
+                                    <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                                      {formatDate(meeting.createdAt)}
+                                    </td>
+                                    <td style={{ padding: '12px' }}>
+                                      <span
+                                        style={{
+                                          padding: '6px 12px',
+                                          borderRadius: '20px',
+                                          fontSize: '13px',
+                                          fontWeight: '600',
+                                          backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                                          color: hasRecording ? '#28a745' : '#dc3545',
+                                          border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`,
+                                          display: 'inline-block'
+                                        }}
+                                      >
+                                        {hasRecording ? '✅ 기록됨' : '❌ 기록 안됨'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
 
-                  {/* VOD Table */}
-                  <div className="meetings-table">
-                    {filteredVODs.length > 0 ? (
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>No.</th>
-                            <th>VOD 제목</th>
-                            <th>용량</th>
-                            <th>비고</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredVODs.map((vod, index) => (
-                            <tr key={vod._id}>
-                              <td>{index + 1}</td>
-                              <td>
-                                <div>
-                                  <div style={{ fontWeight: '500', marginBottom: '4px' }}>{vod.title}</div>
-                                  <div style={{ fontSize: '14px', color: '#666' }}>
-                                    {vod.duration && formatDuration(vod.duration)}
-                                    {vod.status === 'UPLOADING' && ' (업로드 중...)'}
-                                    {vod.status === 'PROCESSING' && ' (처리 중...)'}
-                                    {vod.status === 'ERROR' && ' (오류)'}
-              </div>
-            </div>
-                              </td>
-                              <td>{formatFileSize(vod.size)}</td>
-                              <td>
-                                <button
-                                  className="three-dots"
-                                  onClick={(e) => handleVODMenuClick(vod._id, e)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '18px',
-                                    color: '#6c757d'
-                                  }}
-                                >
-                                  ⋯
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                        {/* Mobile Card View */}
+                        <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
+                          {filteredMeetings.map((meeting, index) => {
+                            const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
+                            return (
+                              <div
+                                key={meeting._id}
+                                style={{
+                                  backgroundColor: 'white',
+                                  borderRadius: '12px',
+                                  padding: '16px',
+                                  marginBottom: '12px',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                  border: '1px solid #e9ecef'
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                                  <div>
+                                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>#{index + 1}</div>
+                                    <div style={{ fontWeight: '600', fontSize: '16px', color: '#333' }}>{meeting.title}</div>
+                                  </div>
+                                  <span
+                                    style={{
+                                      padding: '4px 10px',
+                                      borderRadius: '20px',
+                                      fontSize: '11px',
+                                      fontWeight: '600',
+                                      backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                                      color: hasRecording ? '#28a745' : '#dc3545',
+                                      border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`
+                                    }}
+                                  >
+                                    {hasRecording ? '✅' : '❌'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '13px', color: '#666' }}>
+                                  📅 {formatDate(meeting.createdAt)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     ) : (
                       <div className="empty-state">
                         <div className="empty-icon">✗</div>
-                        <p>등록된 VOD가 없습니다</p>
+                        <p>등록된 회의가 없습니다</p>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                /* Meetings Table */
-                <div className="meetings-table">
+                /* Meetings Table - Beautiful Design with SVG Icons */
+                <div className="meetings-table" style={{ overflowX: 'auto' }}>
                   {filteredMeetings.length === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">✗</div>
                       <p>등록된 회의가 없습니다</p>
                     </div>
                   ) : (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>No.</th>
-                          <th>회의 제목</th>
-                          <th>회의시간</th>
-                          <th>상태</th>
-                          <th>초대코드</th>
-                          <th>비고</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredMeetings.map((meeting, index) => (
-                          <tr key={meeting._id}>
-                            <td>{index + 1}</td>
-                            <td>{meeting.title}</td>
-                            <td>
-                              {meeting.schedule 
-                                ? formatDate(meeting.schedule)
-                                : formatDate(meeting.createdAt)
-                              }
-                            </td>
-                            <td>
-                              <span 
-                                style={{
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  fontWeight: '500',
-                                  color: 'white',
-                                  background: meeting.status === 'LIVE' ? '#28a745' : 
-                                             meeting.status === 'STARTED' ? '#28a745' :
-                                             meeting.status === 'SCHEDULED' ? '#ffc107' : 
-                                             meeting.status === 'ENDED' ? '#6c757d' : '#28a745'
+                    <>
+                      {/* Desktop Table */}
+                      <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>No.</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>회의 제목</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>회의시간</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>상태</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>초대코드</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>비고</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredMeetings.map((meeting, index) => (
+                              <tr 
+                                key={meeting._id}
+                                style={{ 
+                                  borderBottom: '1px solid #e9ecef',
+                                  transition: 'background-color 0.2s'
                                 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                               >
-                                {meeting.status === 'LIVE' ? '진행중' :
-                                 meeting.status === 'STARTED' ? '진행중' : 
-                                 meeting.status === 'SCHEDULED' ? '예정' : 
-                                 meeting.status === 'ENDED' ? '종료' : '진행중'}
-                              </span>
-                              {meeting.status === 'ENDED' && !meeting.isCurrentUserHost && (
-                                <span 
-                                  style={{
-                                    marginLeft: '8px',
-                                    padding: '2px 6px',
-                                    borderRadius: '3px',
-                                    fontSize: '10px',
-                                    fontWeight: '400',
-                                    color: '#6c757d',
-                                    background: '#f8f9fa',
-                                    border: '1px solid #dee2e6'
-                                  }}
-                                  title="호스트 역할이 이전되었습니다"
-                                >
-                                  이전됨
-                                </span>
-                              )}
-                            </td>
-                            <td>
-                              <span 
-                                className="invite-code"
-                                onClick={() => copyInviteCode(meeting.inviteCode)}
-                              >
-                                {meeting.inviteCode}
-                              </span>
-                            </td>
+                                <td style={{ padding: '12px', color: '#666' }}>{index + 1}</td>
+                                <td style={{ padding: '12px', fontWeight: '500', color: '#333' }}>{meeting.title}</td>
+                                <td style={{ padding: '12px', fontSize: '13px', color: '#666' }}>
+                                  {meeting.schedule 
+                                    ? formatDate(meeting.schedule)
+                                    : formatDate(meeting.createdAt)
+                                  }
+                                </td>
+                                <td style={{ padding: '12px' }}>
+                                  <span 
+                                    style={{
+                                      padding: '6px 12px',
+                                      borderRadius: '20px',
+                                      fontSize: '12px',
+                                      fontWeight: '600',
+                                      color: 'white',
+                                      background: meeting.status === 'LIVE' ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 
+                                                 meeting.status === 'STARTED' ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' :
+                                                 meeting.status === 'SCHEDULED' ? 'linear-gradient(135deg, #ffc107 0%, #ffb300 100%)' : 
+                                                 meeting.status === 'ENDED' ? 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' : 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'
+                                    }}
+                                  >
+                                    {meeting.status === 'LIVE' ? '🟢 진행중' :
+                                     meeting.status === 'STARTED' ? '🟢 진행중' : 
+                                     meeting.status === 'SCHEDULED' ? '⏰ 예정' : 
+                                     meeting.status === 'ENDED' ? '✅ 종료' : '🟢 진행중'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '12px' }}>
+                                  <span 
+                                    className="invite-code"
+                                    onClick={() => copyInviteCode(meeting.inviteCode)}
+                                    style={{
+                                      padding: '6px 10px',
+                                      borderRadius: '6px',
+                                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                      color: 'white',
+                                      fontSize: '12px',
+                                      fontWeight: '600',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1.05)';
+                                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1)';
+                                      e.currentTarget.style.boxShadow = 'none';
+                                    }}
+                                  >
+                                    🔑 {meeting.inviteCode}
+                                  </span>
+                                </td>
                             <td>
                               <div className="actions">
                                 {meeting.status === 'SCHEDULED' && (
@@ -1337,8 +1490,187 @@ const Dashboard: React.FC = () => {
                         ))}
                       </tbody>
                     </table>
+                      </div>
+
+                      {/* Mobile Card View */}
+                      <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
+                        {filteredMeetings.map((meeting, index) => (
+                          <div
+                            key={meeting._id}
+                            style={{
+                              backgroundColor: 'white',
+                              borderRadius: '16px',
+                              padding: '16px',
+                              marginBottom: '12px',
+                              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                              border: '1px solid #e9ecef',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)';
+                            }}
+                          >
+                                                         {/* Header */}
+                             <div style={{ marginBottom: '12px' }}>
+                               <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>#{index + 1}</div>
+                               <div style={{ fontWeight: '600', fontSize: '16px', color: '#333', marginBottom: '8px' }}>
+                                 {meeting.title}
+                               </div>
+                               <div style={{ fontSize: '13px', color: '#666' }}>
+                                 📅 {meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt)}
+                               </div>
+                             </div>
+
+                            {/* Invite Code */}
+                            <div style={{ marginBottom: '12px' }}>
+                              <span 
+                                onClick={() => copyInviteCode(meeting.inviteCode)}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: '8px',
+                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                  color: 'white',
+                                  fontSize: '12px',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                🔑 {meeting.inviteCode}
+                              </span>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {meeting.status === 'SCHEDULED' && (
+                                <>
+                                  <button 
+                                    onClick={() => handleStartMeeting(meeting._id)}
+                                    style={{
+                                      padding: '8px 16px',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
+                                      color: 'white',
+                                      flex: 1,
+                                      minWidth: '120px'
+                                    }}
+                                  >
+                                    ▶️ 시작
+                                  </button>
+                                  <button 
+                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                    style={{
+                                      padding: '8px 16px',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                      color: 'white',
+                                      flex: 1,
+                                      minWidth: '120px'
+                                    }}
+                                  >
+                                    📊 상세
+                                  </button>
+                                </>
+                              )}
+                              {(meeting.status === 'LIVE' || meeting.status === 'STARTED') && (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      if (isValidObjectId(meeting._id)) {
+                                        window.location.href = `/prejoin/${meeting._id}`;
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                      color: 'white',
+                                      flex: 1,
+                                      minWidth: '120px'
+                                    }}
+                                  >
+                                    🎥 참여
+                                  </button>
+                                  <button 
+                                    onClick={() => handleEndMeeting(meeting._id)}
+                                    style={{
+                                      padding: '8px 16px',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                      color: 'white',
+                                      flex: 1,
+                                      minWidth: '120px'
+                                    }}
+                                  >
+                                    ⛔ 종료
+                                  </button>
+                                  <button 
+                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                    style={{
+                                      padding: '8px 16px',
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                      color: 'white',
+                                      flex: 1,
+                                      minWidth: '120px'
+                                    }}
+                                  >
+                                    📊 상세
+                                  </button>
+                                </>
+                              )}
+                              {meeting.status === 'ENDED' && (
+                                <button 
+                                  onClick={() => router.push(`/attendance/${meeting._id}`)}
+                                  style={{
+                                    padding: '8px 16px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    color: 'white',
+                                    width: '100%'
+                                  }}
+                                >
+                                  📊 출석 현황
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
-              </div>
+                </div>
               )}
             </div>
           </div>

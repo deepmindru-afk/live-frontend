@@ -77,13 +77,11 @@ const LoginPage: React.FC = () => {
     try {
       const success = await handleLogin(formData);
       if (success) {
-        // Get user data and redirect
-        const user = await getCurrentUser();
-        if (user) {
-          redirectBasedOnRole(user);
-        } else {
-          router.push('/');
-        }
+        // handleLogin already has delays and token verification built in
+        // User data is already saved to localStorage during login
+        // Simply redirect to member dashboard
+        console.log('✅ Login successful, redirecting to member dashboard');
+        router.push('/member');
       }
     } catch (error: any) {
       

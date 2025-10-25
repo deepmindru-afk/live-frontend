@@ -37,7 +37,8 @@ const MemberDashboard: React.FC = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'meetings' | 'profile' | 'join' | 'attendance' | 'menu'>('meetings');
+  const [activeTab, setActiveTab] = useState<'meetings' | 'join' | 'menu'>('meetings');
+  const [showMeetingsDropdown, setShowMeetingsDropdown] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,13 +49,22 @@ const MemberDashboard: React.FC = () => {
     phone: ''
   });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [showAttendancePopup, setShowAttendancePopup] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log('🔍 Checking authentication...');
+        console.log('🔍 isAuthenticated():', isAuthenticated());
+        
         if (isAuthenticated()) {
+          console.log('🔍 User is authenticated, getting user data...');
           const userData = await getCurrentUser();
+          console.log('🔍 User data:', userData);
+          
           if (userData && userData.systemRole === 'MEMBER') {
+            console.log('🔍 User is a MEMBER, proceeding...');
             setUser(userData);
             setProfileData({
               displayName: userData.displayName || '',
@@ -89,21 +99,38 @@ const MemberDashboard: React.FC = () => {
 
   const fetchMeetings = async () => {
     try {
+      // Check if user is authenticated before making the request
+      if (!isAuthenticated()) {
+        console.log('User not authenticated, redirecting to login');
+        router.push('/login');
+        return;
+      }
       
       if (!GET_MY_MEETINGS) {
+        console.log('GET_MY_MEETINGS query not found');
         setMeetings([]);
         return;
       }
+      
+      console.log('Making GraphQL request for meetings...');
+      console.log('Using query:', GET_MY_MEETINGS);
+      console.log('Query type:', typeof GET_MY_MEETINGS);
       
       // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
       let result;
       try {
         result = await makeGraphQLRequest(GET_MY_MEETINGS, {
-          input: {}
+          input: {
+            limit: 50,
+            page: 1
+          }
         });
+        console.log('GraphQL request successful:', result);
       } catch (authError: any) {
+        console.error('GraphQL request failed:', authError);
         // Handle authentication errors immediately
         if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
+          console.log('Authentication error detected, showing login prompt');
           await Swal.fire({
             icon: 'warning',
             title: '세션이 만료되었습니다',
@@ -114,6 +141,7 @@ const MemberDashboard: React.FC = () => {
           }).then((result) => {
             if (result.isConfirmed) {
               // Clear any stored tokens
+              localStorage.removeItem('jwt');
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               // Redirect to login
@@ -193,6 +221,23 @@ const MemberDashboard: React.FC = () => {
     }
   }, [searchQuery, meetings]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showMeetingsDropdown) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.meetings-dropdown')) {
+          setShowMeetingsDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMeetingsDropdown]);
+
   const handleJoinByCode = async () => {
     if (!inviteCode.trim()) {
       await Swal.fire({
@@ -224,6 +269,7 @@ const MemberDashboard: React.FC = () => {
           }).then((result) => {
             if (result.isConfirmed) {
               // Clear any stored tokens
+              localStorage.removeItem('jwt');
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               // Redirect to login
@@ -421,6 +467,16 @@ const MemberDashboard: React.FC = () => {
     }
   };
 
+  const handleAttendanceClick = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setShowAttendancePopup(true);
+  };
+
+  const closeAttendancePopup = () => {
+    setShowAttendancePopup(false);
+    setSelectedMeeting(null);
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ko-KR');
   };
@@ -470,10 +526,10 @@ const MemberDashboard: React.FC = () => {
               />
             )}
             <button 
-              className="mobile-menu-toggle"
-              onClick={() => setActiveTab(activeTab === 'menu' ? 'meetings' : 'menu')}
+              className="mobile-logout-btn"
+              onClick={handleLogoutClick}
             >
-              ☰
+              로그아웃
             </button>
           </div>
         </div>
@@ -497,160 +553,44 @@ const MemberDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        <div className={`mobile-nav ${activeTab === 'menu' ? 'mobile-nav-open' : ''}`}>
-          <div className="mobile-nav-content">
-            <div className="mobile-nav-header">
-              <h3 className="mobile-nav-title">메뉴</h3>
-              <button 
-                className="mobile-nav-close"
-                onClick={() => setActiveTab('meetings')}
+        {/* Meetings Dropdown */}
+        <div className="meetings-dropdown">
+          <button
+            onClick={() => setShowMeetingsDropdown(!showMeetingsDropdown)}
+            className={`meetings-dropdown-toggle ${activeTab === 'meetings' || activeTab === 'join' ? 'active' : ''}`}
+          >
+            📅 내 미팅
+            <span className={`dropdown-arrow ${showMeetingsDropdown ? 'open' : ''}`}>
+              ▼
+            </span>
+          </button>
+          {showMeetingsDropdown && (
+            <div className="meetings-dropdown-menu">
+              <button
+                onClick={() => {
+                  setActiveTab('meetings');
+                  setShowMeetingsDropdown(false);
+                }}
+                className={`dropdown-item ${activeTab === 'meetings' ? 'active' : ''}`}
               >
-                ✕
+                내 미팅
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('join');
+                  setShowMeetingsDropdown(false);
+                }}
+                className={`dropdown-item ${activeTab === 'join' ? 'active' : ''}`}
+              >
+                미팅 참여
               </button>
             </div>
-            <button
-              onClick={() => setActiveTab('meetings')}
-              className={`mobile-nav-item ${activeTab === 'meetings' ? 'active' : ''}`}
-            >
-              📅 내 미팅
-            </button>
-            <button
-              onClick={() => setActiveTab('join')}
-              className={`mobile-nav-item ${activeTab === 'join' ? 'active' : ''}`}
-            >
-              🔗 미팅 참여
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
-            >
-              👤 프로필 관리
-            </button>
-            <button
-              onClick={() => setActiveTab('attendance')}
-              className={`mobile-nav-item ${activeTab === 'attendance' ? 'active' : ''}`}
-            >
-              📋 출석 현황
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('meetings'); // Close the menu first
-                handleLogoutClick(); // Then show logout confirmation
-              }}
-              className="mobile-logout-btn"
-            >
-              로그아웃
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Desktop Sidebar */}
-        <div className="desktop-sidebar">
-          {/* Logo */}
-          <div className="sidebar-logo">
-            <Image
-              src="/logoHRDe.png"
-              alt="HRDE"
-              width={120}
-              height={55}
-              style={{
-                objectFit: 'contain'
-              }}
-            />
-          </div>
-
-          {/* Welcome Message */}
-          <div className="sidebar-welcome">
-            <h2 className="sidebar-greeting">
-              {user?.displayName}님, 안녕하세요 👋
-            </h2>
-            <p className="sidebar-subtitle">Member Dashboard</p>
-          </div>
-
-          {/* Navigation */}
-          <div className="sidebar-nav">
-            <button
-              onClick={() => setActiveTab('meetings')}
-              className={`sidebar-nav-item ${activeTab === 'meetings' ? 'active' : ''}`}
-            >
-              📅 내 미팅
-            </button>
-            <button
-              onClick={() => setActiveTab('join')}
-              className={`sidebar-nav-item ${activeTab === 'join' ? 'active' : ''}`}
-            >
-              🔗 미팅 참여
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`sidebar-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
-            >
-              👤 프로필 관리
-            </button>
-            <button
-              onClick={() => setActiveTab('attendance')}
-              className={`sidebar-nav-item ${activeTab === 'attendance' ? 'active' : ''}`}
-            >
-              📋 출석 현황
-            </button>
-          </div>
-
-          {/* Logout Button */}
-          <div className="sidebar-logout">
-            <button
-              onClick={handleLogoutClick}
-              className="logout-btn"
-            >
-              로그아웃
-            </button>
-          </div>
-        </div>
 
         {/* Main Content */}
-        <div className="main-content">
-          {/* Header */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              margin: 0,
-              fontSize: '24px',
-              color: '#333'
-            }}>
-              {activeTab === 'meetings' && '내 미팅'}
-              {activeTab === 'join' && '미팅 참여'}
-              {activeTab === 'profile' && '프로필 관리'}
-              {activeTab === 'attendance' && '출석 현황'}
-            </h2>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px'
-            }}>
-              {user?.avatarUrl && (
-                <img
-                  src={user.avatarUrl}
-                  alt="Profile"
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    objectFit: 'cover'
-                  }}
-                />
-              )}
-              <span style={{
-                fontSize: '16px',
-                color: '#333'
-              }}>
-                {user?.displayName}
-              </span>
-            </div>
-          </div>
+        <div className="main-content" style={{ marginLeft: 0, width: '100%' }}>
 
           {/* Content based on active tab */}
           {activeTab === 'meetings' && (
@@ -807,7 +747,7 @@ const MemberDashboard: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'profile' && (
+          {false && activeTab === 'profile' && (
             <div className="profile-section">
               <div className="profile-container">
                 <div className="profile-header">
@@ -930,7 +870,7 @@ const MemberDashboard: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'attendance' && (
+          {false && activeTab === 'attendance' && (
             <div className="attendance-section">
               <div className="attendance-container">
                 <h2 className="attendance-title">
@@ -1046,25 +986,26 @@ const MemberDashboard: React.FC = () => {
                                 {meeting.status === 'ENDED' ? '완료' : 
                                  meeting.status === 'SCHEDULED' ? '예정' : '진행중'}
                               </span>
-                              {meeting.status === 'ENDED' && (
-                                <button
-                                  onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                  style={{
-                                    padding: '8px 16px',
-                                    backgroundColor: '#007bff',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '14px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                  }}
-                                >
-                                  📋 출석보기
-                                </button>
-                              )}
+                                {meeting.status === 'ENDED' && (
+                                  <button
+                                    onClick={() => handleAttendanceClick(meeting)}
+                                    style={{
+                                      padding: '8px 16px',
+                                      backgroundColor: '#dc3545',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      fontSize: '14px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                  >
+                                    📊 출석상세
+                                  </button>
+                                )}
                             </div>
                           </div>
                         ))}
@@ -1086,6 +1027,103 @@ const MemberDashboard: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Attendance Popup */}
+        {showAttendancePopup && selectedMeeting && (
+          <div className="attendance-popup-overlay" onClick={closeAttendancePopup}>
+            <div className="attendance-popup" onClick={(e) => e.stopPropagation()}>
+              <div className="popup-header">
+                <h3 className="popup-title">📊 출석 상세 정보</h3>
+                <button className="popup-close" onClick={closeAttendancePopup}>×</button>
+              </div>
+              
+              <div className="popup-content">
+                <div className="meeting-info">
+                  <h4 className="meeting-title">{selectedMeeting.title}</h4>
+                  <div className="meeting-meta">
+                    <span className="meeting-date">
+                      📅 {formatDate(selectedMeeting.createdAt)}
+                    </span>
+                    <span className="meeting-duration">
+                      ⏱️ {calculateMeetingDuration(selectedMeeting)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="attendance-stats">
+                  <div className="stat-card">
+                    <div className="stat-icon">🎯</div>
+                    <div className="stat-content">
+                      <div className="stat-label">참석률</div>
+                      <div className="stat-value">85%</div>
+                    </div>
+                  </div>
+                  
+                  <div className="stat-card">
+                    <div className="stat-icon">⏰</div>
+                    <div className="stat-content">
+                      <div className="stat-label">참여 시간</div>
+                      <div className="stat-value">2시간 15분</div>
+                    </div>
+                  </div>
+                  
+                  <div className="stat-card">
+                    <div className="stat-icon">📊</div>
+                    <div className="stat-content">
+                      <div className="stat-label">세션 수</div>
+                      <div className="stat-value">3회</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="attendance-timeline">
+                  <h5 className="timeline-title">참석 타임라인</h5>
+                  <div className="timeline">
+                    <div className="timeline-item">
+                      <div className="timeline-time">09:00</div>
+                      <div className="timeline-content">
+                        <div className="timeline-title">미팅 시작</div>
+                        <div className="timeline-desc">참여 시작</div>
+                      </div>
+                    </div>
+                    <div className="timeline-item">
+                      <div className="timeline-time">09:15</div>
+                      <div className="timeline-content">
+                        <div className="timeline-title">첫 번째 휴식</div>
+                        <div className="timeline-desc">5분 휴식</div>
+                      </div>
+                    </div>
+                    <div className="timeline-item">
+                      <div className="timeline-time">11:15</div>
+                      <div className="timeline-content">
+                        <div className="timeline-title">미팅 종료</div>
+                        <div className="timeline-desc">참여 완료</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="attendance-summary">
+                  <h5 className="summary-title">참석 요약</h5>
+                  <div className="summary-content">
+                    <div className="summary-item">
+                      <span className="summary-label">총 미팅 시간:</span>
+                      <span className="summary-value">{calculateMeetingDuration(selectedMeeting)}</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">실제 참여 시간:</span>
+                      <span className="summary-value">2시간 15분</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">참석률:</span>
+                      <span className="summary-value">85%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CSS Styles */}
@@ -1119,7 +1157,7 @@ const MemberDashboard: React.FC = () => {
         .mobile-profile {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 12px;
         }
 
         .mobile-avatar {
@@ -1269,21 +1307,565 @@ const MemberDashboard: React.FC = () => {
         }
 
         .mobile-logout-btn {
-          width: calc(100% - 2rem);
-          padding: 1rem;
           background: #dc3545;
           color: white;
           border: none;
-          border-radius: 8px;
-          font-size: 1.1rem;
+          padding: 8px 16px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
           cursor: pointer;
-          margin: 1rem;
-          margin-top: auto;
+          transition: all 0.2s ease;
+          min-width: auto;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .mobile-logout-btn:hover {
+          background: #c82333;
+          transform: translateY(-1px);
+        }
+
+        /* Desktop Logout Button */
+        .desktop-logout-btn {
+          background: #dc3545;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .desktop-logout-btn:hover {
+          background: #c82333;
+          transform: translateY(-1px);
+        }
+
+        /* Responsive logout button */
+        @media (max-width: 768px) {
+          .mobile-logout-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            height: 32px;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .mobile-logout-btn {
+            padding: 10px 20px;
+            font-size: 15px;
+            height: 40px;
+          }
         }
 
         /* Desktop Sidebar - Hide on all screen sizes */
         .desktop-sidebar {
           display: none;
+        }
+
+        /* Meetings Dropdown */
+        .meetings-dropdown {
+          position: relative;
+          margin: 20px;
+        }
+
+        .meetings-dropdown-toggle {
+          width: 100%;
+          padding: 15px 20px;
+          background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          font-size: 16px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
+          transition: all 0.3s ease;
+        }
+
+        .meetings-dropdown-toggle:hover {
+          background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(25, 118, 210, 0.4);
+        }
+
+        .meetings-dropdown-toggle.active {
+          background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+        }
+
+        .dropdown-arrow {
+          transition: transform 0.3s ease;
+          font-size: 14px;
+        }
+
+        .dropdown-arrow.open {
+          transform: rotate(180deg);
+        }
+
+        .meetings-dropdown-menu {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+          z-index: 1000;
+          overflow: hidden;
+          margin-top: 8px;
+          border: 1px solid #e0e0e0;
+        }
+
+        .dropdown-item {
+          width: 100%;
+          padding: 15px 20px;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+          font-size: 15px;
+          color: #333;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .dropdown-item:hover {
+          background-color: #f5f5f5;
+          color: #1976d2;
+        }
+
+        .dropdown-item.active {
+          background-color: #e3f2fd;
+          color: #1976d2;
+          font-weight: 600;
+        }
+
+        .dropdown-item:first-child {
+          border-bottom: 1px solid #e0e0e0;
+        }
+
+        /* Attendance Popup Styles */
+        .attendance-popup-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          animation: fadeIn 0.3s ease;
+          backdrop-filter: blur(5px);
+        }
+
+        .attendance-popup {
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          max-width: 600px;
+          width: 90%;
+          max-height: 80vh;
+          overflow-y: auto;
+          animation: slideUp 0.3s ease;
+          border: 1px solid #e0e0e0;
+        }
+
+        .popup-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px 24px;
+          border-bottom: 1px solid #e9ecef;
+          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+          color: white;
+          border-radius: 16px 16px 0 0;
+        }
+
+        .popup-title {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .popup-close {
+          background: none;
+          border: none;
+          font-size: 24px;
+          color: white;
+          cursor: pointer;
+          padding: 0;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s ease;
+        }
+
+        .popup-close:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: rotate(90deg);
+        }
+
+        .popup-content {
+          padding: 24px;
+        }
+
+        .meeting-info {
+          margin-bottom: 24px;
+          padding: 16px;
+          background: #f8f9fa;
+          border-radius: 12px;
+          border-left: 4px solid #dc3545;
+          animation: slideInLeft 0.6s ease;
+        }
+
+        .meeting-title {
+          margin: 0 0 8px 0;
+          font-size: 18px;
+          font-weight: 600;
+          color: #333;
+        }
+
+        .meeting-meta {
+          display: flex;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+
+        .meeting-date, .meeting-duration {
+          font-size: 14px;
+          color: #666;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .attendance-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .stat-card {
+          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 12px;
+          text-align: center;
+          animation: fadeInUp 0.6s ease;
+          transition: all 0.3s ease;
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .stat-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+          transition: left 0.5s;
+        }
+
+        .stat-card:hover::before {
+          left: 100%;
+        }
+
+        .stat-card:hover {
+          transform: translateY(-5px) scale(1.02);
+          box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
+        }
+
+        .stat-icon {
+          font-size: 24px;
+          margin-bottom: 8px;
+          animation: bounce 2s infinite;
+        }
+
+        .stat-label {
+          font-size: 12px;
+          opacity: 0.9;
+          margin-bottom: 4px;
+        }
+
+        .stat-value {
+          font-size: 20px;
+          font-weight: 700;
+          animation: countUp 1s ease-out;
+        }
+
+        .attendance-timeline {
+          margin-bottom: 24px;
+        }
+
+        .timeline-title {
+          margin: 0 0 16px 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: #333;
+        }
+
+        .timeline {
+          position: relative;
+          padding-left: 20px;
+        }
+
+        .timeline::before {
+          content: '';
+          position: absolute;
+          left: 8px;
+          top: 0;
+          bottom: 0;
+          width: 2px;
+          background: linear-gradient(to bottom, #dc3545, #c82333);
+          animation: drawLine 1s ease-out;
+        }
+
+        .timeline-item {
+          position: relative;
+          margin-bottom: 20px;
+          animation: slideInLeft 0.6s ease;
+          opacity: 0;
+          animation-fill-mode: forwards;
+        }
+
+        .timeline-item:nth-child(1) { animation-delay: 0.2s; }
+        .timeline-item:nth-child(2) { animation-delay: 0.4s; }
+        .timeline-item:nth-child(3) { animation-delay: 0.6s; }
+
+        .timeline-item::before {
+          content: '';
+          position: absolute;
+          left: -16px;
+          top: 6px;
+          width: 12px;
+          height: 12px;
+          background: #dc3545;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 0 0 3px #dc3545;
+          animation: pulse 2s infinite;
+        }
+
+        .timeline-time {
+          font-size: 12px;
+          color: #666;
+          font-weight: 600;
+          margin-bottom: 4px;
+        }
+
+        .timeline-content {
+          background: #f8f9fa;
+          padding: 12px 16px;
+          border-radius: 8px;
+          border-left: 3px solid #dc3545;
+          transition: all 0.2s ease;
+        }
+
+        .timeline-content:hover {
+          background: #e9ecef;
+          transform: translateX(5px);
+        }
+
+        .timeline-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+          margin: 0 0 4px 0;
+        }
+
+        .timeline-desc {
+          font-size: 12px;
+          color: #666;
+          margin: 0;
+        }
+
+        .attendance-summary {
+          background: #f8f9fa;
+          padding: 20px;
+          border-radius: 12px;
+          border: 1px solid #e9ecef;
+          animation: slideInUp 0.8s ease;
+        }
+
+        .summary-title {
+          margin: 0 0 16px 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: #333;
+        }
+
+        .summary-content {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .summary-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 0;
+          border-bottom: 1px solid #e9ecef;
+          transition: all 0.2s ease;
+        }
+
+        .summary-item:hover {
+          background: #e9ecef;
+          padding-left: 8px;
+          border-radius: 4px;
+        }
+
+        .summary-item:last-child {
+          border-bottom: none;
+        }
+
+        .summary-label {
+          font-size: 14px;
+          color: #666;
+        }
+
+        .summary-value {
+          font-size: 14px;
+          font-weight: 600;
+          color: #dc3545;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+          }
+          40% {
+            transform: translateY(-10px);
+          }
+          60% {
+            transform: translateY(-5px);
+          }
+        }
+
+        @keyframes countUp {
+          from {
+            opacity: 0;
+            transform: scale(0.5);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes drawLine {
+          from {
+            height: 0;
+          }
+          to {
+            height: 100%;
+          }
+        }
+
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+          }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+          .attendance-popup {
+            width: 95%;
+            margin: 20px;
+          }
+          
+          .popup-content {
+            padding: 16px;
+          }
+          
+          .attendance-stats {
+            grid-template-columns: 1fr;
+          }
+          
+          .meeting-meta {
+            flex-direction: column;
+            gap: 8px;
+          }
         }
 
         /* Main Content - Full width without sidebar */

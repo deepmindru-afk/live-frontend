@@ -23,6 +23,7 @@ export interface SignupData {
   displayName: string;
   email: string;
   password: string;
+  department?: string;
 }
 
 // GraphQL endpoint - with better fallback handling
@@ -142,15 +143,29 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     // If it's a GraphQL AST object, convert it to string using print
     if (query && typeof query === 'object' && query.kind) {
       queryString = print(query);
+      console.log('🔍 Converted GraphQL query:', queryString);
     } else {
+      console.error('❌ Invalid GraphQL query:', query);
       throw new Error('Invalid GraphQL query: query is undefined or not a valid GraphQL AST');
     }
   }
   
+  // Determine query name for better debugging
+  let queryName = 'unknown';
+  if (queryString.includes('GetMyMeetings')) {
+    queryName = 'GetMyMeetings';
+  } else if (queryString.includes('GetTutorMeetings')) {
+    queryName = 'GetTutorMeetings';
+  } else if (queryString.includes('getMeetingAttendance')) {
+    queryName = 'getMeetingAttendance';
+  } else if (queryString.includes('GetAllMeetings')) {
+    queryName = 'GetAllMeetings';
+  }
+
   console.log('🔍 GraphQL Request:', {
     endpoint: GRAPHQL_ENDPOINT,
     hasToken: !!token,
-    queryName: queryString.includes('getMeetingAttendance') ? 'getMeetingAttendance' : 'other',
+    queryName: queryName,
     variables
   });
 
@@ -165,11 +180,21 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     'apollo-require-preflight': 'true',
   };
   
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Always try to get the token fresh
+  const freshToken = getAuthToken();
+  if (freshToken) {
+    headers['Authorization'] = `Bearer ${freshToken}`;
     console.log('🔐 Using token for authentication');
   } else {
     console.warn('⚠️ No token found for GraphQL request');
+    // Debug: Check localStorage directly
+    if (typeof window !== 'undefined') {
+      console.log('🔍 Debug localStorage:', {
+        jwt: localStorage.getItem('jwt'),
+        token: localStorage.getItem('token'),
+        user: localStorage.getItem('user')
+      });
+    }
   }
   
   console.log('📡 Making GraphQL request to:', GRAPHQL_ENDPOINT);
@@ -219,6 +244,17 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     // Handle specific authentication errors
     const firstError = data.errors[0];
     
+    // Log the actual error message for debugging
+    console.error('🚨 GraphQL Error Details:', {
+      message: firstError.message,
+      code: firstError.extensions?.code,
+      fullError: firstError
+    });
+    
+    // Also log message separately to make sure it's visible
+    console.error('📌 ERROR MESSAGE:', firstError.message);
+    console.error('📌 ERROR CODE:', firstError.extensions?.code || 'NO_CODE');
+    
     if (firstError.message === 'Invalid credentials' || firstError.extensions?.code === 'UNAUTHENTICATED') {
       throw new Error('Invalid credentials');
     }
@@ -228,9 +264,12 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
       throw new Error('JWT_EXPIRED');
     }
     
-    // Handle token not exist
+    // Handle token not exist - DON'T clear tokens automatically, let caller handle
     if (firstError.message === 'TOKEN_NOT_EXIST' || firstError.extensions?.code === 'TOKEN_NOT_EXIST') {
-      throw new Error('TOKEN_NOT_EXIST');
+      // DON'T clear tokens here - caller should handle it properly
+      // Return null instead of throwing to allow caller to handle gracefully
+      console.warn('⚠️ TOKEN_NOT_EXIST error - returning null without clearing tokens');
+      return null;
     }
     
     // Handle role permission errors gracefully
@@ -245,13 +284,13 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     
     // Handle user not found error gracefully
     if (firstError.message === 'User not found' || firstError.extensions?.code === 'INTERNAL_SERVER_ERROR') {
-      clearAuthToken();
+      // Don't clear tokens - let caller handle
       return null;
     }
     
     // Handle authentication errors gracefully
     if (firstError.message.includes('Unauthorized') || firstError.message.includes('Forbidden')) {
-      clearAuthToken();
+      // Don't clear tokens - let caller handle
       return null;
     }
     
@@ -274,19 +313,43 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
       password: credentials.password,
     });
 
+    // Check if data is null (authentication error)
+    if (!data) {
+      console.error('❌ Login failed - makeGraphQLRequest returned null');
+      throw new Error('Invalid credentials');
+    }
 
     if (data.login && data.login.token) {
       // Save JWT to localStorage
       setAuthToken(data.login.token);
+      console.log('✅ Token saved to localStorage (member login)');
       
       // Save user data to localStorage
       localStorage.setItem('user', JSON.stringify(data.login.user));
+      console.log('✅ User data saved to localStorage:', data.login.user);
+      
+      // Verify token is saved
+      const savedToken = getAuthToken();
+      console.log('🔍 Verifying saved token:', savedToken ? 'Token found' : 'No token found');
+      
+      // 🕒 Small delay to ensure storage sync
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      // Double-check token exists before redirect
+      const verifyToken = localStorage.getItem('jwt');
+      if (!verifyToken) {
+        console.warn('⚠️ Token not yet available after login - retrying...');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      
+      console.log('✅ Verified jwt before redirect:', localStorage.getItem('jwt') ? 'found' : 'missing');
       
       // Show success message
       alert(`Welcome back, ${data.login.user.displayName}!`);
       
       return true;
     } else {
+      console.error('❌ Login failed - no token in response:', data);
       throw new Error('Login failed - no token received');
     }
   } catch (error: any) {
@@ -306,19 +369,43 @@ export const handleTutorLogin = async (credentials: LoginCredentials): Promise<b
       }
     });
 
+    // Check if data is null (authentication error)
+    if (!data) {
+      console.error('❌ Tutor login failed - makeGraphQLRequest returned null');
+      throw new Error('Invalid credentials');
+    }
 
     if (data.tutorLogin && data.tutorLogin.token) {
       // Save JWT to localStorage
       setAuthToken(data.tutorLogin.token);
+      console.log('✅ Token saved to localStorage');
       
       // Save user data to localStorage
       localStorage.setItem('user', JSON.stringify(data.tutorLogin.user));
+      console.log('✅ User data saved to localStorage:', data.tutorLogin.user);
+      
+      // Verify token is saved
+      const savedToken = getAuthToken();
+      console.log('🔍 Verifying saved token:', savedToken ? 'Token found' : 'No token found');
+      
+      // 🕒 Small delay to ensure storage sync
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      // Double-check token exists before redirect
+      const verifyToken = localStorage.getItem('jwt');
+      if (!verifyToken) {
+        console.warn('⚠️ Token not yet available after tutor login - retrying...');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      
+      console.log('✅ Verified jwt before redirect:', localStorage.getItem('jwt') ? 'found' : 'missing');
       
       // Show success message
       alert(`Welcome back, Tutor ${data.tutorLogin.user.displayName}!`);
       
       return true;
     } else {
+      console.error('❌ Login failed - no token in response:', data);
       throw new Error('Tutor login failed - no token received');
     }
   } catch (error: any) {
@@ -425,37 +512,72 @@ export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
 
 // Check if user is authenticated
 export const isAuthenticated = (): boolean => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') {
+    console.log('🔍 isAuthenticated - Server side, returning false');
+    return false;
+  }
   
   const token = getAuthToken();
-  if (!token) return false;
+  console.log('🔍 isAuthenticated - token:', token ? 'exists' : 'missing');
+  
+  if (!token) {
+    console.log('❌ isAuthenticated - No token, returning false');
+    return false;
+  }
   
   try {
     // Basic JWT token validation
     const payload = JSON.parse(atob(token.split('.')[1]));
     const now = Math.floor(Date.now() / 1000);
-    return payload.exp > now;
-  } catch {
+    const isValid = payload.exp > now;
+    console.log('🔍 isAuthenticated - Token valid:', isValid, 'exp:', payload.exp, 'now:', now);
+    return isValid;
+  } catch (error) {
+    console.error('❌ isAuthenticated - Token validation error:', error);
     return false;
   }
 };
 
 // Get current user
 export const getCurrentUser = async () => {
-  if (!isAuthenticated()) return null;
+  // Check localStorage FIRST - this is the primary source after login
+  const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      // Verify user has required fields
+      if (user && user._id && user.email) {
+        console.log('✅ Got user from localStorage:', user);
+        return user;
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to parse user from localStorage:', e);
+    }
+  }
   
+  // If no user in localStorage, check authentication status
+  if (!isAuthenticated()) {
+    console.warn('⚠️ No user in localStorage and not authenticated');
+    return null;
+  }
+  
+  // Fallback: try to fetch from backend (ONLY if we have a valid token)
   try {
     const data = await makeGraphQLRequest(GET_CURRENT_USER_QUERY);
     
     // Check if the response has the expected structure
     if (data && data.me) {
+      // Save user to localStorage for next time
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(data.me));
+      }
       return data.me;
     } else {
       return null;
     }
   } catch (error) {
-    // Clear invalid token
-    clearAuthToken();
+    console.error('❌ Failed to get current user:', error);
+    // Don't clear token on error - let the page handle it
     return null;
   }
 };
@@ -525,36 +647,37 @@ export const redirectBasedOnRole = (user: any): void => {
   }
 };
 
-// Token management
+// Token management - Use only jwt key
 export const setAuthToken = (token: string) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window === 'undefined') return;
+  try {
     localStorage.setItem('jwt', token);
-    localStorage.setItem('token', token); // Also store as 'token' for compatibility
+    console.log('✅ Token saved under jwt key only');
+  } catch (error) {
+    console.error('❌ Error saving jwt:', error);
   }
 };
 
 export const getAuthToken = (): string | null => {
-  if (typeof window !== 'undefined') {
-    // Try both 'jwt' and 'token' keys for compatibility
-    const jwtToken = localStorage.getItem('jwt');
-    const tokenKey = localStorage.getItem('token');
-    const token = jwtToken || tokenKey;
-    
-    if (token) {
-      return token;
-    } else {
-      return null;
-    }
+  if (typeof window === 'undefined') return null;
+  const jwt = localStorage.getItem('jwt');
+  if (jwt) return jwt;
+
+  const token = localStorage.getItem('token');
+  if (token) {
+    localStorage.setItem('jwt', token);
+    console.log('✅ Migrated old token → jwt');
+    return token;
   }
   return null;
 };
 
 export const clearAuthToken = () => {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('jwt');
-    localStorage.removeItem('token'); // Clear both keys
-    localStorage.removeItem('user'); // Also clear user data
-  }
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('jwt');
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  console.log('🧹 Cleared jwt, token, and user data');
 };
 
 // Force login for testing

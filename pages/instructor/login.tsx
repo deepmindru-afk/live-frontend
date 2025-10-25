@@ -17,11 +17,28 @@ const InstructorLoginPage: React.FC = () => {
   // Check if user is already authenticated
   useEffect(() => {
     const checkAuth = async () => {
+      // Check if user has valid token AND user data in localStorage
       if (isAuthenticated()) {
-        const user = await getCurrentUser();
-        if (user) {
-          redirectBasedOnRole(user);
+        // Get user from localStorage directly (don't call API)
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const user = JSON.parse(userStr);
+            if (user && user._id && user.email) {
+              console.log('✅ User already authenticated, redirecting...');
+              redirectBasedOnRole(user);
+              return;
+            }
+          } catch (e) {
+            console.warn('⚠️ Failed to parse user data:', e);
+          }
         }
+        
+        // If no valid user in localStorage but token exists, clear and stay on login
+        console.warn('⚠️ Token exists but no valid user data, clearing...');
+        localStorage.removeItem('jwt');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
     };
     checkAuth();
@@ -66,14 +83,13 @@ const InstructorLoginPage: React.FC = () => {
     try {
       const success = await handleTutorLogin(formData);
       if (success) {
-        // Get user data and redirect based on role
-        const user = await getCurrentUser();
-        if (user) {
-          redirectBasedOnRole(user);
-        } else {
-          // Fallback redirect
-          window.location.href = '/instructor';
-        }
+        // handleTutorLogin already has delays built in, no need to add more
+        // The token is already verified and saved in handleTutorLogin
+        
+        // Simply redirect based on the role (user data is already saved in localStorage)
+        // Don't call getCurrentUser() here as it may try to fetch from API before token is fully ready
+        console.log('✅ Login successful, redirecting to instructor dashboard');
+        window.location.href = '/instructor';
       }
     } catch (error: any) {
       
