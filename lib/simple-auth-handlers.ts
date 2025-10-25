@@ -147,13 +147,19 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     }
   }
   
+  console.log('🔍 GraphQL Request:', {
+    endpoint: GRAPHQL_ENDPOINT,
+    hasToken: !!token,
+    queryName: queryString.includes('getMeetingAttendance') ? 'getMeetingAttendance' : 'other',
+    variables
+  });
 
   const requestBody = {
     query: queryString,
     variables,
   };
-
   
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'apollo-require-preflight': 'true',
@@ -161,7 +167,9 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('🔐 Using token for authentication');
   } else {
+    console.warn('⚠️ No token found for GraphQL request');
   }
   
   console.log('📡 Making GraphQL request to:', GRAPHQL_ENDPOINT);
@@ -190,7 +198,18 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   let data;
   try {
     data = await response.json();
+    console.log('📊 GraphQL Response:', {
+      hasData: !!data,
+      hasErrors: !!data.errors,
+      dataKeys: data ? Object.keys(data) : [],
+      errors: data?.errors || null
+    });
+    
+    if (data.errors) {
+      console.error('❌ GraphQL Errors:', data.errors);
+    }
   } catch (jsonError) {
+    console.error('❌ JSON Parse Error:', jsonError);
     throw new Error('Invalid JSON response from server');
   }
   

@@ -144,6 +144,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   
+  // Throttling for participant list updates
+  const lastUpdateRef = useRef(0);
+  
   // Video player mode states
   const [isVideoPlayerMode, setIsVideoPlayerMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -889,10 +892,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     document.addEventListener('touchstart', preventPullToRefresh, { passive: false });
     document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
 
-    // ✅ FIX 1: Delay fullscreen until LiveKit is connected and has participants
+    // ✅ FIX 1: Delay fullscreen until LiveKit is connected and has participants with active video tracks
     const enterFullscreenWhenReady = () => {
       if (isLiveKitConnected && liveKitParticipants.size > 0) {
-        setTimeout(() => enterFullscreen(), 500);
+        const hasTrack = Array.from(liveKitParticipants.values()).some(p => {
+          // Check if participant has any video tracks by looking at the actual LiveKit room participants
+          const roomParticipant = liveKitService?.room?.remoteParticipants.get(p.identity);
+          return roomParticipant ? roomParticipant.videoTrackPublications.size > 0 : false;
+        });
+        if (hasTrack) {
+          setTimeout(() => enterFullscreen(), 500);
+        } else {
+          // Retry after 1 second if no video tracks yet
+          setTimeout(enterFullscreenWhenReady, 1000);
+        }
       } else {
         // Retry after 1 second if not ready
         setTimeout(enterFullscreenWhenReady, 1000);
@@ -1402,6 +1415,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
       
+      // Throttle participant list updates
+      const now = Date.now();
+      if (now - lastUpdateRef.current < 500) return;
+      lastUpdateRef.current = now;
+      
       // 🧠 Step 1 — Detect mismatch in raw participant data
       // Raw participant data processed
       
@@ -1817,12 +1835,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleScreenShareToggle = async () => {
+    console.log('🖥️ Screen share toggle clicked - isLiveKitConnected:', isLiveKitConnected, 'currentScreenSharing:', liveKitIsScreenSharing);
+    
     if (isLiveKitConnected) {
       try {
+        console.log('🖥️ Calling liveKitToggleScreenShare...');
         await liveKitToggleScreenShare();
+        console.log('🖥️ Screen share toggle completed');
         // ✅ FIX: Don't manually set screenSharing state - let the useEffect handle it
         // The LiveKit state change will trigger the useEffect to update queue state
       } catch (error: any) {
+        console.error('🖥️ Screen share toggle error:', error);
         
         // Show user-friendly error message
         Swal.fire({
@@ -1834,6 +1857,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
       }
     } else {
+      console.log('🖥️ LiveKit not connected, using fallback');
       // Fallback for when LiveKit is not connected
       if (currentParticipant?._id) {
         if (queueState.screenShareMode) {
@@ -2658,7 +2682,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     <ClientSideRecording
                       meetingId={actualMeetingId}
                       userId={currentUser?.id || currentUser?._id || 'unknown'}
-                      meetingName={meetingData?.title || `Meeting_${actualMeetingId}`}
+                      meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                       meetingStatus={meetingStatus}
                       onRecordingComplete={(recordingId) => {
                         console.log('Recording completed:', recordingId);
@@ -2773,8 +2797,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
                     {/* Screen Share Button */}
                     <button
-                      onClick={handleStopScreenShare}
-                      onTouchStart={handleStopScreenShare}
+                      onClick={handleScreenShareToggle}
+                      onTouchStart={handleScreenShareToggle}
                       style={{
                         width: '44px',
                         height: '44px',
@@ -2849,7 +2873,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       <ClientSideRecording
                         meetingId={actualMeetingId}
                         userId={currentUser?.id || currentUser?._id || 'unknown'}
-                        meetingName={meetingData?.title || `Meeting_${actualMeetingId}`}
+                        meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                         meetingStatus={meetingStatus}
                         onRecordingComplete={(recordingId) => {
                           console.log('Recording completed:', recordingId);
@@ -3033,9 +3057,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let audioTrack = null;
                 let hasScreenShare = false;
                 
-                // ✅ CRITICAL FIX: LiveKit uses displayName as identity, not user._id
-                // Try multiple identity formats to match with LiveKit participants
-                const participantIdentity = participant.displayName || participant.user?._id || participant.identity;
+                // ✅ CRITICAL FIX: Use consistent identity mapping
+                const participantIdentity = participant.user?._id || participant._id;
                 console.log('🎥 Thumbnail - Participant:', participant.displayName, 'Identity:', participantIdentity, 'User ID:', participant.user?._id);
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
@@ -3091,41 +3114,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   } else {
                     // ✅ REMOTE PARTICIPANT: Get tracks from remoteParticipants
                     console.log('🔍 Looking for remote participant with identity:', participantIdentity);
-                    let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
-                    
-                    // ✅ FALLBACK: Try alternative identity formats if not found
-                    if (!liveKitRoomParticipant) {
-                      // Try with participant.user._id
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.user?._id);
-                      console.log('🔍 Fallback 1 - Using participant.user._id:', participant.user?._id, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with participant._id directly
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant._id);
-                      console.log('🔍 Fallback 2 - Using participant._id:', participant._id, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with participant.identity
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.identity);
-                      console.log('🔍 Fallback 3 - Using participant.identity:', participant.identity, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with participant.userId
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participant.userId);
-                      console.log('🔍 Fallback 4 - Using participant.userId:', participant.userId, 'Found:', !!liveKitRoomParticipant);
-                    }
+                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
                     console.log('🔍 Final result - Found remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
-                      // ✅ IMPORTANT: Get ONLY camera video track for thumbnail (NOT screen share)
+                      // Debug: Log all available video tracks
+                      const allVideoTracks = Array.from(liveKitRoomParticipant.videoTrackPublications.values());
+                      console.log('🎥 Available video tracks for', participant.displayName, ':', allVideoTracks.map(pub => ({
+                        source: pub.source,
+                        trackSource: pub.track?.source,
+                        hasTrack: !!pub.track
+                      })));
+                      
+                      // ✅ IMPORTANT: Get camera video track for thumbnail (try multiple sources)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
-                        .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                        .find(pub => {
+                          const track = pub.track;
+                          const source = pub.source || track?.source;
+                          return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                        });
                       videoTrack = cameraTrackPub?.track;
-                      console.log('🎥 Thumbnail video track assigned:', !!videoTrack, 'Source:', cameraTrackPub?.source);
+                      console.log('🎥 Thumbnail video track assigned:', !!videoTrack, 'Source:', cameraTrackPub?.source, 'Track source:', cameraTrackPub?.track?.source);
                       
                       // Check if this participant has screen share active
                       const screenSharePub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
@@ -3536,9 +3546,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainScreenShareTrack = null;
                 let isParticipantScreenSharing = false;
 
-                // ✅ CRITICAL FIX: LiveKit uses displayName as identity, not user._id
-                // Try multiple identity formats to match with LiveKit participants
-                const participantIdentity = mainParticipant.displayName || mainParticipant.user?._id || mainParticipant.identity;
+                // ✅ CRITICAL FIX: Use consistent identity mapping
+                const participantIdentity = mainParticipant.user?._id || mainParticipant._id;
                 console.log('🎬 Main Video - Participant:', mainParticipant.displayName, 'Identity:', participantIdentity, 'User ID:', mainParticipant.user?._id);
                 
                 if (liveKitService?.room && mainParticipant._id) {
@@ -3559,7 +3568,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     
                     // Get CAMERA video track (not screen share)
                     const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
-                      .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                      .find(pub => {
+                        const track = pub.track;
+                        const source = pub.source || track?.source;
+                        return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                      });
                     mainVideoTrack = cameraTrackPub?.track;
                     
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
@@ -3574,41 +3587,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   } else {
                     // Remote participant - get tracks from remoteParticipants
                     console.log('🎬 Looking for main video remote participant with identity:', participantIdentity);
-                    let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
-                    
-                    // ✅ FALLBACK: Try alternative identity formats if not found
-                    if (!liveKitRoomParticipant) {
-                      // Try with mainParticipant.user._id
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.user?._id);
-                      console.log('🎬 Fallback 1 - Using mainParticipant.user._id:', mainParticipant.user?._id, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with mainParticipant._id directly
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant._id);
-                      console.log('🎬 Fallback 2 - Using mainParticipant._id:', mainParticipant._id, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with mainParticipant.identity
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.identity);
-                      console.log('🎬 Fallback 3 - Using mainParticipant.identity:', mainParticipant.identity, 'Found:', !!liveKitRoomParticipant);
-                    }
-                    
-                    if (!liveKitRoomParticipant) {
-                      // Try with mainParticipant.userId
-                      liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(mainParticipant.userId);
-                      console.log('🎬 Fallback 4 - Using mainParticipant.userId:', mainParticipant.userId, 'Found:', !!liveKitRoomParticipant);
-                    }
+                    const liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
                     console.log('🎬 Final result - Found main video remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
+                      // Debug: Log all available video tracks for main video
+                      const allVideoTracks = Array.from(liveKitRoomParticipant.videoTrackPublications.values());
+                      console.log('🎬 Available video tracks for main video', mainParticipant.displayName, ':', allVideoTracks.map(pub => ({
+                        source: pub.source,
+                        trackSource: pub.track?.source,
+                        hasTrack: !!pub.track
+                      })));
+                      
                       // Get CAMERA video track (not screen share)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
-                        .find(pub => pub.track?.source === 'camera' || pub.source === 'camera');
+                        .find(pub => {
+                          const track = pub.track;
+                          const source = pub.source || track?.source;
+                          return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                        });
                       mainVideoTrack = cameraTrackPub?.track;
-                      console.log('🎬 Main video track assigned:', !!mainVideoTrack, 'Source:', cameraTrackPub?.source);
+                      console.log('🎬 Main video track assigned:', !!mainVideoTrack, 'Source:', cameraTrackPub?.source, 'Track source:', cameraTrackPub?.track?.source);
                       
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
@@ -3675,7 +3675,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   hasAudioTrack: !!mainAudioTrack,
                   hasScreenShareTrack: !!mainScreenShareTrack,
                   isScreenSharing: isParticipantScreenSharing,
-                  videoOff: !mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)
+                  videoOff: !mainVideoTrack || (isMainParticipantLocal && !cameraEnabled),
+                  cameraEnabled: cameraEnabled,
+                  queueScreenShareMode: queueState.screenShareMode,
+                  liveKitScreenSharing: liveKitIsScreenSharing
                 });
 
 

@@ -39,20 +39,24 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   const [shouldShake, setShouldShake] = useState(false);
   const previousHandRaised = useRef(isHandRaised);
 
-  // Video track attachment
+  // Video track attachment with race condition fixes
   useEffect(() => {
-    if (videoRef.current && videoTrack) {
-      // Attach the video track to the video element
-      videoTrack.attach(videoRef.current);
-      
-      return () => {
-        // Clean up: detach the track when component unmounts or track changes
-        if (videoTrack && videoRef.current) {
-          videoTrack.detach(videoRef.current);
-        }
-      };
+    const el = videoRef.current;
+    if (!el || !videoTrack) return;
+
+    if (el.offsetWidth === 0) {
+      const timer = setTimeout(() => videoTrack.attach(el), 300);
+      return () => clearTimeout(timer);
     }
-  }, [videoTrack, participantId, name, isVideoOff]);
+
+    // Always detach before attaching to prevent race conditions
+    videoTrack.detach(el);
+    videoTrack.attach(el);
+
+    return () => {
+      videoTrack.detach(el);
+    };
+  }, [videoTrack]);
 
   // ✅ CRITICAL: Attach audio track for sound
   useEffect(() => {

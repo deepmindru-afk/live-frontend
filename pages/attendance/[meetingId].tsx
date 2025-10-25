@@ -69,14 +69,29 @@ const AttendancePage: React.FC = () => {
   const [showParticipantModal, setShowParticipantModal] = useState(false);
 
   useEffect(() => {
-    if (meetingId) {
+    if (router.isReady && meetingId) {
       loadMeetingData();
     }
-  }, [meetingId]);
+  }, [router.isReady, meetingId]);
 
   const loadMeetingData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching attendance for', meetingId);
+      
+      // Check if user is authenticated
+      const token = localStorage.getItem('token') || localStorage.getItem('jwt');
+      if (!token) {
+        console.error('❌ No authentication token found');
+        Swal.fire({ 
+          icon: 'error', 
+          title: '인증 필요', 
+          text: '로그인이 필요합니다. 로그인 페이지로 이동합니다.' 
+        }).then(() => {
+          router.push('/login');
+        });
+        return;
+      }
       
       // Load meeting details
       try {
@@ -85,29 +100,72 @@ const AttendancePage: React.FC = () => {
         });
         
         if (meetingResult.getMeetingById) {
-          setMeeting(meetingResult.getMeetingById);
+          const meeting = meetingResult.getMeetingById;
+          console.log('🏢 Meeting info:', {
+            id: meeting._id,
+            title: meeting.title,
+            hostId: meeting.hostId,
+            currentHostId: meeting.currentHostId,
+            status: meeting.status
+          });
+          setMeeting(meeting);
         }
       } catch (error) {
+        console.error('❌ Meeting query failed:', error);
       }
 
       // Load attendance data
       try {
+        // First, let's check the current user's info
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          console.log('👤 Current user info:', {
+            id: user._id,
+            displayName: user.displayName,
+            systemRole: user.systemRole,
+            email: user.email
+          });
+        }
+
         const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         });
         
+        console.log('📊 Attendance result:', attendanceResult);
         
-        if (attendanceResult.getMeetingAttendance) {
-          setAttendance(attendanceResult.getMeetingAttendance);
-        } else {
-          setAttendance(null);
+        if (!attendanceResult?.getMeetingAttendance) {
+          console.error('⚠️ No attendance data found:', attendanceResult);
+          Swal.fire({ 
+            icon: 'error', 
+            title: '출석 데이터 없음', 
+            text: '서버에서 출석 정보를 가져오지 못했습니다.' 
+          });
+          return;
         }
-      } catch (error) {
-        // No fallback data - let it show empty state
+        setAttendance(attendanceResult.getMeetingAttendance);
+      } catch (err) {
+        console.error('❌ Attendance query failed:', err);
+        
+        // Check if it's a permission error
+        if (err instanceof Error && err.message && err.message.includes('Only meeting hosts and tutors can view attendance')) {
+          Swal.fire({ 
+            icon: 'error', 
+            title: '권한 없음', 
+            text: '출석 정보를 볼 권한이 없습니다. 미팅 호스트이거나 강사여야 합니다.' 
+          });
+        } else {
+          Swal.fire({ 
+            icon: 'error', 
+            title: '서버 오류', 
+            text: '출석 정보를 불러오지 못했습니다.' 
+          });
+        }
         setAttendance(null);
       }
       
     } catch (error) {
+      console.error('❌ Load meeting data failed:', error);
     } finally {
       setLoading(false);
     }

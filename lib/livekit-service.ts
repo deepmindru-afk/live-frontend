@@ -670,13 +670,16 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🖥️ LiveKit startScreenShare: Starting screen share...');
       
       // Check if screen sharing is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         throw new Error('Screen sharing is not supported in this browser');
       }
       
+      console.log('🖥️ LiveKit startScreenShare: Calling setScreenShareEnabled(true)...');
       await this._room.localParticipant.setScreenShareEnabled(true);
+      console.log('🖥️ LiveKit startScreenShare: setScreenShareEnabled completed');
       this.updateRoomState({ isScreenSharing: true });
     } catch (error: any) {
       
@@ -697,12 +700,15 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('🖥️ LiveKit stopScreenShare: Stopping screen share...');
       
       // Gracefully stop screen share without stopping the entire stream
       await this._room.localParticipant.setScreenShareEnabled(false);
+      console.log('🖥️ LiveKit stopScreenShare: setScreenShareEnabled(false) completed');
       
       // Update state after successful stop
       this.updateRoomState({ isScreenSharing: false });
+      console.log('🖥️ LiveKit stopScreenShare: State updated to isScreenSharing: false');
       
     } catch (error) {
       

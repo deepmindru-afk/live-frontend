@@ -40,46 +40,78 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   const screenShareRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Attach video track
+  // Attach video track with race condition fixes
   useEffect(() => {
-    if (mainVideoRef.current && videoTrack && !isScreenSharing) {
-      console.log('🎥 MAIN STAGE VIDEO ATTACH:', {
-        participantId,
-        name,
-        hasVideoTrack: !!videoTrack,
-        videoElement: !!mainVideoRef.current,
-        isVideoOff,
-        isScreenSharing,
-        videoElementVisible: mainVideoRef.current.offsetWidth > 0 && mainVideoRef.current.offsetHeight > 0
-      });
-      
-      videoTrack.attach(mainVideoRef.current);
-      
-      // Mobile debugging
-      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-        console.log('📱 MOBILE VIDEO DEBUG:', {
-          videoElement: mainVideoRef.current,
-          videoElementStyle: window.getComputedStyle(mainVideoRef.current),
-          videoElementRect: mainVideoRef.current.getBoundingClientRect(),
-          videoElementDisplay: mainVideoRef.current.style.display,
-          videoElementVisibility: mainVideoRef.current.style.visibility
-        });
-      }
-      
-      return () => {
-        videoTrack.detach(mainVideoRef.current);
-      };
+    const el = mainVideoRef.current;
+    if (!el || !videoTrack) {
+      console.log('🎥 MainStageView video attach: No element or track', { hasElement: !!el, hasTrack: !!videoTrack });
+      return;
     }
-  }, [videoTrack, isScreenSharing, participantId, name, isVideoOff]);
 
-  // Attach screen share track
-  useEffect(() => {
-    if (screenShareRef.current && screenShareTrack && isScreenSharing) {
-      screenShareTrack.attach(screenShareRef.current);
-      return () => {
-        screenShareTrack.detach(screenShareRef.current);
-      };
+    console.log('🎥 MainStageView video attach: Attaching video track', { 
+      isScreenSharing, 
+      hasVideoTrack: !!videoTrack, 
+      elementSize: el.offsetWidth 
+    });
+
+    if (el.offsetWidth === 0) {
+      console.log('🎥 MainStageView video attach: Element has no width, delaying attachment');
+      const timer = setTimeout(() => {
+        console.log('🎥 MainStageView video attach: Delayed attachment executing');
+        videoTrack.detach(el);
+        videoTrack.attach(el);
+      }, 300);
+      return () => clearTimeout(timer);
     }
+
+    // Always detach before attaching to prevent race conditions
+    console.log('🎥 MainStageView video attach: Immediate attachment');
+    videoTrack.detach(el);
+    videoTrack.attach(el);
+
+    return () => {
+      console.log('🎥 MainStageView video attach: Cleanup - detaching video track');
+      videoTrack.detach(el);
+    };
+  }, [videoTrack, isScreenSharing]);
+
+  // Attach screen share track with race condition fixes
+  useEffect(() => {
+    const el = screenShareRef.current;
+    if (!el || !screenShareTrack || !isScreenSharing) {
+      console.log('🖥️ MainStageView screen share attach: No element, track, or not sharing', { 
+        hasElement: !!el, 
+        hasTrack: !!screenShareTrack, 
+        isScreenSharing 
+      });
+      return;
+    }
+
+    console.log('🖥️ MainStageView screen share attach: Attaching screen share track', { 
+      isScreenSharing, 
+      hasScreenShareTrack: !!screenShareTrack, 
+      elementSize: el.offsetWidth 
+    });
+
+    if (el.offsetWidth === 0) {
+      console.log('🖥️ MainStageView screen share attach: Element has no width, delaying attachment');
+      const timer = setTimeout(() => {
+        console.log('🖥️ MainStageView screen share attach: Delayed attachment executing');
+        screenShareTrack.detach(el);
+        screenShareTrack.attach(el);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
+    // Always detach before attaching to prevent race conditions
+    console.log('🖥️ MainStageView screen share attach: Immediate attachment');
+    screenShareTrack.detach(el);
+    screenShareTrack.attach(el);
+
+    return () => {
+      console.log('🖥️ MainStageView screen share attach: Cleanup - detaching screen share track');
+      screenShareTrack.detach(el);
+    };
   }, [screenShareTrack, isScreenSharing]);
 
   // ✅ CRITICAL: Attach audio track for sound
@@ -111,75 +143,94 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
       
       {/* Main Video Container */}
       <div className={styles['main-stage-container']} onClick={handleClick}>
-        {/* Screen Share Video */}
+        {/* Screen Share Video - Render when screen sharing */}
         {isScreenSharing && screenShareTrack ? (
-          <video
-            ref={screenShareRef}
-            className={`${styles['main-stage-video']} ${styles['screen-share-video']}`}
-            autoPlay
-            playsInline
-            muted
-            style={{
-              // Beautiful screen share styling - no margins or borders
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain', // Show full content without cropping
-              objectPosition: 'center',
-              background: '#000000',
-              display: 'block',
-              visibility: 'visible',
-              opacity: 1,
-              zIndex: 1,
-              position: 'relative',
-              border: 'none', // Remove any borders
-              margin: 0, // Remove margins
-              padding: 0, // Remove padding
-              borderRadius: 0, // Remove border radius for full screen effect
-              boxShadow: 'none', // Remove any shadows
-              outline: 'none' // Remove outline
-            }}
-          />
+          <>
+            {console.log('🖥️ MainStageView render: Rendering screen share video', { isScreenSharing, hasScreenShareTrack: !!screenShareTrack })}
+            <video
+              ref={screenShareRef}
+              className={`${styles['main-stage-video']} ${styles['screen-share-video']}`}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                // Beautiful screen share styling - no margins or borders
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain', // Show full content without cropping
+                objectPosition: 'center',
+                background: '#000000',
+                display: 'block',
+                visibility: 'visible',
+                opacity: 1,
+                zIndex: 1,
+                position: 'relative',
+                border: 'none', // Remove any borders
+                margin: 0, // Remove margins
+                padding: 0, // Remove padding
+                borderRadius: 0, // Remove border radius for full screen effect
+                boxShadow: 'none', // Remove any shadows
+                outline: 'none' // Remove outline
+              }}
+            />
+          </>
         ) : (
           <>
-            {/* Regular Video */}
+            {console.log('🎥 MainStageView render: Not screen sharing, checking regular video', { 
+              isScreenSharing, 
+              isVideoOff, 
+              hasVideoTrack: !!videoTrack,
+              willShowVideo: !isVideoOff && videoTrack && !isScreenSharing
+            })}
+            {/* Regular Video - Only render if not screen sharing */}
             {!isVideoOff && videoTrack && !isScreenSharing ? (
-              <video
-                ref={mainVideoRef}
-                className={styles['main-stage-video']}
-                autoPlay
-                playsInline
-                muted
-                style={{
-                  // Mobile-specific fixes
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: 'block',
-                  visibility: 'visible',
-                  opacity: 1,
-                  zIndex: 1,
-                  position: 'relative'
-                }}
-              />
+              <>
+                {console.log('🎥 MainStageView render: Rendering regular video')}
+                <video
+                  ref={mainVideoRef}
+                  className={styles['main-stage-video']}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    // Mobile-specific fixes
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: 1,
+                    zIndex: 1,
+                    position: 'relative'
+                  }}
+                />
+              </>
             ) : (
-              /* Beautiful Name Display When No Video */
-              <div className={styles['main-stage-no-video']}>
-                <div className={styles['no-video-content']}>
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt={name} className={styles['no-video-avatar']} />
-                  ) : (
-                    <div className={styles['no-video-avatar-placeholder']}>
-                      {name.charAt(0).toUpperCase()}
+              <>
+                {console.log('🎥 MainStageView render: Showing no-video placeholder', { 
+                  isVideoOff, 
+                  hasVideoTrack: !!videoTrack, 
+                  isScreenSharing 
+                })}
+                {/* Beautiful Name Display When No Video */}
+                <div className={styles['main-stage-no-video']}>
+                  <div className={styles['no-video-content']}>
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={name} className={styles['no-video-avatar']} />
+                    ) : (
+                      <div className={styles['no-video-avatar-placeholder']}>
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className={styles['no-video-name']}>
+                      {name}
                     </div>
-                  )}
-                  <div className={styles['no-video-name']}>
-                    {name}
-                  </div>
-                  <div className={styles['no-video-subtitle']}>
-                    {isHost ? 'Host' : 'Participant'}
+                    <div className={styles['no-video-subtitle']}>
+                      {isHost ? 'Host' : 'Participant'}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
