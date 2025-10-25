@@ -5,6 +5,164 @@ import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
 import { GET_MEETING_ATTENDANCE } from '../../apollo/livestream/queries';
 import Swal from 'sweetalert2';
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
+
+// Beautiful Modern Card Component
+const BeautifulStatsCard: React.FC<{
+  label: string;
+  value: number;
+  max?: number;
+  gradient: string[];
+  icon: string;
+  unit?: string;
+}> = ({ label, value, max = 100, gradient, icon, unit = '' }) => {
+  const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+
+  return (
+    <motion.div
+      initial={{ scale: 0, opacity: 0, y: 50 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      transition={{ 
+        duration: 0.6,
+        type: "spring",
+        stiffness: 100
+      }}
+      whileHover={{ 
+        scale: 1.03,
+        y: -10,
+        transition: { duration: 0.2 }
+      }}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        background: `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`,
+        borderRadius: '24px',
+        padding: '32px',
+        minWidth: '280px',
+        boxShadow: `0 10px 40px ${gradient[0]}40`,
+        cursor: 'pointer'
+      }}
+    >
+      {/* Animated background particles */}
+      <motion.div
+        animate={{
+          rotate: [0, 360],
+          scale: [1, 1.2, 1]
+        }}
+        transition={{
+          duration: 20,
+          repeat: Infinity,
+          ease: "linear"
+        }}
+        style={{
+          position: 'absolute',
+          top: '-50px',
+          right: '-50px',
+          width: '200px',
+          height: '200px',
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${gradient[0]}20 0%, transparent 70%)`,
+          pointerEvents: 'none'
+        }}
+      />
+      
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '20px'
+        }}>
+          <div style={{
+            fontSize: '48px',
+            width: '60px',
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '16px',
+            backdropFilter: 'blur(10px)'
+          }}>
+            {icon}
+          </div>
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.3, type: "spring" }}
+            style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: 'white',
+              background: 'rgba(255, 255, 255, 0.25)',
+              padding: '6px 14px',
+              borderRadius: '20px',
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            {percentage.toFixed(1)}%
+          </motion.div>
+        </div>
+
+        <div style={{ color: 'white' }}>
+          <div style={{
+            fontSize: '36px',
+            fontWeight: 'bold',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: '8px'
+          }}>
+            <CountUp
+              end={value}
+              duration={2}
+              separator=","
+            />
+            {unit && <span style={{ fontSize: '20px', opacity: 0.9 }}>{unit}</span>}
+          </div>
+          <div style={{
+            fontSize: '16px',
+            opacity: 0.9,
+            fontWeight: '500',
+            marginBottom: '12px'
+          }}>
+            {label}
+          </div>
+          {max && max !== 100 && (
+            <div style={{
+              fontSize: '13px',
+              opacity: 0.7,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <div style={{
+                flex: 1,
+                height: '6px',
+                background: 'rgba(255, 255, 255, 0.3)',
+                borderRadius: '10px',
+                overflow: 'hidden'
+              }}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentage}%` }}
+                  transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
+                  style={{
+                    height: '100%',
+                    background: 'white',
+                    borderRadius: '10px'
+                  }}
+                />
+              </div>
+              <span>/ {max}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 interface ParticipantAttendance {
   _id: string;
@@ -341,162 +499,252 @@ const AttendancePage: React.FC = () => {
 
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#f8f9fa',
-        padding: '20px'
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%)',
+        padding: '20px',
+        position: 'relative'
       }}>
-        {/* Header */}
+        {/* Animated Background Overlay */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '30px'
-        }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '28px', color: '#333' }}>
-              출석 현황
-            </h1>
-            <p style={{ margin: '5px 0 0 0', color: '#666' }}>
-              {meeting.title}
-            </p>
-            <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#888' }}>
-              출석률은 참여 시간을 총 미팅 시간으로 나눈 비율입니다
-            </p>
-            <div style={{ marginTop: '10px', fontSize: '14px', color: '#888' }}>
-              <div>생성일: {formatTime(meeting.createdAt)}</div>
-              {meeting.actualStartAt && <div>시작일: {formatTime(meeting.actualStartAt)}</div>}
-              {meeting.endedAt && <div>종료일: {formatTime(meeting.endedAt)}</div>}
-              {meeting.scheduledFor && <div>예정일: {formatTime(meeting.scheduledFor)}</div>}
-              <div>초대코드: <strong>{meeting.inviteCode}</strong></div>
-              <div>상태: <span style={{
-                color: meeting.status === 'ENDED' ? '#dc3545' : 
-                       meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '#28a745' : '#6c757d',
-                fontWeight: 'bold'
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.3) 0%, transparent 50%)',
+          pointerEvents: 'none'
+        }} />
+        {/* Header - Enhanced with Glassmorphism */}
+        <motion.div
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            padding: '30px',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            marginBottom: '30px',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '32px',
+                  boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)'
+                }}>
+                  📊
+                </div>
+                <div>
+                  <h1 style={{ margin: 0, fontSize: '32px', color: '#667eea', fontWeight: 'bold' }}>
+                    출석 현황
+                  </h1>
+                  <p style={{ margin: '5px 0 0 0', color: '#764ba2', fontSize: '18px', fontWeight: '500' }}>
+                    {meeting.title}
+                  </p>
+                </div>
+              </div>
+              
+              <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#666', fontStyle: 'italic' }}>
+                출석률은 참여 시간을 총 미팅 시간으로 나눈 비율입니다
+              </p>
+
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                marginTop: '15px'
               }}>
-                {meeting.status === 'ENDED' ? '종료됨' : 
-                 meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '진행중' : 
-                 meeting.status === 'SCHEDULED' ? '예약됨' : '생성됨'}
-              </span></div>
+                <motion.div
+                  whileHover={{ scale: 1.05, backgroundColor: 'rgba(102, 126, 234, 0.15)' }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'rgba(102, 126, 234, 0.1)',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    border: '1px solid rgba(102, 126, 234, 0.3)'
+                  }}
+                >
+                  <span style={{ fontSize: '11px', color: '#667eea', fontWeight: '600', marginRight: '6px' }}>📅</span>
+                  <span style={{ fontSize: '12px', color: '#555' }}>{formatTime(meeting.createdAt).split(' ').slice(-2).join(' ')}</span>
+                </motion.div>
+
+                {meeting.actualStartAt && (
+                  <motion.div
+                    whileHover={{ scale: 1.05, backgroundColor: 'rgba(240, 147, 251, 0.15)' }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      padding: '6px 12px',
+                      background: 'rgba(240, 147, 251, 0.1)',
+                      borderRadius: '20px',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(240, 147, 251, 0.3)'
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', color: '#f093fb', fontWeight: '600', marginRight: '6px' }}>▶️</span>
+                    <span style={{ fontSize: '12px', color: '#555' }}>{formatTime(meeting.actualStartAt).split(' ').slice(-2).join(' ')}</span>
+                  </motion.div>
+                )}
+
+                {meeting.endedAt && (
+                  <motion.div
+                    whileHover={{ scale: 1.05, backgroundColor: 'rgba(79, 172, 254, 0.15)' }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      padding: '6px 12px',
+                      background: 'rgba(79, 172, 254, 0.1)',
+                      borderRadius: '20px',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(79, 172, 254, 0.3)'
+                    }}
+                  >
+                    <span style={{ fontSize: '11px', color: '#4facfe', fontWeight: '600', marginRight: '6px' }}>⏸️</span>
+                    <span style={{ fontSize: '12px', color: '#555' }}>{formatTime(meeting.endedAt).split(' ').slice(-2).join(' ')}</span>
+                  </motion.div>
+                )}
+
+                <motion.div
+                  whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 215, 0, 0.15)' }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'rgba(255, 215, 0, 0.1)',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    border: '1px solid rgba(255, 215, 0, 0.3)'
+                  }}
+                >
+                  <span style={{ fontSize: '11px', color: '#ff8c00', fontWeight: '600', marginRight: '6px' }}>🔑</span>
+                  <span style={{ fontSize: '12px', color: '#555', fontWeight: '600' }}>{meeting.inviteCode}</span>
+                </motion.div>
+
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    background: meeting.status === 'ENDED' ? 'rgba(220, 53, 69, 0.1)' :
+                                meeting.status === 'LIVE' || meeting.status === 'STARTED' ? 'rgba(40, 167, 69, 0.1)' :
+                                'rgba(108, 117, 125, 0.1)',
+                    border: `1px solid ${meeting.status === 'ENDED' ? 'rgba(220, 53, 69, 0.3)' : 
+                                          meeting.status === 'LIVE' || meeting.status === 'STARTED' ? 'rgba(40, 167, 69, 0.3)' : 
+                                          'rgba(108, 117, 125, 0.3)'}`
+                  }}
+                >
+                  <span style={{ fontSize: '11px', fontWeight: '600', marginRight: '6px' }}>
+                    {meeting.status === 'ENDED' ? '🔴' : 
+                     meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '🟢' : '⚪'}
+                  </span>
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: meeting.status === 'ENDED' ? '#dc3545' : 
+                           meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '#28a745' : '#6c757d'
+                  }}>
+                    {meeting.status === 'ENDED' ? '종료' : 
+                     meeting.status === 'LIVE' || meeting.status === 'STARTED' ? '진행중' : 
+                     meeting.status === 'SCHEDULED' ? '예약됨' : '생성'}
+                  </span>
+                </motion.div>
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <motion.button
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
               onClick={exportToExcel}
               style={{
-                padding: '12px 24px',
-                backgroundColor: '#28a745',
+                padding: '14px 28px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
                 border: 'none',
-                borderRadius: '8px',
+                borderRadius: '12px',
                 cursor: 'pointer',
                 fontSize: '16px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                fontWeight: '500'
+                gap: '10px',
+                fontWeight: '600',
+                boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+                transition: 'all 0.3s ease'
               }}
             >
-              📊 Excel 다운로드
-            </button>
-            <button
+              <span style={{ fontSize: '20px' }}>📊</span>
+              Excel 다운로드
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => router.push('/dashboard')}
               style={{
-                padding: '10px 20px',
-                backgroundColor: '#6c757d',
+                padding: '14px 28px',
+                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                 color: 'white',
                 border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
+                borderRadius: '12px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: '600',
+                boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
+                transition: 'all 0.3s ease'
               }}
             >
-              ← 대시보드로 돌아가기
-            </button>
+              🏠 대시보드로
+            </motion.button>
           </div>
         </div>
+        </motion.div>
 
-        {/* Summary Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '20px',
-          marginBottom: '30px'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 참가자</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>
-              {attendance?.totalParticipants || 0}명
-            </div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참석자</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-              {attendance?.presentParticipants || 0}명
-            </div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>참석률</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ffc107' }}>
-              {attendance?.attendanceRate || 0}%
-            </div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>총 미팅 시간</h3>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#6c757d' }}>
-              {formatDurationShort(getTotalMeetingDuration())}
-            </div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>평균 참여 시간</h3>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#17a2b8' }}>
-              {attendance?.averageAttendanceTime ? formatDurationShort(attendance.averageAttendanceTime) : 'N/A'}
-            </div>
-          </div>
-          
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>현재 온라인</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>
-              {attendance?.participants.filter(p => p.status === 'ONLINE').length || 0}명
-            </div>
-          </div>
+        {/* Top 3 Circular Animated Counters with Vibrant Colors */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '30px',
+            marginBottom: '40px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <BeautifulStatsCard
+            label="총 미팅 시간"
+            value={Math.round(getTotalMeetingDuration() / 60)}
+            max={120}
+            gradient={['#667eea', '#764ba2']}
+            icon="⏱️"
+            unit="분"
+          />
+          <BeautifulStatsCard
+            label="총 참가자"
+            value={attendance?.totalParticipants || 0}
+            max={Math.max(attendance?.totalParticipants || 1, 50)}
+            gradient={['#f093fb', '#f5576c']}
+            icon="👥"
+            unit="명"
+          />
+          <BeautifulStatsCard
+            label="평균 참여 시간"
+            value={attendance?.averageAttendanceTime ? Math.round(attendance.averageAttendanceTime / 60) : 0}
+            max={Math.round(getTotalMeetingDuration() / 60)}
+            gradient={['#4facfe', '#00f2fe']}
+            icon="🎯"
+            unit="분"
+          />
         </div>
 
         {/* Search */}
@@ -520,13 +768,20 @@ const AttendancePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Attendance Table */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
-        }}>
+        {/* Attendance Table with Glassmorphism */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            overflow: 'hidden'
+          }}
+        >
           <table style={{
             width: '100%',
             borderCollapse: 'collapse'
@@ -713,7 +968,7 @@ const AttendancePage: React.FC = () => {
               })}
             </tbody>
           </table>
-        </div>
+        </motion.div>
 
         {/* Participant Detail Modal */}
         {showParticipantModal && selectedParticipant && (

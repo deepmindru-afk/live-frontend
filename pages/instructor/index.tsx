@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin, showErrorAlert } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
-import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
+import { GET_TUTOR_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { GET_VODS } from '../../apollo/vod/queries';
 import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../apollo/vod/mutations';
 import ProfileDropdown from '../../components/ProfileDropdown';
@@ -71,7 +71,13 @@ const Dashboard: React.FC = () => {
             setUser(userData);
             await testBackendConnection();
             await fetchMeetings();
-            await loadVODs();
+            // Load VODs with error handling
+            try {
+              await loadVODs();
+            } catch (vodError: any) {
+              console.warn('⚠️ VOD loading failed (non-critical):', vodError.message);
+              setVods([]); // Set empty VOD list
+            }
           } else {
             // Redirect based on role
             if (userData && userData.systemRole === 'MEMBER') {
@@ -158,9 +164,8 @@ const Dashboard: React.FC = () => {
       // Try to fetch meetings via GraphQL first (use real backend)
       try {
         const { makeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
-        const result = await makeGraphQLRequest(GET_MY_MEETINGS, {
+        const result = await makeGraphQLRequest(GET_TUTOR_MEETINGS, {
           input: {
-            hostId: currentUserId, // Filter by current user
             limit: 50, // Get more meetings
             page: 1 // Use page instead of offset
           }
@@ -211,7 +216,7 @@ const Dashboard: React.FC = () => {
         // Try without hostId filter to see if there are any meetings
         try {
           const { makeGraphQLRequest: fallbackMakeGraphQLRequest } = await import('../../lib/simple-auth-handlers');
-          const fallbackResult = await fallbackMakeGraphQLRequest(GET_MY_MEETINGS, {
+          const fallbackResult = await fallbackMakeGraphQLRequest(GET_TUTOR_MEETINGS, {
             input: {
               limit: 50,
               page: 1
@@ -256,19 +261,27 @@ const Dashboard: React.FC = () => {
             return;
           }
         } catch (fallbackError) {
+          console.error('❌ Meeting loading failed:', fallbackError);
           
-          // Final fallback: Show empty state with helpful message
+          // Final fallback: Show empty state without blocking the UI
           setMeetings([]);
           
-          // Show user-friendly error message
+          // Check if it's an authentication error
+          if (fallbackError instanceof Error && 
+              (fallbackError.message?.includes('TOKEN_NOT_EXIST') || 
+               fallbackError.message?.includes('Authentication'))) {
+            // Don't show error modal for auth issues - user can still use other features
+            console.warn('⚠️ Authentication required for loading meetings');
+            return;
+          }
+          
+          // Only show error modal for actual connection issues
           Swal.fire({
             title: 'Unable to Load Meetings',
-            text: 'There was an issue connecting to the server. Please refresh the page and try again.',
+            text: 'There was an issue connecting to the server. Please check your connection and try again.',
             icon: 'warning',
-            confirmButtonText: 'Refresh Page',
-            allowOutsideClick: false
-          }).then(() => {
-            window.location.reload();
+            confirmButtonText: 'OK',
+            allowOutsideClick: true
           });
         }
       }
@@ -276,17 +289,18 @@ const Dashboard: React.FC = () => {
       // If GraphQL fails, show empty state (no mock data to avoid showing all meetings)
       setMeetings([]);
       
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ fetchMeetings error:', error);
       
-      // Show error but don't block the UI
-      await Swal.fire({
-        icon: 'warning',
-        title: '연결 오류',
-        text: '서버에 연결할 수 없습니다. 오프라인 모드로 실행됩니다.',
-        confirmButtonText: '확인'
-      });
+      // Check if it's an authentication error
+      if (error && (error.message?.includes('TOKEN_NOT_EXIST') || error.message?.includes('Authentication'))) {
+        console.warn('⚠️ Authentication required for loading meetings');
+        setMeetings([]);
+        return;
+      }
       
-      // Set empty array for now - in production you might want to show cached data
+      // Show error but don't block the UI for other errors
+      console.warn('⚠️ Server connection issue - showing empty meetings list');
       setMeetings([]);
     }
   };
@@ -610,13 +624,43 @@ const Dashboard: React.FC = () => {
   const loadVODs = async () => {
     try {
       const result = await enhancedMakeGraphQLRequest(GET_VODS, {
-        pagination: { limit: 50, offset: 0 }
+        input: { limit: 50, offset: 0 }
       });
       
-      if (result.vods) {
-        setVods(result.vods);
+      if (result && result.getAllVods && result.getAllVods.vods) {
+        setVods(result.getAllVods.vods);
+      } else {
+        setVods([]);
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ Failed to load VODs:', error);
+      
+      // Check if it's a role permission error
+      if (error && (error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || 
+                    error.message?.includes('Authentication') ||
+                    error.message?.includes('TOKEN_NOT_EXIST') ||
+                    error.status === 403)) {
+        console.warn('⚠️ VOD query requires specific role permissions - showing empty state');
+        setVods([]);
+        return; // Don't show error for permission issues
+      }
+      
+      // Check for 400 errors
+      if (error && error.status === 400) {
+        console.warn('⚠️ Bad request (400) - showing empty state');
+        setVods([]);
+        return;
+      }
+      
+      // Check for 500 server errors
+      if (error && error.status === 500) {
+        console.error('❌ Server error (500) - Backend may be having issues');
+        setVods([]);
+        return;
+      }
+      
+      // For other errors, just show empty state
+      console.warn('⚠️ VOD load failed - showing empty state');
       setVods([]);
     }
   };
@@ -1116,33 +1160,53 @@ const Dashboard: React.FC = () => {
                                     <button 
                                       onClick={() => handleStartMeeting(meeting._id)}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#28a745',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
                                         color: 'white',
-                                        marginRight: '8px'
+                                        boxShadow: '0 4px 12px rgba(86, 171, 47, 0.3)',
+                                        marginRight: '8px',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(86, 171, 47, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(86, 171, 47, 0.3)';
                                       }}
                                     >
-                                      시작
+                                      ▶️ 시작
                                     </button>
                                     <button 
                                       onClick={() => router.push(`/attendance/${meeting._id}`)}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#6c757d',
-                                        color: 'white'
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                        color: 'white',
+                                        boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 172, 254, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 172, 254, 0.3)';
                                       }}
                                     >
-                                      상세
+                                      📊 상세
                                     </button>
                                   </>
                                 )}
@@ -1162,107 +1226,108 @@ const Dashboard: React.FC = () => {
         }
                                       }}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#007bff',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                                         color: 'white',
-                                        marginRight: '8px'
+                                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                                        marginRight: '8px',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
                                       }}
                                     >
-                                      참여
+                                      🎥 참여
                                     </button>
                                     <button 
                                       onClick={() => handleEndMeeting(meeting._id)}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#dc3545',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                                         color: 'white',
-                                        marginRight: '8px'
+                                        boxShadow: '0 4px 12px rgba(245, 87, 108, 0.3)',
+                                        marginRight: '8px',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(245, 87, 108, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.3)';
                                       }}
                                     >
-                                      종료
+                                      ⛔ 종료
                                     </button>
                                     <button 
                                       onClick={() => router.push(`/attendance/${meeting._id}`)}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#6c757d',
-                                        color: 'white'
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                                        color: 'white',
+                                        boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 172, 254, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 172, 254, 0.3)';
                                       }}
                                     >
-                                      상세
+                                      📊 상세
                                     </button>
                                   </>
                                 )}
                                 {meeting.status === 'ENDED' && (
                                   <>
                                     <button 
-                                      onClick={() => {
-                                        if (meeting.isCurrentUserHost) {
-                                          // User is still the host, can rejoin
-                                          if (isValidObjectId(meeting._id)) {
-                                            window.location.href = `/prejoin/${meeting._id}`;
-                                          } else {
-                                            Swal.fire({
-                                              icon: 'error',
-                                              title: 'Invalid Meeting',
-                                              text: 'This meeting has an invalid ID format. Please create a new meeting.',
-                                              confirmButtonText: 'OK'
-                                            });
-                                          }
-                                        } else {
-                                          // User is no longer the host, show info
-                                          Swal.fire({
-                                            icon: 'info',
-                                            title: '호스트 역할 이전됨',
-                                            text: '이 회의의 호스트 역할이 다른 사용자에게 이전되었습니다. 더 이상 참여할 수 없습니다.',
-                                            confirmButtonText: '확인'
-                                          });
-                                        }
-                                      }}
-                                      style={{
-                                        padding: '6px 12px',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: meeting.isCurrentUserHost ? '#6c757d' : '#e9ecef',
-                                        color: meeting.isCurrentUserHost ? 'white' : '#6c757d',
-                                        marginRight: '8px'
-                                      }}
-                                      disabled={!meeting.isCurrentUserHost}
-                                    >
-                                      {meeting.isCurrentUserHost ? '다시 참여' : '이전됨'}
-                                    </button>
-                                    <button 
                                       onClick={() => router.push(`/attendance/${meeting._id}`)}
                                       style={{
-                                        padding: '6px 12px',
+                                        padding: '8px 16px',
                                         border: 'none',
-                                        borderRadius: '4px',
+                                        borderRadius: '8px',
                                         cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: '500',
-                                        background: '#6c757d',
-                                        color: 'white'
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        color: 'white',
+                                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
                                       }}
                                     >
-                                      상세
+                                      📊 출석 현황
                                     </button>
                                   </>
                                 )}

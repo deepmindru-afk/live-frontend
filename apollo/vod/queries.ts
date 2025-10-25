@@ -20,21 +20,11 @@ export const GET_VODS = gql`
           title
           status
           inviteCode
-          scheduledFor
-          actualStartAt
-          endedAt
-          durationMin
-          host {
-            _id
-            email
-            displayName
-            systemRole
-            avatarUrl
-            department
-          }
         }
       }
       total
+      limit
+      offset
       hasMore
     }
   }
@@ -59,18 +49,6 @@ export const GET_VOD_BY_ID = gql`
         title
         status
         inviteCode
-        scheduledFor
-        actualStartAt
-        endedAt
-        durationMin
-        host {
-          _id
-          email
-          displayName
-          systemRole
-          avatarUrl
-          department
-        }
       }
     }
   }

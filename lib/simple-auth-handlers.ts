@@ -233,6 +233,16 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
       throw new Error('TOKEN_NOT_EXIST');
     }
     
+    // Handle role permission errors gracefully
+    if (firstError.message === 'ONLY_SPECIFIC_ROLES_ALLOWED' || 
+        firstError.message.includes('ONLY_SPECIFIC_ROLES_ALLOWED') ||
+        firstError.extensions?.code === 'ONLY_SPECIFIC_ROLES_ALLOWED') {
+      // Return an error object that can be caught and handled
+      const error = new Error('ONLY_SPECIFIC_ROLES_ALLOWED');
+      (error as any).status = 403;
+      throw error;
+    }
+    
     // Handle user not found error gracefully
     if (firstError.message === 'User not found' || firstError.extensions?.code === 'INTERNAL_SERVER_ERROR') {
       clearAuthToken();
