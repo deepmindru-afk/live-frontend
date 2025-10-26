@@ -144,8 +144,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   
+  // --- HAND RAISE: host notifications + state ---
+  const [raisedHandNotices, setRaisedHandNotices] = useState<Array<{id:string;name:string;at:number}>>([]);
+  
   // Throttling for participant list updates
   const lastUpdateRef = useRef(0);
+  
+  // ✅ ID NORMALIZATION HELPER: Handle different ID field patterns
+  const getParticipantIdentity = (participant: any): string | null => {
+    return participant?.user?._id || participant?.userId || participant?.identity || participant?._id || null;
+  };
+  
+  const matchesParticipantId = (participant: any, targetId: string): boolean => {
+    const identity = getParticipantIdentity(participant);
+    const participantId = participant?._id;
+    const userId = participant?.userId;
+    
+    return identity === targetId || participantId === targetId || userId === targetId || participant?.user?._id === targetId;
+  };
   
   // Video player mode states
   const [isVideoPlayerMode, setIsVideoPlayerMode] = useState(false);
@@ -510,6 +526,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     meetingId: actualMeetingId,
     token: webSocketToken,
     onMessage: (message) => {
+      if (message.type === 'PARTICIPANT_STATE_UPDATE') {
+        setParticipants(prev => prev.map(p => matchesParticipantId(p, message.participantId) || matchesParticipantId(p, message.userId) ? { ...p, micState: message.micState || p.micState, cameraState: message.cameraState || p.cameraState } : p));
+      }
     },
     onParticipantJoined: (participant) => {
       const participantKey = `${participant._id}-${participant.userId}`;
@@ -616,6 +635,79 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [socket, actualMeetingId, refetchParticipants]);
 
+  // 🎯 Live mic/camera state updates from backend or other participants
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleParticipantStateUpdate = (update) => {
+      setParticipants((prev) =>
+        prev.map((p) =>
+          matchesParticipantId(p, update.participantId) || matchesParticipantId(p, update.userId)
+            ? {
+                ...p,
+                micState: update.micState ?? p.micState,
+                cameraState: update.cameraState ?? p.cameraState,
+              }
+            : p
+        )
+      );
+    };
+
+    socket.on('PARTICIPANT_STATE_UPDATE', handleParticipantStateUpdate);
+
+    return () => socket.off('PARTICIPANT_STATE_UPDATE', handleParticipantStateUpdate);
+  }, [socket]);
+
+  // --- HAND RAISE: host notifications + state ---
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleHandRaised = (data: {userId:string; displayName:string; raisedAt:Date}) => {
+      // toast
+      try {
+        const toast = document.createElement('div');
+        toast.textContent = `${data.displayName} raised hand ✋`;
+        Object.assign(toast.style, {
+          position:'fixed', bottom:'20px', right:'20px', background:'#3b82f6', color:'#fff',
+          padding:'10px 16px', borderRadius:'8px', fontSize:'14px', boxShadow:'0 4px 10px rgba(0,0,0,0.2)',
+          zIndex:'9999'
+        });
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      } catch {}
+
+      // reflect in participants state so thumbnails/MainStage get isHandRaised=true
+      setParticipants(prev =>
+        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: true } : p)
+      );
+
+      // tiny notice list if you want to render somewhere
+      setRaisedHandNotices(prev => [{id:data.userId, name:data.displayName, at:Date.now()}, ...prev].slice(0,5));
+    };
+
+    // 🔔 Play chime sound for host
+    const chimeData = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+    const playChime = () => {
+      try {
+        const audio = new Audio(chimeData);
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
+      } catch (err) {
+        console.warn('Chime play failed:', err);
+      }
+    };
+
+    socket.on('HAND_RAISED', (data) => {
+      // Check if user is host
+      const isHostUser = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+      if (isHostUser) {
+        playChime(); // play sound only for host
+      }
+      handleHandRaised(data);
+    });
+    return () => socket.off('HAND_RAISED');
+  }, [socket, currentParticipant, role, currentUser]);
+
   // WebSocket event listener for recording announcements
   useEffect(() => {
     
@@ -667,7 +759,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             confirmButtonColor: '#ef4444'
           }).then(async () => {
             if (liveKitDisconnect) await liveKitDisconnect();
-            window.location.href = '/member/dashboard';
+            window.location.href = '/member';
           });
         }
       };
@@ -1776,6 +1868,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         const newMicEnabled = !micEnabled;
         setMicEnabled(newMicEnabled);
 
+        // 🔄 Emit WebSocket event to sync remote state
+        socket?.emit('PARTICIPANT_STATE_UPDATE', { 
+          meetingId: actualMeetingId, 
+          participantId: currentParticipant._id, 
+          micState: newMicEnabled ? 'ON' : 'OFF',
+          cameraState: cameraEnabled ? 'ON' : 'OFF'
+        });
+
         // 🔄 Sync participant mic state to match UI
         setParticipants(prev => prev.map(p => {
           if (p._id === currentParticipant?._id) {
@@ -1808,6 +1908,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         await liveKitToggleCamera();
         const newCameraEnabled = !cameraEnabled;
         setCameraEnabled(newCameraEnabled);
+
+        // 🔄 Emit WebSocket event to sync remote state
+        socket?.emit('PARTICIPANT_STATE_UPDATE', { 
+          meetingId: actualMeetingId, 
+          participantId: currentParticipant._id, 
+          micState: micEnabled ? 'ON' : 'OFF',
+          cameraState: newCameraEnabled ? 'ON' : 'OFF' 
+        });
 
         // 🔄 Sync participant camera state
         setParticipants(prev => prev.map(p => {
@@ -3070,7 +3178,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let hasScreenShare = false;
                 
                 // ✅ CRITICAL FIX: Use consistent identity mapping
-                const participantIdentity = participant.user?._id || participant._id;
+                const participantIdentity = participant.userId || participant.user?._id || participant._id;
                 console.log('🎥 Thumbnail - Participant:', participant.displayName, 'Identity:', participantIdentity, 'User ID:', participant.user?._id);
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
@@ -3196,7 +3304,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     videoTrack={videoTrack}
                     audioTrack={audioTrack}
                     isSpeaking={isSpeaking}
-                    isHandRaised={hasHandRaised}
+                    isHandRaised={Boolean(participant.isHandRaised || hasHandRaised)}
                     isMuted={participant.micState === 'OFF'}
                     isVideoOff={!videoTrack || (isLocalParticipant && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={participant.role === 'HOST'}
@@ -3559,7 +3667,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let isParticipantScreenSharing = false;
 
                 // ✅ CRITICAL FIX: Use consistent identity mapping
-                const participantIdentity = mainParticipant.user?._id || mainParticipant._id;
+                const participantIdentity = mainParticipant.userId || mainParticipant.user?._id || mainParticipant._id;
                 console.log('🎬 Main Video - Participant:', mainParticipant.displayName, 'Identity:', participantIdentity, 'User ID:', mainParticipant.user?._id);
                 
                 if (liveKitService?.room && mainParticipant._id) {
@@ -3701,7 +3809,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     videoTrack={mainVideoTrack}
                     audioTrack={mainAudioTrack}
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
-                    isHandRaised={mainParticipant.hasHandRaised || false}
+                    isHandRaised={Boolean(mainParticipant.isHandRaised || mainParticipant.hasHandRaised)}
                     isMuted={mainParticipant.micState === 'OFF' || false}
                     isVideoOff={!mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={mainParticipant.role === 'HOST' || false}

@@ -57,10 +57,12 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
     if (el.offsetWidth === 0) {
       console.log('🎥 MainStageView video attach: Element has no width, delaying attachment');
       const timer = setTimeout(() => {
-        console.log('🎥 MainStageView video attach: Delayed attachment executing');
-        videoTrack.detach(el);
-        videoTrack.attach(el);
-      }, 300);
+        if (el && el.offsetWidth > 0) {
+          console.log('🎥 MainStageView video attach: Delayed attachment executing');
+          videoTrack.detach(el);
+          videoTrack.attach(el);
+        }
+      }, 800);
       return () => clearTimeout(timer);
     }
 
@@ -96,10 +98,12 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
     if (el.offsetWidth === 0) {
       console.log('🖥️ MainStageView screen share attach: Element has no width, delaying attachment');
       const timer = setTimeout(() => {
-        console.log('🖥️ MainStageView screen share attach: Delayed attachment executing');
-        screenShareTrack.detach(el);
-        screenShareTrack.attach(el);
-      }, 300);
+        if (el && el.offsetWidth > 0) {
+          console.log('🖥️ MainStageView screen share attach: Delayed attachment executing');
+          screenShareTrack.detach(el);
+          screenShareTrack.attach(el);
+        }
+      }, 800);
       return () => clearTimeout(timer);
     }
 
@@ -117,9 +121,14 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   // ✅ CRITICAL: Attach audio track for sound
   useEffect(() => {
     if (audioRef.current && audioTrack) {
+      // CRITICAL FIX: Always mute local participant audio BEFORE attaching to prevent echo
+      if (isLocalParticipant || participantId === 'local') {
+        audioRef.current.muted = true;
+      }
+      
       audioTrack.attach(audioRef.current);
       
-      // CRITICAL FIX: Always mute local participant audio to prevent echo
+      // Double-check mute state after attach (defensive programming)
       if (isLocalParticipant || participantId === 'local') {
         audioRef.current.muted = true;
       }

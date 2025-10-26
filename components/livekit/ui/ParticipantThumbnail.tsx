@@ -45,7 +45,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     if (!el || !videoTrack) return;
 
     if (el.offsetWidth === 0) {
-      const timer = setTimeout(() => videoTrack.attach(el), 300);
+      const timer = setTimeout(() => { if (el.offsetWidth > 0) videoTrack.attach(el); }, 800);
       return () => clearTimeout(timer);
     }
 
@@ -61,9 +61,14 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   // ✅ CRITICAL: Attach audio track for sound
   useEffect(() => {
     if (audioRef.current && audioTrack) {
+      // CRITICAL FIX: Always mute local participant audio BEFORE attaching to prevent echo
+      if (isLocalParticipant || participantId === 'local') {
+        audioRef.current.muted = true;
+      }
+      
       audioTrack.attach(audioRef.current);
       
-      // CRITICAL FIX: Always mute local participant audio to prevent echo
+      // Double-check mute state after attach (defensive programming)
       if (isLocalParticipant || participantId === 'local') {
         audioRef.current.muted = true;
       }
@@ -107,7 +112,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       }}
     >
       {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
-      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant || participantId === 'local'} style={{ display: 'none' }} />
+      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant ? true : false} style={{ display: 'none' }} />
       
       <div className={styles['thumbnail-video-container']}>
         {!isVideoOff && videoTrack ? (
