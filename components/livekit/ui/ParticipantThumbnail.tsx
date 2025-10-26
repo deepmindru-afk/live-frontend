@@ -96,13 +96,14 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
 
   return (
     <div 
-      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised'] : ''} ${shouldShake ? styles['shake-once'] : ''} ${isSelected ? styles['selected'] : ''}`}
+      className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised-shake'] : ''} ${shouldShake ? styles['shake-once'] : ''} ${isSelected ? styles['selected'] : ''}`}
       onClick={onClick}
       style={{
-        border: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
-        boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : 'none',
+        border: isSelected ? '3px solid #3b82f6' : isHandRaised ? '3px solid #3b82f6' : '3px solid transparent',
+        boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : isHandRaised ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none',
         transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-        transition: 'all 0.3s ease'
+        transition: 'all 0.3s ease',
+        animation: isHandRaised ? 'shake-continuous 0.6s ease-in-out infinite' : 'none'
       }}
     >
       {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
@@ -132,11 +133,18 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
 
       <div className={styles['thumbnail-info']}>
         <div className={styles['participant-name']} style={{
-          color: isSelected ? '#3b82f6' : 'inherit',
-          fontWeight: isSelected ? 'bold' : 'normal'
+          color: isHandRaised ? '#3b82f6' : isSelected ? '#3b82f6' : 'inherit',
+          fontWeight: isHandRaised || isSelected ? 'bold' : 'normal',
+          fontSize: isHandRaised ? '11px' : '12px'
         }}>
+          {isHandRaised && (
+            <span style={{ 
+              marginRight: '4px',
+              fontSize: '10px'
+            }}>✋</span>
+          )}
           {isHost && <span className={styles['host-badge']}>HOST</span>}
-          {isSelected && (
+          {isSelected && !isHandRaised && (
             <span style={{ 
               marginRight: '6px',
               width: '8px',

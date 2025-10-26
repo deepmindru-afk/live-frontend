@@ -291,6 +291,33 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   }
 }
 
+@keyframes shake-continuous {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  5% {
+    transform: translateX(-2px) rotate(-0.5deg);
+  }
+  10% {
+    transform: translateX(2px) rotate(0.5deg);
+  }
+  15% {
+    transform: translateX(-2px) rotate(-0.5deg);
+  }
+  20% {
+    transform: translateX(2px) rotate(0.5deg);
+  }
+  25% {
+    transform: translateX(-2px) rotate(-0.5deg);
+  }
+  50% {
+    transform: translateX(0) rotate(0deg);
+  }
+  75% {
+    transform: translateX(-1px) rotate(-0.3deg);
+  }
+}
+
 // ========================================
 // Main Stage View Component
 // ========================================

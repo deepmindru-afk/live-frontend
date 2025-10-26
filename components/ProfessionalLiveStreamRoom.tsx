@@ -827,7 +827,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, []);
 
-  // Mobile fullscreen and immersive mode
+  // Mobile fullscreen and immersive mode - FIXED: Opens fullscreen by default
   useEffect(() => {
     if (!isMobile) return;
 
@@ -839,45 +839,46 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
     }
 
-    const enterFullscreen = async () => {
+    // Auto-enter fullscreen on mobile when connected
+    const enterFullscreenWhenReady = async () => {
       try {
-        // ✅ FIX 1: Show controls initially to prevent black screen
+        // Small delay to ensure page is fully loaded
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check if already in fullscreen
+        if (document.fullscreenElement) return;
+        
+        // Show controls initially
         setShowControls(true);
         
         // Force video player mode for mobile
         setIsVideoPlayerMode(true);
         setIsFullscreen(true);
         
-        // Request fullscreen for the document
+        // Request fullscreen
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
           await elem.requestFullscreen().catch(() => {});
         } else if ((elem as any).webkitRequestFullscreen) {
           await (elem as any).webkitRequestFullscreen().catch(() => {});
-        } else if ((elem as any).mozRequestFullScreen) {
-          await (elem as any).mozRequestFullScreen().catch(() => {});
-        } else if ((elem as any).msRequestFullscreen) {
-          await (elem as any).msRequestFullscreen().catch(() => {});
+        } else if ((elem as any).webkitEnterFullscreen) {
+          await (elem as any).webkitEnterFullscreen().catch(() => {});
         }
-
+        
         // Try to hide address bar on mobile browsers
         window.scrollTo(0, 1);
         
-        // ✅ FIX 4: Disable iOS orientation lock to prevent render freeze
-        if (screen.orientation && (screen.orientation as any).lock && !/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-          try {
-            (screen.orientation as any).lock?.('landscape').catch(() => {});
-          } catch (e) {
-          }
-        }
-        
-        // ✅ FIX 2: Delay hiding controls to prevent instant black screen
+        // Delay hiding controls
         setTimeout(() => {
           setShowControls(false);
-        }, 1000);
+        }, 2000);
       } catch (error) {
+        console.log('Auto-fullscreen not available:', error);
       }
     };
+
+    // Call after a short delay
+    const timer = setTimeout(enterFullscreenWhenReady, 1000);
 
     // Prevent pull-to-refresh on mobile
     const preventPullToRefresh = (e: TouchEvent) => {
@@ -892,29 +893,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     document.addEventListener('touchstart', preventPullToRefresh, { passive: false });
     document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
 
-    // ✅ FIX 1: Delay fullscreen until LiveKit is connected and has participants with active video tracks
-    const enterFullscreenWhenReady = () => {
-      if (isLiveKitConnected && liveKitParticipants.size > 0) {
-        const hasTrack = Array.from(liveKitParticipants.values()).some(p => {
-          // Check if participant has any video tracks by looking at the actual LiveKit room participants
-          const roomParticipant = liveKitService?.room?.remoteParticipants.get(p.identity);
-          return roomParticipant ? roomParticipant.videoTrackPublications.size > 0 : false;
-        });
-        if (hasTrack) {
-          setTimeout(() => enterFullscreen(), 500);
-        } else {
-          // Retry after 1 second if no video tracks yet
-          setTimeout(enterFullscreenWhenReady, 1000);
-        }
-      } else {
-        // Retry after 1 second if not ready
-        setTimeout(enterFullscreenWhenReady, 1000);
-      }
-    };
-
-    // Start checking for readiness
-    const timer = setTimeout(enterFullscreenWhenReady, 100);
-
     return () => {
       clearTimeout(timer);
       document.removeEventListener('touchstart', preventPullToRefresh);
@@ -924,13 +902,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (viewportMeta && originalContent) {
         viewportMeta.setAttribute('content', originalContent);
       }
-      
-      // Exit fullscreen
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
     };
-  }, [isMobile, isLiveKitConnected, liveKitParticipants.size]);
+  }, [isMobile]);
 
   // Mobile error handling
   useEffect(() => {
@@ -1017,10 +990,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     };
   }, [isVideoPlayerMode]);
 
-  // Fullscreen toggle functionality
+  // Fullscreen toggle functionality - FIXED: Now properly handles mobile and desktop
   const toggleFullscreen = useCallback(async () => {
     try {
-      if (!document.fullscreenElement) {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement && !(document as any).mozFullScreenElement && !(document as any).msFullscreenElement) {
         // Enter fullscreen
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
@@ -1032,7 +1005,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         } else if ((elem as any).msRequestFullscreen) {
           await (elem as any).msRequestFullscreen();
         }
-        setIsFullscreen(true);
       } else {
         // Exit fullscreen
         if (document.exitFullscreen) {
@@ -1044,12 +1016,41 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         } else if ((document as any).msExitFullscreen) {
           await (document as any).msExitFullscreen();
         }
-        setIsFullscreen(false);
       }
     } catch (error) {
-      // Fullscreen failed, continue anyway
+      console.error('Fullscreen toggle failed:', error);
     }
   }, []);
+
+  // FIXED: Track fullscreen state changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+      
+      // On mobile, hide controls when exiting fullscreen
+      if (isMobile && !isCurrentlyFullscreen) {
+        setShowControls(true);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, [isMobile]);
 
   // Picture-in-Picture mode for mobile (when app goes to background)
   useEffect(() => {
@@ -2803,7 +2804,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         width: '44px',
                         height: '44px',
                         borderRadius: '50%',
-                        backgroundColor: screenSharing ? '#3b82f6' : '#6b7280',
+                        backgroundColor: liveKitIsScreenSharing ? '#3b82f6' : '#6b7280',
                         border: '2px solid white',
                         cursor: 'pointer',
                         color: 'white',
@@ -2816,7 +2817,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         position: 'relative',
                         touchAction: 'manipulation'
                       }}
-                      title={screenSharing ? 'Stop sharing' : 'Share screen'}
+                      title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                         <path d="M8 5v14l11-7z"/>
@@ -3050,7 +3051,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 const isSpeaking = participant.audioLevel > 0.1 || false;
                 
                 // Check hand raise status from wsRaisedHands
-                const hasHandRaised = wsRaisedHands.some(hand => hand.userId === participant._id) || false;
+                const hasHandRaised = wsRaisedHands.some(hand => {
+                  const match = hand.userId === participant._id;
+                  if (match) {
+                    console.log('✅ HAND RAISED MATCH:', participant.displayName, 'hand.userId:', hand.userId, 'participant._id:', participant._id);
+                  }
+                  return match;
+                }) || false;
+                
+                // Debug log for hand raise status
+                if (hasHandRaised) {
+                  console.log('🎉 HAND RAISED DETECTED for:', participant.displayName, 'wsRaisedHands:', wsRaisedHands);
+                }
                 
                 // Get video and audio tracks from LiveKit room
                 let videoTrack = null;
@@ -3862,17 +3874,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: isMobile ? '40px' : '48px',
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
-                  backgroundColor: screenSharing ? '#3b82f6' : '#f3f4f6',
+                  backgroundColor: liveKitIsScreenSharing ? '#3b82f6' : '#f3f4f6',
                   border: 'none',
                   cursor: 'pointer',
-                  color: screenSharing ? 'white' : '#6b7280',
+                  color: liveKitIsScreenSharing ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
-                title={screenSharing ? 'Stop sharing' : 'Share screen'}
+                title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
               >
                 <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/>

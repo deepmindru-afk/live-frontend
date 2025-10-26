@@ -9,6 +9,7 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="HRDe Live" />
+        <meta name="theme-color" content="#000000" />
         
         {/* Prevent zoom on input focus (iOS Safari) */}
         <meta name="format-detection" content="telephone=no" />
@@ -19,6 +20,30 @@ export default function Document() {
         {/* Preconnect to external domains for better performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
+        <style jsx global>{`
+          /* Hide browser chrome on mobile when in fullscreen */
+          @media (display-mode: fullscreen) {
+            body {
+              overflow: hidden !important;
+            }
+          }
+          
+          /* Prevent overscroll on mobile */
+          html, body {
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          /* Hide browser UI elements on iOS */
+          @supports (-webkit-touch-callout: none) {
+            body {
+              -webkit-touch-callout: none;
+              -webkit-user-select: none;
+              user-select: none;
+            }
+          }
+        `}</style>
       </Head>
       <body>
         <Main />
