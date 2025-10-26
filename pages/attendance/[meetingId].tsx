@@ -16,7 +16,8 @@ const BeautifulStatsCard: React.FC<{
   gradient: string[];
   icon: string;
   unit?: string;
-}> = ({ label, value, max = 100, gradient, icon, unit = '' }) => {
+  showProgress?: boolean;
+}> = ({ label, value, max = 100, gradient, icon, unit = '', showProgress = true }) => {
   const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
 
   return (
@@ -38,8 +39,9 @@ const BeautifulStatsCard: React.FC<{
         overflow: 'hidden',
         background: `linear-gradient(135deg, ${gradient[0]} 0%, ${gradient[1]} 100%)`,
         borderRadius: '24px',
-        padding: '32px',
-        minWidth: '280px',
+        padding: window.innerWidth <= 768 ? '20px' : '32px',
+        minWidth: window.innerWidth <= 768 ? '100%' : '280px',
+        maxWidth: window.innerWidth <= 768 ? '100%' : 'none',
         boxShadow: `0 10px 40px ${gradient[0]}40`,
         cursor: 'pointer'
       }}
@@ -71,13 +73,13 @@ const BeautifulStatsCard: React.FC<{
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
           marginBottom: '20px'
         }}>
           <div style={{
-            fontSize: '48px',
-            width: '60px',
-            height: '60px',
+            fontSize: window.innerWidth <= 768 ? '36px' : '48px',
+            width: window.innerWidth <= 768 ? '50px' : '60px',
+            height: window.innerWidth <= 768 ? '50px' : '60px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -87,27 +89,11 @@ const BeautifulStatsCard: React.FC<{
           }}>
             {icon}
           </div>
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.3, type: "spring" }}
-            style={{
-              fontSize: '14px',
-              fontWeight: '600',
-              color: 'white',
-              background: 'rgba(255, 255, 255, 0.25)',
-              padding: '6px 14px',
-              borderRadius: '20px',
-              backdropFilter: 'blur(10px)'
-            }}
-          >
-            {percentage.toFixed(1)}%
-          </motion.div>
         </div>
 
         <div style={{ color: 'white' }}>
           <div style={{
-            fontSize: '36px',
+            fontSize: window.innerWidth <= 768 ? '36px' : '48px',
             fontWeight: 'bold',
             marginBottom: '8px',
             display: 'flex',
@@ -119,7 +105,7 @@ const BeautifulStatsCard: React.FC<{
               duration={2}
               separator=","
             />
-            {unit && <span style={{ fontSize: '20px', opacity: 0.9 }}>{unit}</span>}
+            {unit && <span style={{ fontSize: '24px', opacity: 0.9 }}>{unit}</span>}
           </div>
           <div style={{
             fontSize: '16px',
@@ -129,7 +115,7 @@ const BeautifulStatsCard: React.FC<{
           }}>
             {label}
           </div>
-          {max && max !== 100 && (
+          {showProgress && max && max !== 100 && (
             <div style={{
               fontSize: '13px',
               opacity: 0.7,
@@ -292,7 +278,7 @@ const AttendancePage: React.FC = () => {
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const user = JSON.parse(userStr);
-          console.log('👤 Current user info:', {
+          console.log('👤 [FRONTEND] Current user info:', {
             id: user._id,
             displayName: user.displayName,
             systemRole: user.systemRole,
@@ -300,14 +286,21 @@ const AttendancePage: React.FC = () => {
           });
         }
 
+        console.log('🔄 [FRONTEND] Requesting attendance data for meeting:', meetingId);
         const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         });
         
-        console.log('📊 Attendance result:', attendanceResult);
+        console.log('📊 [FRONTEND] Attendance result received:', {
+          hasData: !!attendanceResult,
+          hasGetMeetingAttendance: !!attendanceResult?.getMeetingAttendance,
+          totalParticipants: attendanceResult?.getMeetingAttendance?.totalParticipants,
+          participantsCount: attendanceResult?.getMeetingAttendance?.participants?.length,
+          fullResult: attendanceResult
+        });
         
         if (!attendanceResult?.getMeetingAttendance) {
-          console.error('⚠️ No attendance data found:', attendanceResult);
+          console.error('⚠️ [FRONTEND] No attendance data found:', attendanceResult);
           Swal.fire({ 
             icon: 'error', 
             title: '출석 데이터 없음', 
@@ -315,9 +308,32 @@ const AttendancePage: React.FC = () => {
           });
           return;
         }
+        
+        console.log('✅ [FRONTEND] Setting attendance data:', {
+          totalParticipants: attendanceResult.getMeetingAttendance.totalParticipants,
+          participants: attendanceResult.getMeetingAttendance.participants?.map((p: any) => ({
+            name: p.displayName,
+            role: p.role,
+            status: p.status
+          }))
+        });
+        
+        // DEBUG: Log date fields for first participant
+        if (attendanceResult.getMeetingAttendance.participants?.length > 0) {
+          const firstParticipant = attendanceResult.getMeetingAttendance.participants[0];
+          console.log('🔍 [FRONTEND DEBUG] First participant date fields:', {
+            displayName: firstParticipant.displayName,
+            joinedAt: firstParticipant.joinedAt,
+            joinedAtType: typeof firstParticipant.joinedAt,
+            leftAt: firstParticipant.leftAt,
+            leftAtType: typeof firstParticipant.leftAt,
+            fullParticipant: firstParticipant
+          });
+        }
+        
         setAttendance(attendanceResult.getMeetingAttendance);
       } catch (err) {
-        console.error('❌ Attendance query failed:', err);
+        console.error('❌ [FRONTEND] Attendance query failed:', err);
         
         // Check if it's a permission error
         if (err instanceof Error && err.message && err.message.includes('Only meeting hosts and tutors can view attendance')) {
@@ -343,8 +359,33 @@ const AttendancePage: React.FC = () => {
     }
   };
 
-  const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleString('ko-KR', {
+  const formatTime = (timeString: string | Date | null | undefined) => {
+    if (!timeString) return 'N/A';
+    
+    let date: Date;
+    
+    if (timeString instanceof Date) {
+      date = timeString;
+    } else if (typeof timeString === 'string') {
+      // Handle Unix timestamp strings (milliseconds)
+      if (/^\d+$/.test(timeString) && timeString.length > 10) {
+        // It's a timestamp in milliseconds
+        date = new Date(parseInt(timeString, 10));
+      } else {
+        // It's an ISO string
+        date = new Date(timeString);
+      }
+    } else {
+      return 'Invalid format';
+    }
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.error('❌ [FRONTEND] Invalid date:', timeString, typeof timeString);
+      return 'Invalid Date';
+    }
+    
+    return date.toLocaleString('ko-KR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -380,7 +421,9 @@ const AttendancePage: React.FC = () => {
 
   const calculateAttendancePercentage = (participantTime: number, totalMeetingTime: number) => {
     if (totalMeetingTime <= 0) return 0;
-    return Math.round((participantTime / totalMeetingTime) * 100);
+    // Cap at 100% to prevent values over 100%
+    const percentage = Math.round((participantTime / totalMeetingTime) * 100);
+    return Math.min(percentage, 100);
   };
 
   const getTotalMeetingDuration = () => {
@@ -417,9 +460,9 @@ const AttendancePage: React.FC = () => {
     const totalMeetingDuration = getTotalMeetingDuration();
     
     const csvContent = [
-      ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
+      ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '손들기'],
       ...attendance.participants.map((participant, index) => {
-        const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+        const attendancePercentage = Math.min(calculateAttendancePercentage(participant.totalTime, totalMeetingDuration), 100);
         return [
           index + 1,
           participant.displayName,
@@ -435,14 +478,14 @@ const AttendancePage: React.FC = () => {
           participant.status === 'ONLINE' ? '온라인' : 
           participant.status === 'PRESENT' ? '참석' : 
           participant.status === 'LEFT' ? '퇴장' : '미정',
-          participant.micState === 'ON' ? '켜짐' : '꺼짐',
-          participant.cameraState === 'ON' ? '켜짐' : '꺼짐',
           participant.hasHandRaised ? '예' : '아니오'
         ];
       })
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Add UTF-8 BOM for proper Korean character encoding in Excel
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -514,7 +557,7 @@ const AttendancePage: React.FC = () => {
       <div style={{
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%)',
-        padding: '20px',
+        padding: screenWidth <= 768 ? '10px' : '20px',
         position: 'relative'
       }}>
         {/* Animated Background Overlay */}
@@ -535,38 +578,40 @@ const AttendancePage: React.FC = () => {
           style={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(10px)',
-            padding: '30px',
+            padding: screenWidth <= 768 ? '20px' : '30px',
             borderRadius: '20px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            marginBottom: '30px',
+            marginBottom: screenWidth <= 768 ? '20px' : '30px',
             border: '1px solid rgba(255, 255, 255, 0.2)'
           }}
         >
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'flex-start'
+            alignItems: 'flex-start',
+            flexDirection: screenWidth <= 768 ? 'column' : 'row',
+            gap: screenWidth <= 768 ? '20px' : '0'
           }}>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
                 <div style={{
-                  width: '60px',
-                  height: '60px',
+                  width: screenWidth <= 768 ? '50px' : '60px',
+                  height: screenWidth <= 768 ? '50px' : '60px',
                   borderRadius: '16px',
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '32px',
+                  fontSize: screenWidth <= 768 ? '24px' : '32px',
                   boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)'
                 }}>
                   📊
                 </div>
                 <div>
-                  <h1 style={{ margin: 0, fontSize: '32px', color: '#667eea', fontWeight: 'bold' }}>
+                  <h1 style={{ margin: 0, fontSize: screenWidth <= 768 ? '24px' : '32px', color: '#667eea', fontWeight: 'bold' }}>
                     출석 현황
                   </h1>
-                  <p style={{ margin: '5px 0 0 0', color: '#764ba2', fontSize: '18px', fontWeight: '500' }}>
+                  <p style={{ margin: '5px 0 0 0', color: '#764ba2', fontSize: screenWidth <= 768 ? '14px' : '18px', fontWeight: '500' }}>
                     {meeting.title}
                   </p>
                 </div>
@@ -678,25 +723,32 @@ const AttendancePage: React.FC = () => {
                 </motion.div>
               </div>
             </div>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <div style={{ 
+            display: 'flex', 
+            gap: '15px', 
+            alignItems: 'center',
+            flexDirection: screenWidth <= 768 ? 'column' : 'row',
+            width: screenWidth <= 768 ? '100%' : 'auto'
+          }}>
             <motion.button
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
               onClick={exportToExcel}
               style={{
-                padding: '14px 28px',
+                padding: screenWidth <= 768 ? '12px 24px' : '14px 28px',
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: screenWidth <= 768 ? '14px' : '16px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
                 fontWeight: '600',
                 boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                width: screenWidth <= 768 ? '100%' : 'auto'
               }}
             >
               <span style={{ fontSize: '20px' }}>📊</span>
@@ -707,16 +759,17 @@ const AttendancePage: React.FC = () => {
               whileTap={{ scale: 0.95 }}
               onClick={() => router.push('/dashboard')}
               style={{
-                padding: '14px 28px',
+                padding: screenWidth <= 768 ? '12px 24px' : '14px 28px',
                 background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',
                 cursor: 'pointer',
-                fontSize: '16px',
+                fontSize: screenWidth <= 768 ? '14px' : '16px',
                 fontWeight: '600',
                 boxShadow: '0 4px 15px rgba(245, 87, 108, 0.4)',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                width: screenWidth <= 768 ? '100%' : 'auto'
               }}
             >
               🏠 대시보드로
@@ -730,9 +783,10 @@ const AttendancePage: React.FC = () => {
           style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: '30px',
-            marginBottom: '40px',
-            flexWrap: 'wrap'
+            gap: screenWidth <= 768 ? '15px' : '30px',
+            marginBottom: screenWidth <= 768 ? '20px' : '40px',
+            flexWrap: 'wrap',
+            flexDirection: screenWidth <= 768 ? 'column' : 'row'
           }}
         >
           <BeautifulStatsCard
@@ -742,22 +796,25 @@ const AttendancePage: React.FC = () => {
             gradient={['#667eea', '#764ba2']}
             icon="⏱️"
             unit="분"
+            showProgress={false}
           />
           <BeautifulStatsCard
             label="총 참가자"
             value={attendance?.totalParticipants || 0}
-            max={Math.max(attendance?.totalParticipants || 1, 50)}
+            max={100}
             gradient={['#f093fb', '#f5576c']}
             icon="👥"
             unit="명"
+            showProgress={true}
           />
           <BeautifulStatsCard
             label="평균 참여 시간"
             value={attendance?.averageAttendanceTime ? Math.round(attendance.averageAttendanceTime / 60) : 0}
-            max={Math.round(getTotalMeetingDuration() / 60)}
+            max={120}
             gradient={['#4facfe', '#00f2fe']}
             icon="🎯"
             unit="분"
+            showProgress={false}
           />
         </div>
 
@@ -765,7 +822,7 @@ const AttendancePage: React.FC = () => {
         <div style={{
           marginBottom: '20px'
         }}>
-          <div style={{ maxWidth: '400px' }}>
+          <div style={{ maxWidth: screenWidth <= 768 ? '100%' : '400px' }}>
             <input
               type="text"
               placeholder="참가자 이름으로 검색..."
@@ -776,7 +833,7 @@ const AttendancePage: React.FC = () => {
                 padding: '12px',
                 border: '1px solid #ddd',
                 borderRadius: '8px',
-                fontSize: '16px'
+                fontSize: screenWidth <= 768 ? '14px' : '16px'
               }}
             />
           </div>
@@ -804,20 +861,32 @@ const AttendancePage: React.FC = () => {
             }}>
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa' }}>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>No.</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참가자</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참석 시간</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>퇴장 시간</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>참여 시간</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>출석률</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>상태</th>
-                <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>비고</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>No.</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>참가자</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>참여 시간</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>퇴장 시간</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>참석 시간</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>출석률</th>
+                <th style={{ padding: screenWidth <= 768 ? '8px' : '15px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>비고</th>
               </tr>
             </thead>
             <tbody>
               {filteredParticipants.map((participant, index) => {
                 const totalMeetingDuration = getTotalMeetingDuration();
                 const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+                
+                // DEBUG: Log participant dates before formatting
+                console.log('🔍 [FRONTEND DEBUG] Participant dates:', {
+                  displayName: participant.displayName,
+                  joinedAt: participant.joinedAt,
+                  joinedAtType: typeof participant.joinedAt,
+                  joinedAtValue: participant.joinedAt,
+                  leftAt: participant.leftAt,
+                  leftAtType: typeof participant.leftAt,
+                  leftAtValue: participant.leftAt,
+                  formattedJoined: formatTime(participant.joinedAt),
+                  formattedLeft: participant.leftAt ? formatTime(participant.leftAt) : 'N/A'
+                });
                 
                 return (
                   <tr 
@@ -831,85 +900,42 @@ const AttendancePage: React.FC = () => {
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                     onClick={() => handleParticipantClick(participant)}
                   >
-                    <td style={{ padding: '15px' }}>{index + 1}</td>
-                    <td style={{ padding: '15px' }}>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>{index + 1}</td>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>
                       <div>
-                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           {participant.avatarUrl && (
                             <img 
                               src={participant.avatarUrl} 
                               alt={participant.displayName}
                               style={{
-                                width: '24px',
-                                height: '24px',
+                                width: '32px',
+                                height: '32px',
                                 borderRadius: '50%',
                                 objectFit: 'cover'
                               }}
                             />
                           )}
-                          <div>
-                            <div>{participant.displayName}</div>
-                            {participant.email && (
-                              <div style={{ fontSize: '12px', color: '#666' }}>{participant.email}</div>
-                            )}
-                            {participant.organization && (
-                              <div style={{ fontSize: '11px', color: '#888' }}>{participant.organization}</div>
-                            )}
+                          <span style={{ fontSize: '15px' }}>{participant.displayName}</span>
+                        </div>
+                        {participant.systemRole && (
+                          <div style={{ fontSize: '12px', color: '#666', marginLeft: participant.avatarUrl ? '40px' : '0' }}>
+                            {participant.systemRole}
                           </div>
-                        </div>
-                        <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            backgroundColor: participant.status === 'ONLINE' ? '#28a745' : 
-                                           participant.status === 'PRESENT' ? '#17a2b8' : 
-                                           participant.status === 'LEFT' ? '#6c757d' : '#dc3545',
-                            color: 'white',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontSize: '12px'
-                          }}>
-                            {participant.status === 'ONLINE' ? '온라인' : 
-                             participant.status === 'PRESENT' ? '참석' : 
-                             participant.status === 'LEFT' ? '퇴장' : '미정'}
-                          </span>
-                          {participant.systemRole && (
-                            <span style={{
-                              display: 'inline-block',
-                              backgroundColor: '#e9ecef',
-                              color: '#495057',
-                              padding: '2px 6px',
-                              borderRadius: '8px',
-                              fontSize: '10px'
-                            }}>
-                              {participant.systemRole}
-                            </span>
-                          )}
-                          {participant.hasHandRaised && (
-                            <span style={{
-                              display: 'inline-block',
-                              backgroundColor: '#ffc107',
-                              color: '#212529',
-                              padding: '2px 6px',
-                              borderRadius: '8px',
-                              fontSize: '10px'
-                            }}>
-                              ✋ 손들기
-                            </span>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </td>
-                    <td style={{ padding: '15px' }}>{formatTime(participant.joinedAt)}</td>
-                    <td style={{ padding: '15px' }}>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>{formatTime(participant.joinedAt)}</td>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>
                       {participant.leftAt ? formatTime(participant.leftAt) : (
                         <span style={{ color: '#28a745', fontWeight: '500' }}>진행 중</span>
                       )}
                     </td>
-                    <td style={{ padding: '15px' }}>{formatDuration(participant.totalTime)}</td>
-                    <td style={{ padding: '15px' }}>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>{formatDuration(participant.totalTime)}</td>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{
-                          width: '60px',
+                          width: screenWidth <= 768 ? '40px' : '60px',
                           height: '8px',
                           backgroundColor: '#e9ecef',
                           borderRadius: '4px',
@@ -924,45 +950,16 @@ const AttendancePage: React.FC = () => {
                           }} />
                         </div>
                         <span style={{
-                          fontSize: '14px',
+                          fontSize: screenWidth <= 768 ? '12px' : '14px',
                           fontWeight: '500',
                           color: attendancePercentage >= 80 ? '#28a745' : 
                                  attendancePercentage >= 50 ? '#ffc107' : '#dc3545'
                         }}>
-                          {attendancePercentage}%
+                          {Math.min(attendancePercentage, 100)}%
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: '15px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: participant.micState === 'ON' ? '#28a745' : '#dc3545'
-                          }} title={`마이크: ${participant.micState === 'ON' ? '켜짐' : '꺼짐'}`}></span>
-                          <span style={{ fontSize: '12px' }}>마이크</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: participant.cameraState === 'ON' ? '#28a745' : '#dc3545'
-                          }} title={`카메라: ${participant.cameraState === 'ON' ? '켜짐' : '꺼짐'}`}></span>
-                          <span style={{ fontSize: '12px' }}>카메라</span>
-                        </div>
-                        {participant.sessionCount > 1 && (
-                          <div style={{ fontSize: '11px', color: '#666' }}>
-                            {participant.sessionCount}회 재접속
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ padding: '15px' }}>
+                    <td style={{ padding: screenWidth <= 768 ? '8px' : '15px', fontSize: screenWidth <= 768 ? '12px' : '14px' }}>
                       <button
                         style={{
                           background: 'none',
@@ -1133,23 +1130,13 @@ const AttendancePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Mic/Camera Status */}
-                  <div style={{ display: 'flex', justifyContent: 'space-around', paddingTop: '8px', borderTop: '1px solid #e9ecef' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '16px' }}>{participant.micState === 'ON' ? '🎤' : '🔇'}</span>
-                      <span style={{ fontSize: '12px', color: '#666' }}>마이크</span>
+                  {/* Hand Raise Status (if raised) */}
+                  {participant.hasHandRaised && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '8px', borderTop: '1px solid #e9ecef' }}>
+                      <span style={{ fontSize: '16px' }}>✋</span>
+                      <span style={{ fontSize: '12px', color: '#ffc107', fontWeight: '600' }}>손들기</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '16px' }}>{participant.cameraState === 'ON' ? '📹' : '📷'}</span>
-                      <span style={{ fontSize: '12px', color: '#666' }}>카메라</span>
-                    </div>
-                    {participant.hasHandRaised && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '16px' }}>✋</span>
-                        <span style={{ fontSize: '12px', color: '#ffc107', fontWeight: '600' }}>손들기</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -1294,47 +1281,8 @@ const AttendancePage: React.FC = () => {
                              calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()) >= 50 ? '#856404' : '#721c24',
                       fontWeight: '500'
                     }}>
-                      {calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration())}%
+                      {Math.min(calculateAttendancePercentage(selectedParticipant.totalTime, getTotalMeetingDuration()), 100)}%
                     </span>
-                  </div>
-                  <div style={{ marginBottom: '10px' }}>
-                    <strong>미디어 상태:</strong>
-                    <div style={{ marginTop: '5px', display: 'flex', gap: '10px' }}>
-                      <span style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        backgroundColor: selectedParticipant.micState === 'ON' ? '#d4edda' : '#f8d7da',
-                        borderRadius: '4px',
-                        fontSize: '12px'
-                      }}>
-                        <span style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          backgroundColor: selectedParticipant.micState === 'ON' ? '#28a745' : '#dc3545'
-                        }}></span>
-                        마이크 {selectedParticipant.micState === 'ON' ? '켜짐' : '꺼짐'}
-                      </span>
-                      <span style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        backgroundColor: selectedParticipant.cameraState === 'ON' ? '#d4edda' : '#f8d7da',
-                        borderRadius: '4px',
-                        fontSize: '12px'
-                      }}>
-                        <span style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          backgroundColor: selectedParticipant.cameraState === 'ON' ? '#28a745' : '#dc3545'
-                        }}></span>
-                        카메라 {selectedParticipant.cameraState === 'ON' ? '켜짐' : '꺼짐'}
-                      </span>
-                    </div>
                   </div>
                   {selectedParticipant.hasHandRaised && (
                     <div style={{ marginBottom: '10px' }}>
@@ -1395,7 +1343,7 @@ const AttendancePage: React.FC = () => {
                             {participant.leftAt ? '완료' : '진행중'}
                           </div>
                           <div style={{ fontSize: '12px', fontWeight: '500' }}>
-                            {calculateAttendancePercentage(participant.totalTime, getTotalMeetingDuration())}%
+                            {Math.min(calculateAttendancePercentage(participant.totalTime, getTotalMeetingDuration()), 100)}%
                           </div>
                         </div>
                       </div>

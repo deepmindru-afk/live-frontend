@@ -1,0 +1,96 @@
+
+> my-frontend@0.1.0 dev
+> next dev
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/musab/package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/musab/Desktop/HRDe/Live-frontend-/package-lock.json
+
+   ▲ Next.js 15.5.3
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.186:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1851ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ○ Compiling /instructor ...
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /instructor in 1114ms (926 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET /instructor 200 in 851ms
+ ✓ Compiled / in 366ms (932 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET / 200 in 634ms
+ GET /instructor 200 in 282ms
+ ○ Compiling /attendance/[meetingId] ...
+ ✓ Compiled /attendance/[meetingId] in 681ms (1335 modules)
+ ✓ Compiled in 1199ms (1329 modules)
+ ✓ Compiled in 399ms (1329 modules)
+ ✓ Compiled in 579ms (1329 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET /instructor 200 in 336ms
+ GET /attendance/68fd9827ee15049a8797dc4b 200 in 483ms
+ GET /attendance/68fd9827ee15049a8797dc4b 200 in 243ms
+ ✓ Compiled in 1369ms (1329 modules)
+ GET /attendance/68fd9827ee15049a8797dc4b 200 in 351ms
+ ⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+   ▲ Next.js 15.5.3
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.186:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1986ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ○ Compiling /attendance/[meetingId] ...
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /attendance/[meetingId] in 1484ms (1295 modules)
+ GET /attendance/68fd9827ee15049a8797dc4b 200 in 1016ms
+ ○ Compiling /instructor ...
+ ✓ Compiled /instructor in 584ms (1329 modules)
+ ✓ Compiled /prejoin/[meetingId] in 291ms (1337 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET /prejoin/68fda9c12d8e669202bc5f7b 200 in 616ms
+ ✓ Compiled /livestream/[meetingId] in 215ms (1413 modules)
+ ✓ Compiled / in 375ms (1018 modules)
+ GET / 200 in 559ms
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET / 200 in 229ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 730ms (1017 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET /login 200 in 1068ms
+ ✓ Compiled /instructor in 315ms (1030 modules)
+🔗 GraphQL Endpoint: http://localhost:3007/graphql
+ GET /instructor 200 in 889ms
+ ✓ Compiled /attendance/[meetingId] in 266ms (1374 modules)
+ ✓ Compiled in 696ms (1332 modules)
+ ✓ Compiled in 1089ms (1332 modules)
+ ✓ Compiled in 1005ms (1332 modules)
+ ✓ Compiled in 529ms (1332 modules)
+ ✓ Compiled in 1190ms (1332 modules)
+ ✓ Compiled in 284ms (1332 modules)
+ ✓ Compiled in 601ms (1332 modules)
+ ✓ Compiled in 226ms (1332 modules)
+ ✓ Compiled in 399ms (1332 modules)
+ ✓ Compiled in 293ms (1332 modules)
+ ✓ Compiled in 604ms (1332 modules)
+ ✓ Compiled in 1584ms (1332 modules)
+ ✓ Compiled in 284ms (1332 modules)
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 371ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 236ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 246ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 247ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 242ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 242ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 240ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 237ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 254ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 341ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 258ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 242ms
+ GET /attendance/68fda9c12d8e669202bc5f7b 200 in 296ms
