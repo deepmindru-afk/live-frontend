@@ -414,15 +414,34 @@ export const GET_PARTICIPANT_BY_USER_MEETING = gql`
   query GetParticipantByUserAndMeeting($meetingId: ID!) {
     getParticipantByUserAndMeeting(meetingId: $meetingId) {
       _id
+      meetingId
       displayName
       role
       micState
       cameraState
+      status
       user {
         _id
         displayName
         email
+        avatarUrl
+        organization
+        department
       }
+      loginInfo {
+        totalSessions
+        firstLogin
+        lastLogin
+        totalDurationMinutes
+        isCurrentlyOnline
+        sessions {
+          joinedAt
+          leftAt
+          durationMinutes
+        }
+      }
+      createdAt
+      updatedAt
     }
   }
 `;

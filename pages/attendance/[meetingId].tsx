@@ -471,7 +471,8 @@ const AttendancePage: React.FC = () => {
           participant.department || '',
           participant.systemRole || '',
           formatTime(participant.joinedAt),
-          participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
+          participant.leftAt ? formatTime(participant.leftAt) : 
+          (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '퇴장 정보 없음' : '진행 중'),
           formatDuration(participant.totalTime),
           participant.sessionCount,
           attendancePercentage,
@@ -1091,7 +1092,8 @@ const AttendancePage: React.FC = () => {
                     }}>
                       <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>🚪 퇴장</div>
                       <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>
-                        {participant.leftAt ? formatTime(participant.leftAt).split(' ').slice(-2).join(' ') : '진행 중'}
+                        {participant.leftAt ? formatTime(participant.leftAt).split(' ').slice(-2).join(' ') : 
+                         (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행 중')}
                       </div>
                     </div>
                   </div>
@@ -1261,7 +1263,8 @@ const AttendancePage: React.FC = () => {
                     <strong>참석 시간:</strong> {formatTime(selectedParticipant.joinedAt)}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>퇴장 시간:</strong> {selectedParticipant.leftAt ? formatTime(selectedParticipant.leftAt) : '진행 중'}
+                    <strong>퇴장 시간:</strong> {selectedParticipant.leftAt ? formatTime(selectedParticipant.leftAt) : 
+                     (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행 중')}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>총 참여 시간:</strong> {formatDuration(selectedParticipant.totalTime)}
@@ -1295,7 +1298,8 @@ const AttendancePage: React.FC = () => {
                         borderRadius: '4px',
                         fontSize: '12px'
                       }}>
-                        ✋ {selectedParticipant.handRaisedAt ? formatTime(selectedParticipant.handRaisedAt) : '진행 중'}
+                        ✋ {selectedParticipant.handRaisedAt ? formatTime(selectedParticipant.handRaisedAt) : 
+                           (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행 중')}
                       </span>
                     </div>
                   )}
@@ -1340,7 +1344,8 @@ const AttendancePage: React.FC = () => {
                             {formatDuration(participant.totalTime)}
                           </div>
                           <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                            {participant.leftAt ? '완료' : '진행중'}
+                            {participant.leftAt ? '완료' : 
+                             (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행중')}
                           </div>
                           <div style={{ fontSize: '12px', fontWeight: '500' }}>
                             {Math.min(calculateAttendancePercentage(participant.totalTime, getTotalMeetingDuration()), 100)}%

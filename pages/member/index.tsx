@@ -51,6 +51,8 @@ const MemberDashboard: React.FC = () => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [showAttendancePopup, setShowAttendancePopup] = useState(false);
+  const [participantData, setParticipantData] = useState<any>(null);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -159,22 +161,49 @@ const MemberDashboard: React.FC = () => {
       
       
       if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
-        const meetings = result.getMeetings.meetings.map((meeting: any) => ({
-          _id: meeting._id,
-          title: meeting.title,
-          status: meeting.status === 'CREATED' ? 'STARTED' : 
-                  meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                  meeting.status === 'ENDED' ? 'ENDED' : 'STARTED',
-          schedule: meeting.scheduledFor,
-          inviteCode: meeting.inviteCode,
-          createdAt: meeting.createdAt,
-          updatedAt: meeting.updatedAt || meeting.createdAt,
-          participantCount: meeting.participantCount || 0,
-          duration: meeting.duration
-        }));
+        // For ENDED meetings, we need to check if the user actually participated
+        const meetingsWithParticipation = await Promise.all(
+          result.getMeetings.meetings.map(async (meeting: any) => {
+            const meetingStatus = meeting.status === 'CREATED' ? 'STARTED' : 
+                                  meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                                  meeting.status === 'ENDED' ? 'ENDED' : 'STARTED';
+            
+            // For ENDED meetings, check if user participated
+            if (meetingStatus === 'ENDED') {
+              try {
+                const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
+                  meetingId: meeting._id
+                });
+                
+                // Only include if user participated
+                if (!participantResult?.getParticipantByUserAndMeeting) {
+                  return null;
+                }
+              } catch (error) {
+                console.log(`No participation found for meeting ${meeting._id}`);
+                return null;
+              }
+            }
+            
+            return {
+              _id: meeting._id,
+              title: meeting.title,
+              status: meetingStatus,
+              schedule: meeting.scheduledFor,
+              inviteCode: meeting.inviteCode,
+              createdAt: meeting.createdAt,
+              updatedAt: meeting.updatedAt || meeting.createdAt,
+              participantCount: meeting.participantCount || 0,
+              duration: meeting.duration
+            };
+          })
+        );
         
-        setMeetings(meetings);
-        setFilteredMeetings(meetings);
+        // Filter out null entries (meetings where user didn't participate)
+        const validMeetings = meetingsWithParticipation.filter(m => m !== null);
+        
+        setMeetings(validMeetings);
+        setFilteredMeetings(validMeetings);
       } else {
         setMeetings([]);
         setFilteredMeetings([]);
@@ -467,18 +496,88 @@ const MemberDashboard: React.FC = () => {
     }
   };
 
-  const handleAttendanceClick = (meeting: Meeting) => {
+  const fetchParticipantAttendance = async (meetingId: string) => {
+    try {
+      setLoadingAttendance(true);
+      const result = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
+        meetingId: meetingId
+      });
+      console.log('Participant attendance data:', result);
+      setParticipantData(result);
+    } catch (error: any) {
+      console.error('Error fetching participant attendance:', error);
+      await showErrorAlert('Error', 'Failed to load attendance data');
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+
+  const handleAttendanceClick = async (meeting: Meeting) => {
     setSelectedMeeting(meeting);
     setShowAttendancePopup(true);
+    await fetchParticipantAttendance(meeting._id);
   };
 
   const closeAttendancePopup = () => {
     setShowAttendancePopup(false);
     setSelectedMeeting(null);
+    setParticipantData(null);
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ko-KR');
+  };
+
+  const formatTime = (timeString: string | Date | null | undefined) => {
+    if (!timeString) return 'N/A';
+    
+    let date: Date;
+    
+    if (timeString instanceof Date) {
+      date = timeString;
+    } else if (typeof timeString === 'string') {
+      // Handle Unix timestamp strings (milliseconds)
+      if (/^\d+$/.test(timeString) && timeString.length > 10) {
+        date = new Date(parseInt(timeString, 10));
+      } else {
+        date = new Date(timeString);
+      }
+    } else {
+      return 'Invalid format';
+    }
+    
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    
+    return date.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds) return '0분';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return minutes > 0 ? `${hours}시간 ${minutes}분` : `${hours}시간`;
+    } else if (minutes > 0) {
+      return secs > 0 ? `${minutes}분 ${secs}초` : `${minutes}분`;
+    } else {
+      return `${secs}초`;
+    }
+  };
+
+  const calculateMeetingDuration = (meeting: Meeting) => {
+    if (meeting.duration) {
+      const hours = Math.floor(meeting.duration / 60);
+      const minutes = meeting.duration % 60;
+      return `${hours}시간 ${minutes}분`;
+    }
+    return 'N/A';
   };
 
   if (loading) {
@@ -677,11 +776,17 @@ const MemberDashboard: React.FC = () => {
                           )}
                         </div>
                         <button
-                          onClick={() => router.push(`/prejoin/${meeting._id}`)}
+                          onClick={async () => {
+                            if (meeting.status === 'ENDED') {
+                              await handleAttendanceClick(meeting);
+                            } else {
+                              router.push(`/prejoin/${meeting._id}`);
+                            }
+                          }}
                           className={`join-btn ${meeting.status.toLowerCase()}`}
                         >
                           {meeting.status === 'STARTED' ? '참여하기' : 
-                           meeting.status === 'SCHEDULED' ? '대기중' : '상세보기'}
+                           meeting.status === 'SCHEDULED' ? '대기중' : '출석확인'}
                         </button>
                       </div>
                     </div>
@@ -1038,88 +1143,87 @@ const MemberDashboard: React.FC = () => {
               </div>
               
               <div className="popup-content">
-                <div className="meeting-info">
-                  <h4 className="meeting-title">{selectedMeeting.title}</h4>
-                  <div className="meeting-meta">
-                    <span className="meeting-date">
-                      📅 {formatDate(selectedMeeting.createdAt)}
-                    </span>
-                    <span className="meeting-duration">
-                      ⏱️ {calculateMeetingDuration(selectedMeeting)}
-                    </span>
+                {loadingAttendance ? (
+                  <div style={{ textAlign: 'center', padding: '40px' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+                    <p>출석 정보를 불러오는 중...</p>
                   </div>
-                </div>
-
-                <div className="attendance-stats">
-                  <div className="stat-card">
-                    <div className="stat-icon">🎯</div>
-                    <div className="stat-content">
-                      <div className="stat-label">참석률</div>
-                      <div className="stat-value">85%</div>
-                    </div>
-                  </div>
-                  
-                  <div className="stat-card">
-                    <div className="stat-icon">⏰</div>
-                    <div className="stat-content">
-                      <div className="stat-label">참여 시간</div>
-                      <div className="stat-value">2시간 15분</div>
-                    </div>
-                  </div>
-                  
-                  <div className="stat-card">
-                    <div className="stat-icon">📊</div>
-                    <div className="stat-content">
-                      <div className="stat-label">세션 수</div>
-                      <div className="stat-value">3회</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="attendance-timeline">
-                  <h5 className="timeline-title">참석 타임라인</h5>
-                  <div className="timeline">
-                    <div className="timeline-item">
-                      <div className="timeline-time">09:00</div>
-                      <div className="timeline-content">
-                        <div className="timeline-title">미팅 시작</div>
-                        <div className="timeline-desc">참여 시작</div>
+                ) : participantData?.getParticipantByUserAndMeeting ? (
+                  <>
+                    <div className="meeting-info">
+                      <h4 className="meeting-title">{selectedMeeting.title}</h4>
+                      <div className="meeting-meta">
+                        <span className="meeting-date">
+                          📅 {formatDate(selectedMeeting.createdAt)}
+                        </span>
+                        <span className="meeting-duration">
+                          ⏱️ {calculateMeetingDuration(selectedMeeting)}
+                        </span>
                       </div>
                     </div>
-                    <div className="timeline-item">
-                      <div className="timeline-time">09:15</div>
-                      <div className="timeline-content">
-                        <div className="timeline-title">첫 번째 휴식</div>
-                        <div className="timeline-desc">5분 휴식</div>
-                      </div>
-                    </div>
-                    <div className="timeline-item">
-                      <div className="timeline-time">11:15</div>
-                      <div className="timeline-content">
-                        <div className="timeline-title">미팅 종료</div>
-                        <div className="timeline-desc">참여 완료</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="attendance-summary">
-                  <h5 className="summary-title">참석 요약</h5>
-                  <div className="summary-content">
-                    <div className="summary-item">
-                      <span className="summary-label">총 미팅 시간:</span>
-                      <span className="summary-value">{calculateMeetingDuration(selectedMeeting)}</span>
+                    <div className="attendance-stats">
+                      <div className="stat-card">
+                        <div className="stat-icon">⏰</div>
+                        <div className="stat-content">
+                          <div className="stat-label">참여 시간</div>
+                          <div className="stat-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes ? `${participantData.getParticipantByUserAndMeeting.loginInfo.totalDurationMinutes}분` : '0분'}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="stat-card">
+                        <div className="stat-icon">📊</div>
+                        <div className="stat-content">
+                          <div className="stat-label">세션 수</div>
+                          <div className="stat-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalSessions || 0}회</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="summary-item">
-                      <span className="summary-label">실제 참여 시간:</span>
-                      <span className="summary-value">2시간 15분</span>
+
+                    <div className="attendance-timeline">
+                      <h5 className="timeline-title">참석 타임라인</h5>
+                      <div className="timeline">
+                        {participantData.getParticipantByUserAndMeeting.loginInfo?.sessions?.map((session: any, index: number) => (
+                          <div key={index} className="timeline-item">
+                            <div className="timeline-time">{formatTime(session.joinedAt)}</div>
+                            <div className="timeline-content">
+                              <div className="timeline-title">{index === 0 ? '미팅 참여' : `재입장 ${index}`}</div>
+                              <div className="timeline-desc">
+                                {session.leftAt ? `퇴장: ${formatTime(session.leftAt)} (${session.durationMinutes}분)` : '진행 중'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="summary-item">
-                      <span className="summary-label">참석률:</span>
-                      <span className="summary-value">85%</span>
+
+                    <div className="attendance-summary">
+                      <h5 className="summary-title">참석 요약</h5>
+                      <div className="summary-content">
+                        <div className="summary-item">
+                          <span className="summary-label">참여 시간:</span>
+                          <span className="summary-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes ? `${participantData.getParticipantByUserAndMeeting.loginInfo.totalDurationMinutes}분` : '0분'}</span>
+                        </div>
+                        <div className="summary-item">
+                          <span className="summary-label">참여 시작:</span>
+                          <span className="summary-value">{formatTime(participantData.getParticipantByUserAndMeeting.loginInfo?.firstLogin)}</span>
+                        </div>
+                        {participantData.getParticipantByUserAndMeeting.loginInfo?.lastLogin && (
+                          <div className="summary-item">
+                            <span className="summary-label">마지막 활동:</span>
+                            <span className="summary-value">{formatTime(participantData.getParticipantByUserAndMeeting.loginInfo.lastLogin)}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>📋</div>
+                    <h3>출석 정보가 없습니다</h3>
+                    <p>이 회의에 대한 참석 기록이 없습니다.</p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
