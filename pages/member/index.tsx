@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert } from '../../lib/simple-auth-handlers';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
-import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS } from '../../apollo/meeting/queries';
+import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS, GET_ALL_MEETINGS } from '../../apollo/meeting/queries';
 import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
 import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING } from '../../apollo/livestream/queries';
 
@@ -121,13 +121,28 @@ const MemberDashboard: React.FC = () => {
       // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
       let result;
       try {
-        result = await makeGraphQLRequest(GET_MY_MEETINGS, {
+        // Try GET_MY_MEETINGS first, fallback to GET_ALL_MEETINGS
+        let queryToUse = GET_MY_MEETINGS;
+        let variables = {
           input: {
-            limit: 50,
+            limit: 100,
             page: 1
           }
-        });
+        };
+        
+        console.log('🔍 Attempting to fetch meetings with:', { variables });
+        
+        result = await makeGraphQLRequest(queryToUse, variables);
         console.log('GraphQL request successful:', result);
+        console.log('🔍 Raw GraphQL result keys:', Object.keys(result || {}));
+        console.log('🔍 Result.hasOwnProperty("getMeetings"):', result?.hasOwnProperty('getMeetings'));
+        console.log('🔍 Result.getMeetings type:', typeof result?.getMeetings);
+        if (result?.getMeetings) {
+          console.log('🔍 getMeetings keys:', Object.keys(result.getMeetings));
+          console.log('🔍 meetings is array?', Array.isArray(result.getMeetings.meetings));
+          console.log('🔍 meetings length:', result.getMeetings?.meetings?.length);
+          console.log('🔍 first meeting sample:', result.getMeetings?.meetings?.[0]);
+        }
       } catch (authError: any) {
         console.error('GraphQL request failed:', authError);
         // Handle authentication errors immediately
@@ -160,55 +175,70 @@ const MemberDashboard: React.FC = () => {
       }
       
       
+      console.log('📊 Full GraphQL result:', JSON.stringify(result, null, 2));
+      console.log('📊 getMeetings:', result.getMeetings);
+      console.log('📊 meetings array:', result.getMeetings?.meetings);
+      console.log('📊 meetings count:', result.getMeetings?.meetings?.length);
+      console.log('📊 meetings array type:', Array.isArray(result.getMeetings?.meetings));
+      console.log('📊 meetings value:', result.getMeetings?.meetings);
+      
+      // Check if meetings is actually an empty array vs undefined
+      if (result.getMeetings) {
+        console.log('📊 getMeetings object:', {
+          hasMeetings: !!result.getMeetings.meetings,
+          isArray: Array.isArray(result.getMeetings.meetings),
+          length: result.getMeetings.meetings?.length,
+          value: result.getMeetings.meetings,
+          total: result.getMeetings.total,
+          allKeys: Object.keys(result.getMeetings)
+        });
+      }
+      
       if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
-        // For ENDED meetings, we need to check if the user actually participated
-        const meetingsWithParticipation = await Promise.all(
-          result.getMeetings.meetings.map(async (meeting: any) => {
-            const meetingStatus = meeting.status === 'CREATED' ? 'STARTED' : 
-                                  meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
-                                  meeting.status === 'ENDED' ? 'ENDED' : 'STARTED';
-            
-            // For ENDED meetings, check if user participated
-            if (meetingStatus === 'ENDED') {
-              try {
-                const participantResult = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
-                  meetingId: meeting._id
-                });
-                
-                // Only include if user participated
-                if (!participantResult?.getParticipantByUserAndMeeting) {
-                  return null;
-                }
-              } catch (error) {
-                console.log(`No participation found for meeting ${meeting._id}`);
-                return null;
-              }
-            }
-            
-            return {
-              _id: meeting._id,
-              title: meeting.title,
-              status: meetingStatus,
-              schedule: meeting.scheduledFor,
-              inviteCode: meeting.inviteCode,
-              createdAt: meeting.createdAt,
-              updatedAt: meeting.updatedAt || meeting.createdAt,
-              participantCount: meeting.participantCount || 0,
-              duration: meeting.duration
-            };
-          })
-        );
+        console.log('✅ Meetings data received:', result.getMeetings.meetings.length, 'meetings');
         
-        // Filter out null entries (meetings where user didn't participate)
-        const validMeetings = meetingsWithParticipation.filter(m => m !== null);
+        // Show ALL meetings - LIVE (STARTED), SCHEDULED, and ENDED (participated or not)
+        const allMeetings = result.getMeetings.meetings.map((meeting: any) => {
+          const meetingStatus = meeting.status === 'CREATED' ? 'STARTED' : 
+                                meeting.status === 'SCHEDULED' ? 'SCHEDULED' : 
+                                meeting.status === 'ENDED' ? 'ENDED' : 
+                                meeting.status === 'LIVE' ? 'STARTED' : 'STARTED';
+          
+          console.log('📝 Processing meeting:', meeting.title, 'status:', meeting.status, '→', meetingStatus);
+          
+          return {
+            _id: meeting._id,
+            title: meeting.title,
+            status: meetingStatus,
+            schedule: meeting.scheduledFor,
+            inviteCode: meeting.inviteCode,
+            createdAt: meeting.createdAt,
+            updatedAt: meeting.updatedAt || meeting.createdAt,
+            participantCount: meeting.participantCount || 0,
+            duration: meeting.durationMin || meeting.duration
+          };
+        });
         
-        setMeetings(validMeetings);
-        setFilteredMeetings(validMeetings);
+        console.log('✅ Processed meetings:', allMeetings.length);
+        console.log('✅ Processed meetings STATUS:', allMeetings.map(m => `${m.title}: ${m.status}`));
+        setMeetings(allMeetings);
+        setFilteredMeetings(allMeetings);
+      } else if (result.getMeetings && result.getMeetings.meetings && result.getMeetings.meetings.length === 0) {
+        console.warn('⚠️ Response has getMeetings but meetings array is empty');
+        console.warn('⚠️ This could mean:');
+        console.warn('   1. You have not joined any meetings as a participant');
+        console.warn('   2. You have not created any meetings as a host');
+        console.warn('   3. All meetings you joined have ended and been filtered out');
+        console.warn('⚠️ Total meetings in response:', result.getMeetings.total);
+        setMeetings([]);
+        setFilteredMeetings([]);
       } else {
+        console.warn('⚠️ Unexpected response structure:', result);
         setMeetings([]);
         setFilteredMeetings([]);
       }
     } catch (error: any) {
+      console.error('❌ Error in fetchMeetings:', error);
       
       // Handle authentication errors specifically
       if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
@@ -734,7 +764,9 @@ const MemberDashboard: React.FC = () => {
 
               {filteredMeetings.length > 0 ? (
                 <div className="meetings-grid">
-                  {filteredMeetings.map((meeting) => (
+                  {filteredMeetings.map((meeting) => {
+                    console.log('🎨 RENDERING meeting in UI:', meeting.title, 'status:', meeting.status, 'has _id:', !!meeting._id, 'inviteCode:', meeting.inviteCode);
+                    return (
                     <div
                       key={meeting._id}
                       className="meeting-card"
@@ -772,9 +804,19 @@ const MemberDashboard: React.FC = () => {
                         <button
                           onClick={async () => {
                             if (meeting.status === 'ENDED') {
-                              await handleAttendanceClick(meeting);
-                            } else {
+                              // Navigate to attendance page for ENDED meetings
+                              router.push(`/attendance/${meeting._id}`);
+                            } else if (meeting.status === 'STARTED') {
+                              // Join live meetings
                               router.push(`/prejoin/${meeting._id}`);
+                            } else if (meeting.status === 'SCHEDULED') {
+                              // For scheduled meetings, can't join yet
+                              await Swal.fire({
+                                icon: 'info',
+                                title: '예정된 미팅',
+                                text: '이 미팅은 아직 시작되지 않았습니다.',
+                                confirmButtonText: '확인'
+                              });
                             }
                           }}
                           className={`join-btn ${meeting.status.toLowerCase()}`}
@@ -784,7 +826,8 @@ const MemberDashboard: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="empty-state">
@@ -794,13 +837,27 @@ const MemberDashboard: React.FC = () => {
                   <h3 className="empty-title">
                     {searchQuery.trim() 
                       ? `"${searchQuery}"에 대한 검색 결과가 없습니다.`
-                      : '참여한 미팅이 없습니다.'
+                      : '검색된 미팅이 없습니다.'
                     }
                   </h3>
+                  <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>
+                    {searchQuery.trim() 
+                      ? '다른 검색어를 시도해보세요.'
+                      : '아직 참여한 미팅이 없습니다. 호스트로부터 초대코드를 받아 참여해보세요.'}
+                  </p>
                   {searchQuery.trim() && (
                     <button
                       onClick={() => setSearchQuery('')}
                       className="reset-search-btn"
+                      style={{
+                        marginTop: '20px',
+                        padding: '10px 20px',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
                     >
                       검색 초기화
                     </button>
@@ -846,6 +903,7 @@ const MemberDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* @ts-ignore - This section is disabled */}
           {false && activeTab === 'profile' && (
             <div className="profile-section">
               <div className="profile-container">
@@ -854,7 +912,7 @@ const MemberDashboard: React.FC = () => {
                     <div className="avatar-container">
                       {user?.avatarUrl ? (
                         <img
-                          src={user.avatarUrl}
+                          src={user?.avatarUrl || ''}
                           alt="Profile"
                           className="profile-avatar"
                         />
@@ -969,6 +1027,7 @@ const MemberDashboard: React.FC = () => {
             </div>
           )}
 
+          {/* @ts-ignore - This section is disabled */}
           {false && activeTab === 'attendance' && (
             <div className="attendance-section">
               <div className="attendance-container">
