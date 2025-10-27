@@ -21,8 +21,46 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 // Participant Thumbnail Component
 // ========================================
 
+.participant-thumbnails {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding: 10px;
+
+  /* Hide scrollbar for modern browsers */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.participant-thumbnails::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* ✅ Responsive layout for mobile */
+@media (max-width: 768px) {
+  .participant-thumbnails {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    white-space: nowrap;
+  }
+
+  .participant-thumbnail {
+    flex: 0 0 auto;
+    width: 140px;
+    height: 100px;
+  }
+}
+
 .participant-thumbnail {
   position: relative;
+  flex: 0 0 auto; // ✅ Prevent shrinking - maintain size
+  scroll-snap-align: start;
   width: 25vw; // Even bigger for better visibility
   height: 20vw; // Increased height for better aspect ratio
   min-width: 160px; // Bigger minimum size
@@ -185,11 +223,18 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
       }
     }
 
-    &.hand-raised {
-      background: rgba($warning-orange, 0.8);
-      font-size: 12px;
-      animation: wave-hand 1s ease-in-out infinite;
-    }
+  &.hand-raised {
+    background: rgba($warning-orange, 0.8);
+    font-size: 12px;
+    animation: wave-hand 1s ease-in-out infinite;
+    color: #3b82f6;
+    font-size: 18px;
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    z-index: 10;
+    animation: pulse-hand 1s infinite ease-in-out;
+  }
 
     &.screen-sharing {
       background: rgba($primary-blue, 0.9);
@@ -226,6 +271,13 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
     &:nth-child(3) {
       animation-delay: 0.4s;
+    }
+  }
+
+  // ✅ Kick/Remove button styling
+  .kick-button {
+    &:hover {
+      background-color: #dc2626 !important;
     }
   }
 }
@@ -291,31 +343,33 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   }
 }
 
+/* ✋ Hand Raise Animations */
+.hand-raised-shake {
+  animation: shake-continuous 0.6s ease-in-out infinite;
+}
+
+.shake-once {
+  animation: shake-once 0.4s ease-in-out;
+}
+
 @keyframes shake-continuous {
-  0%, 100% {
-    transform: translateX(0) rotate(0deg);
-  }
-  5% {
-    transform: translateX(-2px) rotate(-0.5deg);
-  }
-  10% {
-    transform: translateX(2px) rotate(0.5deg);
-  }
-  15% {
-    transform: translateX(-2px) rotate(-0.5deg);
-  }
-  20% {
-    transform: translateX(2px) rotate(0.5deg);
-  }
-  25% {
-    transform: translateX(-2px) rotate(-0.5deg);
-  }
-  50% {
-    transform: translateX(0) rotate(0deg);
-  }
-  75% {
-    transform: translateX(-1px) rotate(-0.3deg);
-  }
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 0); }
+  50% { transform: translate(2px, 0); }
+  75% { transform: translate(-2px, 0); }
+}
+
+@keyframes shake-once {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 0); }
+  50% { transform: translate(3px, 0); }
+  75% { transform: translate(-3px, 0); }
+}
+
+@keyframes pulse-hand {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 // ========================================

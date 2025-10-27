@@ -319,30 +319,9 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
     
     return (
       <>
-        {/* Hand raise count badge */}
-        {wsRaisedHands.length > 0 && (
-          <div style={{
-            position: 'absolute',
-            top: '16px',
-            right: '16px',
-            padding: '8px 16px',
-            backgroundColor: 'rgba(245, 158, 11, 0.95)',
-            borderRadius: '24px',
-            color: 'white',
-            fontSize: '14px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-            animation: 'pulse 2s infinite'
-          }}>
-            ✋ {wsRaisedHands.length} hand{wsRaisedHands.length > 1 ? 's' : ''} raised
-          </div>
-        )}
+        {/* ✅ REMOVED: Orange hand raised count badge - too distracting */}
         
-        {/* Current hand raise message */}
+        {/* Current hand raise message - Keep this minimal notification */}
         {currentHandRaiseMessage && (
           <div style={{
             position: 'absolute',

@@ -16,6 +16,7 @@ interface MainStageViewProps {
   screenShareTrack?: any;
   connectionQuality?: number;
   isLocalParticipant?: boolean;
+  isRecording?: boolean; // ✅ Check if recording is active
   onParticipantClick?: (participantId: string) => void;
 }
 
@@ -34,6 +35,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   screenShareTrack,
   connectionQuality = 5,
   isLocalParticipant = false,
+  isRecording = false, // ✅ Whether recording is active
   onParticipantClick,
 }) => {
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -120,23 +122,34 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   // ✅ CRITICAL: Attach audio track for sound
   useEffect(() => {
-    if (audioRef.current && audioTrack) {
-      // CRITICAL FIX: Always mute local participant audio BEFORE attaching to prevent echo
-      if (isLocalParticipant || participantId === 'local') {
-        audioRef.current.muted = true;
-      }
-      
-      audioTrack.attach(audioRef.current);
-      
-      // Double-check mute state after attach (defensive programming)
-      if (isLocalParticipant || participantId === 'local') {
-        audioRef.current.muted = true;
-      }
-      
-      return () => {
-        audioTrack.detach(audioRef.current);
-      };
+    if (!audioRef.current || !audioTrack) return;
+
+    // ✅ Always mute local participant audio
+    if (isLocalParticipant || participantId === 'local') {
+      audioRef.current.muted = true;
     }
+
+    // Prevent duplicate playback
+    try {
+      audioTrack.detach(audioRef.current);
+    } catch {}
+
+    // Attach audio track safely
+    audioTrack.attach(audioRef.current);
+
+    // Force mute again just in case
+    if (isLocalParticipant || participantId === 'local') {
+      audioRef.current.muted = true;
+      audioRef.current.volume = 0; // ✅ guarantee no playback
+    }
+
+    return () => {
+      try {
+        if (audioRef.current && audioTrack) {
+          audioTrack.detach(audioRef.current);
+        }
+      } catch {}
+    };
   }, [audioTrack, participantId, isLocalParticipant]);
 
   const handleClick = () => {
@@ -147,8 +160,8 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
-      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
-      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant || participantId === 'local'} style={{ display: 'none' }} />
+      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO EXCEPT WHEN RECORDING */}
+      <audio ref={audioRef} autoPlay playsInline muted={(isLocalParticipant || participantId === 'local') && !isRecording} style={{ display: 'none' }} />
       
       {/* Main Video Container */}
       <div className={styles['main-stage-container']} onClick={handleClick}>

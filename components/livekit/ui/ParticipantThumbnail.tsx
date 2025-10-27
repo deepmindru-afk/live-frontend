@@ -15,6 +15,9 @@ interface ParticipantThumbnailProps {
   isScreenSharing?: boolean;
   isLocalParticipant?: boolean;
   isSelected?: boolean;
+  currentUserIsHost?: boolean; // ✅ Check if current user is host
+  isRecording?: boolean; // ✅ Check if recording is active
+  onKickParticipant?: (participant: any) => void; // ✅ Kick participant callback
   onClick?: () => void;
 }
 
@@ -32,6 +35,9 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   isScreenSharing = false,
   isLocalParticipant = false,
   isSelected = false,
+  currentUserIsHost = false, // ✅ Whether current user is host
+  isRecording = false, // ✅ Whether recording is active
+  onKickParticipant, // ✅ Kick participant handler
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -58,29 +64,33 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     };
   }, [videoTrack]);
 
-  // ✅ CRITICAL: Attach audio track for sound
+  // ✅ Audio track attachment for remote participants (skip for local to prevent echo)
   useEffect(() => {
-    if (audioRef.current && audioTrack) {
-      // CRITICAL FIX: Always mute local participant audio BEFORE attaching to prevent echo
-      if (isLocalParticipant || participantId === 'local') {
-        audioRef.current.muted = true;
-      }
-      
-      audioTrack.attach(audioRef.current);
-      
-      // Double-check mute state after attach (defensive programming)
-      if (isLocalParticipant || participantId === 'local') {
-        audioRef.current.muted = true;
-      }
-      
-      return () => {
-        if (audioTrack && audioRef.current) {
+    if (!audioRef.current || !audioTrack) return;
+    
+    // Don't attach audio for local participant to prevent echo
+    if (isLocalParticipant || participantId === 'local') {
+      audioRef.current.muted = true;
+      audioRef.current.volume = 0;
+      return;
+    }
+    
+    // Attach remote participant audio
+    try {
+      audioTrack.detach(audioRef.current);
+    } catch {}
+    audioTrack.attach(audioRef.current);
+    audioRef.current.muted = false; // ✅ Enable audio for remote participants
+    
+    return () => {
+      try {
+        if (audioRef.current && audioTrack) {
           audioTrack.detach(audioRef.current);
         }
-      };
-    }
+      } catch {}
+    };
   }, [audioTrack, participantId, isLocalParticipant]);
-
+  
   // Shake animation when hand is raised
   useEffect(() => {
     // Trigger shake only when hand changes from NOT raised to RAISED
@@ -104,6 +114,8 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       className={`${styles['participant-thumbnail']} ${isSpeaking ? styles['speaking'] : ''} ${isHandRaised ? styles['hand-raised-shake'] : ''} ${shouldShake ? styles['shake-once'] : ''} ${isSelected ? styles['selected'] : ''}`}
       onClick={onClick}
       style={{
+        position: 'relative',
+        zIndex: isHandRaised ? 10 : 5, // Higher z-index when hand is raised
         border: isSelected ? '3px solid #3b82f6' : isHandRaised ? '3px solid #3b82f6' : '3px solid transparent',
         boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : isHandRaised ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none',
         transform: isSelected ? 'scale(1.05)' : 'scale(1)',
@@ -111,8 +123,8 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         animation: isHandRaised ? 'shake-continuous 0.6s ease-in-out infinite' : 'none'
       }}
     >
-      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO */}
-      <audio ref={audioRef} autoPlay playsInline muted={isLocalParticipant ? true : false} style={{ display: 'none' }} />
+      {/* ✅ Audio element for remote participants - local is muted to prevent echo */}
+      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
       
       <div className={styles['thumbnail-video-container']}>
         {!isVideoOff && videoTrack ? (
@@ -136,6 +148,20 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         )}
       </div>
 
+      {/* ✅ Kick/Remove Button - Only visible to host for non-local participants */}
+      {currentUserIsHost && !isLocalParticipant && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering onClick on parent
+            onKickParticipant && onKickParticipant({ participantId, name });
+          }}
+          title="Remove participant"
+          style={{ width:'32px', height:'32px', background:'#ef4444', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer' }}
+        >
+          ✖
+        </button>
+      )}
+
       <div className={styles['thumbnail-info']}>
         <div className={styles['participant-name']} style={{
           color: isHandRaised ? '#3b82f6' : isSelected ? '#3b82f6' : 'inherit',
@@ -145,11 +171,11 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
           {isHandRaised && (
             <span style={{ 
               marginRight: '4px',
-              fontSize: '10px'
+              fontSize: '14px'
             }}>✋</span>
           )}
           {isHost && <span className={styles['host-badge']}>HOST</span>}
-          {isSelected && !isHandRaised && (
+          {isSelected && (
             <span style={{ 
               marginRight: '6px',
               width: '8px',

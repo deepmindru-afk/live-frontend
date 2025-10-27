@@ -703,9 +703,25 @@ const MemberDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Search and Filters Container */}
+              {/* Search Container */}
               <div className="search-filters-container">
-                <div className="search-container">
+                <div className="search-wrapper">
+                  <svg 
+                    className="search-icon" 
+                    width="20" 
+                    height="20" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path 
+                      d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" 
+                      stroke="currentColor" 
+                      strokeWidth="2" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                   <input
                     type="text"
                     placeholder="미팅 제목으로 검색..."
@@ -713,28 +729,6 @@ const MemberDashboard: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="search-input"
                   />
-                </div>
-
-                {/* Filters */}
-                <div className="filters-container">
-                  <button 
-                    className={`filter-btn ${searchQuery === '' ? 'active' : ''}`}
-                    onClick={() => setSearchQuery('')}
-                  >
-                    전체
-                  </button>
-                  <button 
-                    className={`filter-btn ${searchQuery === 'STARTED' ? 'active' : ''}`}
-                    onClick={() => setSearchQuery('STARTED')}
-                  >
-                    진행 중
-                  </button>
-                  <button 
-                    className={`filter-btn ${searchQuery === 'ENDED' ? 'active' : ''}`}
-                    onClick={() => setSearchQuery('ENDED')}
-                  >
-                    종료됨
-                  </button>
                 </div>
               </div>
 
@@ -2029,51 +2023,41 @@ const MemberDashboard: React.FC = () => {
           margin-bottom: 1.5rem;
         }
 
+        .search-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 1.5rem;
+          color: #9ca3af;
+          pointer-events: none;
+          transition: all 0.3s ease;
+        }
+
         .search-input {
           width: 100%;
-          padding: 1rem 1.5rem;
+          padding: 1.25rem 1.75rem 1.25rem 3.5rem;
           border: 2px solid #e1e5e9;
-          border-radius: 12px;
+          border-radius: 16px;
           font-size: 1.1rem;
-          background-color: #f8f9fa;
+          background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
           transition: all 0.3s ease;
           box-sizing: border-box;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .search-input:focus {
           outline: none;
           border-color: #1976d2;
-          background-color: white;
-          box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+          background: white;
+          box-shadow: 0 4px 20px rgba(25, 118, 210, 0.15);
+          transform: translateY(-2px);
         }
 
-        /* Filters */
-        .filters-container {
-          display: flex;
-          gap: 0.75rem;
-          margin-bottom: 2rem;
-          flex-wrap: wrap;
-        }
-
-        .filter-btn {
-          padding: 0.75rem 1.5rem;
-          background-color: #f8f9fa;
-          border: 2px solid #e1e5e9;
-          border-radius: 25px;
-          cursor: pointer;
-          font-size: 1rem;
-          color: #666;
-          transition: all 0.2s ease;
-        }
-
-        .filter-btn.active {
-          background-color: #1976d2;
-          border-color: #1976d2;
-          color: white;
-        }
-
-        .filter-btn:hover {
-          border-color: #1976d2;
+        .search-wrapper:focus-within .search-icon {
           color: #1976d2;
         }
 
@@ -2630,10 +2614,6 @@ const MemberDashboard: React.FC = () => {
             align-items: flex-start;
           }
 
-          .filters-container {
-            justify-content: center;
-          }
-
           .attendance-cards-row {
             grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
@@ -2676,13 +2656,14 @@ const MemberDashboard: React.FC = () => {
           }
 
           .search-input {
-            padding: 0.875rem 1.25rem;
+            padding: 1rem 1.25rem 1rem 3rem;
             font-size: 1rem;
           }
 
-          .filter-btn {
-            padding: 0.625rem 1.25rem;
-            font-size: 0.9rem;
+          .search-icon {
+            left: 1.25rem;
+            width: 18px;
+            height: 18px;
           }
 
           .join-btn {
@@ -2738,13 +2719,15 @@ const MemberDashboard: React.FC = () => {
             font-size: 0.9rem;
           }
 
-          .filters-container {
-            gap: 0.5rem;
+          .search-input {
+            padding: 0.875rem 1rem 0.875rem 2.75rem;
+            font-size: 0.95rem;
           }
 
-          .filter-btn {
-            padding: 0.5rem 1rem;
-            font-size: 0.85rem;
+          .search-icon {
+            left: 1rem;
+            width: 16px;
+            height: 16px;
           }
 
           .join-container {

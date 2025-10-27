@@ -14,7 +14,8 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   // Production optimizations - only for production builds
-  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
+  // Disabled standalone mode for local development - it causes path issues
+  // ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   experimental: {
     // Enable modern features
     esmExternals: true,

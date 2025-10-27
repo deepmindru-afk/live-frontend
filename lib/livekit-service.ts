@@ -5,6 +5,7 @@ import { CREATE_LIVEKIT_TOKEN } from '../apollo/livekit/mutations';
 export interface LiveKitConnectionOptions {
   roomName: string;
   participantName: string;
+  identity?: string; // ✅ Unique user identity for LiveKit
   meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER';
   enableCamera?: boolean;
   enableMicrophone?: boolean;
@@ -195,6 +196,7 @@ export class LiveKitService {
         mutation: CREATE_LIVEKIT_TOKEN,
         variables: {
           meetingId: options.roomName,
+          identity: options.identity, // ✅ Pass unique identity to token generation
         },
       });
 

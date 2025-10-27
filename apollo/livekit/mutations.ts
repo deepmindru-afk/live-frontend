@@ -3,8 +3,8 @@ import { gql } from '@apollo/client';
 // ===== LIVEKIT MUTATIONS =====
 
 export const CREATE_LIVEKIT_TOKEN = gql`
-  mutation CreateLivekitToken($meetingId: String!) {
-    createLivekitToken(meetingId: $meetingId)
+  mutation CreateLivekitToken($meetingId: String!, $identity: String!) {
+    createLivekitToken(meetingId: $meetingId, identity: $identity)
   }
 `;
 
