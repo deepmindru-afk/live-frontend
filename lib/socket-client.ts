@@ -10,7 +10,8 @@ class SocketClient {
     }
 
     this.token = token;
-    this.socket = io('http://localhost:3007', {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007';
+    this.socket = io(backendUrl, {
       auth: {
         token: token,
       },

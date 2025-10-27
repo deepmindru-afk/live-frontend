@@ -14,7 +14,8 @@ class WebSocketClient {
     this.meetingId = meetingId;
     this.token = token;
 
-    const wsUrl = `ws://localhost:3007/ws?meetingId=${encodeURIComponent(meetingId)}&token=${encodeURIComponent(token)}`;
+    const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL || process.env.NEXT_PUBLIC_SIGNALING_WS || 'ws://localhost:3007';
+    const wsUrl = `${wsBaseUrl}?meetingId=${encodeURIComponent(meetingId)}&token=${encodeURIComponent(token)}`;
 
     this.ws = new WebSocket(wsUrl);
 
