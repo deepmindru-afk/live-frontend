@@ -490,15 +490,14 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      // Starting camera enable process
+      console.log('📹 enableCamera: Starting camera enable process');
       
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
-      // This ensures all values passed to RTCPeerConnection.addTransceiver are valid finite numbers
       const safeVideoConstraints = {
         resolution: {
-          width: 1280,   // Explicit finite number - prevents NaN/Infinity calculations
-          height: 720,   // Explicit finite number - prevents NaN/Infinity calculations
-          frameRate: 30, // Standard frame rate - prevents division by zero
+          width: 1280,
+          height: 720,
+          frameRate: 30,
         },
       };
       
@@ -510,27 +509,35 @@ export class LiveKitService {
         throw new Error('Invalid video resolution constraints');
       }
       
-      
+      // Try to enable camera with constraints
+      try {
+        await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
+        console.log('📹 enableCamera: Camera enabled with constraints');
+      } catch (cameraError: any) {
+        // Try without constraints as fallback
+        console.log('📹 enableCamera: Retrying without constraints');
         try {
-          await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
-        } catch (cameraError: any) {
-          // Try without constraints as fallback
-          try {
-            await this._room.localParticipant.setCameraEnabled(true);
-          } catch (fallbackError) {
-            throw fallbackError;
-          }
+          await this._room.localParticipant.setCameraEnabled(true);
+          console.log('📹 enableCamera: Camera enabled without constraints');
+        } catch (fallbackError) {
+          throw fallbackError;
         }
+      }
       
-      const videoTrack = this._room.localParticipant.videoTrackPublications.values().next().value;
+      // Read the actual state from LiveKit SDK after enable
+      const actualCameraEnabled = this._room.localParticipant.isCameraEnabled;
+      console.log('📹 enableCamera: Actual camera state from SDK:', actualCameraEnabled);
       
-      // Video track published successfully
+      // Update state with actual value from SDK
+      this.updateRoomState({ isCameraEnabled: actualCameraEnabled });
       
-      this.updateRoomState({ isCameraEnabled: true });
+      console.log('📹 enableCamera: Camera state updated to:', actualCameraEnabled);
     } catch (error: any) {
+      console.error('📹 enableCamera: Error:', error);
       
       // Check if it's the specific WebRTC encoding error
       if (error?.message && error.message.includes('scaleResolutionDownBy')) {
+        console.error('📹 enableCamera: scaleResolutionDownBy error detected');
       }
       
       throw error;
@@ -541,18 +548,26 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
+      console.log('📹 disableCamera: Starting camera disable process');
       
       // Gracefully disable camera without stopping the entire stream
       await this._room.localParticipant.setCameraEnabled(false);
       
-      // Update state after successful disable
-      this.updateRoomState({ isCameraEnabled: false });
+      // Read the actual state from LiveKit SDK after disable
+      const actualCameraEnabled = this._room.localParticipant.isCameraEnabled;
+      console.log('📹 disableCamera: Actual camera state from SDK:', actualCameraEnabled);
+      
+      // Update state with actual value from SDK
+      this.updateRoomState({ isCameraEnabled: actualCameraEnabled });
+      
+      console.log('📹 disableCamera: Camera state updated to:', actualCameraEnabled);
       
     } catch (error) {
+      console.error('📹 disableCamera: Error:', error);
       
-      // Even if disable fails, don't stop the entire stream
-      // Just update the state to reflect the intended state
-      this.updateRoomState({ isCameraEnabled: false });
+      // Read the actual state even if disable fails
+      const actualCameraEnabled = this._room?.localParticipant?.isCameraEnabled ?? false;
+      this.updateRoomState({ isCameraEnabled: actualCameraEnabled });
       
       // Don't rethrow the error to prevent stream interruption
     }

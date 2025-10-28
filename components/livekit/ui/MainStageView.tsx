@@ -45,8 +45,15 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   // Attach video track with race condition fixes
   useEffect(() => {
     const el = mainVideoRef.current;
-    if (!el || !videoTrack) {
-      console.log('🎥 MainStageView video attach: No element or track', { hasElement: !!el, hasTrack: !!videoTrack });
+    if (!el || !videoTrack || isVideoOff) {
+      // ✅ CRITICAL FIX: Detach track when video is off
+      if (el && videoTrack) {
+        console.log('🎥 MainStageView video attach: Detaching track (video off)');
+        try {
+          videoTrack.detach(el);
+        } catch {}
+      }
+      console.log('🎥 MainStageView video attach: No element or track or video off', { hasElement: !!el, hasTrack: !!videoTrack, isVideoOff });
       return;
     }
 
@@ -59,7 +66,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
     if (el.offsetWidth === 0) {
       console.log('🎥 MainStageView video attach: Element has no width, delaying attachment');
       const timer = setTimeout(() => {
-        if (el && el.offsetWidth > 0) {
+        if (el && el.offsetWidth > 0 && !isVideoOff) {
           console.log('🎥 MainStageView video attach: Delayed attachment executing');
           videoTrack.detach(el);
           videoTrack.attach(el);
@@ -77,7 +84,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
       console.log('🎥 MainStageView video attach: Cleanup - detaching video track');
       videoTrack.detach(el);
     };
-  }, [videoTrack, isScreenSharing]);
+  }, [videoTrack, isScreenSharing, isVideoOff]); // ✅ CRITICAL FIX: Include isVideoOff
 
   // Attach screen share track with race condition fixes
   useEffect(() => {

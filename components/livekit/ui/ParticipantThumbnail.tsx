@@ -48,10 +48,23 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   // Video track attachment with race condition fixes
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || !videoTrack) return;
+    if (!el || !videoTrack || isVideoOff) {
+      // ✅ CRITICAL FIX: Detach track when video is off
+      if (el && videoTrack) {
+        try {
+          videoTrack.detach(el);
+        } catch {}
+      }
+      return;
+    }
 
     if (el.offsetWidth === 0) {
-      const timer = setTimeout(() => { if (el.offsetWidth > 0) videoTrack.attach(el); }, 800);
+      const timer = setTimeout(() => { 
+        if (el.offsetWidth > 0 && !isVideoOff) {
+          videoTrack.detach(el);
+          videoTrack.attach(el);
+        }
+      }, 800);
       return () => clearTimeout(timer);
     }
 
@@ -62,7 +75,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     return () => {
       videoTrack.detach(el);
     };
-  }, [videoTrack]);
+  }, [videoTrack, isVideoOff]); // ✅ CRITICAL FIX: Include isVideoOff in dependencies
 
   // ✅ Audio track attachment for remote participants (skip for local to prevent echo)
   useEffect(() => {

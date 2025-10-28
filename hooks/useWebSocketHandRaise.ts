@@ -95,10 +95,8 @@ export const useWebSocketHandRaise = ({
       return;
     }
 
-    if (!myHandRaised) {
-      return;
-    }
-
+    // ✅ CRITICAL FIX: Always emit LOWER_HAND, don't check myHandRaised
+    // The backend will determine if hand was actually raised
     setIsLoading(true);
     
     socket.emit('LOWER_HAND', {
@@ -106,7 +104,7 @@ export const useWebSocketHandRaise = ({
       userId,
       displayName
     });
-  }, [socket, isConnected, meetingId, userId, displayName, myHandRaised, onError]);
+  }, [socket, isConnected, meetingId, userId, displayName, onError]);
 
   // Get current raised hands
   const getRaisedHands = useCallback(() => {
@@ -205,6 +203,29 @@ export const useWebSocketHandRaise = ({
       callbacksRef.current.onAllHandsLowered?.(data);
     };
 
+    const handleHandLowerSuccess = (data: { participantId: string; message: string }) => {
+      setIsLoading(false);
+      
+      // Update state when successfully lowered
+      if (data.participantId === userId) {
+        setMyHandRaised(false);
+      }
+      
+      setRaisedHands(prev => {
+        const newHands = prev.filter(hand => hand.userId !== data.participantId);
+        return newHands;
+      });
+    };
+
+    const handleHandRaiseSuccess = (data: { participantId: string; message: string }) => {
+      setIsLoading(false);
+      
+      // Update state when successfully raised
+      if (data.participantId === userId) {
+        setMyHandRaised(true);
+      }
+    };
+
     const handleError = (error: { message: string }) => {
       setIsLoading(false);
       callbacksRef.current.onError?.(error.message);
@@ -217,6 +238,8 @@ export const useWebSocketHandRaise = ({
     socket.on('ALL_HANDS_LOWERED', handleAllHandsLowered);
     socket.on('HAND_AUTO_LOWERED', handleHandAutoLowered);
     socket.on('RAISED_HANDS_LIST', handleRaisedHandsList);
+    socket.on('HAND_LOWER_SUCCESS', handleHandLowerSuccess);
+    socket.on('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
     socket.on('ERROR', handleError);
     
     // Add a test listener to see if any events are coming through
@@ -233,6 +256,8 @@ export const useWebSocketHandRaise = ({
       socket.off('ALL_HANDS_LOWERED', handleAllHandsLowered);
       socket.off('HAND_AUTO_LOWERED', handleHandAutoLowered);
       socket.off('RAISED_HANDS_LIST', handleRaisedHandsList);
+      socket.off('HAND_LOWER_SUCCESS', handleHandLowerSuccess);
+      socket.off('HAND_RAISE_SUCCESS', handleHandRaiseSuccess);
       socket.off('ERROR', handleError);
       socket.offAny(); // CRITICAL: Remove the catch-all listener
     };
