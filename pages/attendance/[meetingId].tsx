@@ -195,7 +195,8 @@ interface Meeting {
   status: string;
   inviteCode: string;
   participantCount: number;
-  duration?: number; // in seconds
+  duration?: number; // in minutes
+  durationMin?: number; // in minutes (alternative field name)
   createdAt: string;
   endedAt?: string;
   scheduledFor?: string;
@@ -264,7 +265,12 @@ const AttendancePage: React.FC = () => {
             title: meeting.title,
             hostId: meeting.hostId,
             currentHostId: meeting.currentHostId,
-            status: meeting.status
+            status: meeting.status,
+            actualStartAt: meeting.actualStartAt,
+            endedAt: meeting.endedAt,
+            duration: meeting.duration,
+            durationMin: meeting.durationMin,
+            createdAt: meeting.createdAt
           });
           setMeeting(meeting);
         }
@@ -397,14 +403,13 @@ const AttendancePage: React.FC = () => {
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
     
     if (hours > 0) {
-      return `${hours}시간 ${minutes}분 ${secs}초`;
+      return `${hours}시간 ${minutes}분`;
     } else if (minutes > 0) {
-      return `${minutes}분 ${secs}초`;
+      return `${minutes}분`;
     } else {
-      return `${secs}초`;
+      return `0분`;
     }
   };
 
@@ -429,19 +434,53 @@ const AttendancePage: React.FC = () => {
   const getTotalMeetingDuration = () => {
     if (!meeting) return 0;
     
-    // Calculate meeting duration from actual start and end times
+    // Priority 1: Calculate from actual start and end times (most accurate)
     if (meeting.actualStartAt && meeting.endedAt) {
       const startTime = new Date(meeting.actualStartAt).getTime();
       const endTime = new Date(meeting.endedAt).getTime();
-      return Math.floor((endTime - startTime) / 1000); // Convert to seconds
-    } else if (meeting.actualStartAt) {
-      const startTime = new Date(meeting.actualStartAt).getTime();
-      const currentTime = Date.now();
-      return Math.floor((currentTime - startTime) / 1000); // Convert to seconds
-    } else if (meeting.duration) {
-      return meeting.duration * 60; // Convert minutes to seconds
+      const durationSeconds = Math.floor((endTime - startTime) / 1000);
+      
+      console.log('📊 [MEETING DURATION]', {
+        actualStartAt: meeting.actualStartAt,
+        endedAt: meeting.endedAt,
+        startTimeMs: startTime,
+        endTimeMs: endTime,
+        durationSeconds: durationSeconds,
+        durationMinutes: Math.floor(durationSeconds / 60)
+      });
+      
+      // Only use this if it makes sense (not negative or zero)
+      if (durationSeconds > 0) {
+        return durationSeconds;
+      }
     }
     
+    // Priority 2: Use scheduled duration from backend  
+    if (meeting.duration || meeting.durationMin) {
+      // meeting.duration is in minutes, convert to seconds
+      const durationMinutes = meeting.duration || meeting.durationMin || 0;
+      const durationSeconds = durationMinutes * 60;
+      console.log('📊 [MEETING DURATION] Using scheduled duration:', {
+        durationMinutes: durationMinutes,
+        durationSeconds: durationSeconds
+      });
+      return durationSeconds;
+    }
+    
+    // Priority 3: Calculate from actual start time to now (for ongoing meetings)
+    if (meeting.actualStartAt) {
+      const startTime = new Date(meeting.actualStartAt).getTime();
+      const currentTime = Date.now();
+      const durationSeconds = Math.floor((currentTime - startTime) / 1000);
+      console.log('📊 [MEETING DURATION] Using ongoing duration:', {
+        durationSeconds: durationSeconds,
+        durationMinutes: Math.floor(durationSeconds / 60)
+      });
+      return durationSeconds;
+    }
+    
+    // Fallback: return 0
+    console.warn('⚠️ [MEETING DURATION] No valid duration data found');
     return 0;
   };
 

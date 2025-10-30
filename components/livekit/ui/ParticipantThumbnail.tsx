@@ -18,6 +18,7 @@ interface ParticipantThumbnailProps {
   currentUserIsHost?: boolean; // ✅ Check if current user is host
   isRecording?: boolean; // ✅ Check if recording is active
   onKickParticipant?: (participant: any) => void; // ✅ Kick participant callback
+  onLowerHand?: (participantId: string) => void; // ✅ Lower hand callback for host
   onClick?: () => void;
 }
 
@@ -38,6 +39,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   currentUserIsHost = false, // ✅ Whether current user is host
   isRecording = false, // ✅ Whether recording is active
   onKickParticipant, // ✅ Kick participant handler
+  onLowerHand, // ✅ Lower hand handler
   onClick,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -161,18 +163,68 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
         )}
       </div>
 
-      {/* ✅ Kick/Remove Button - Only visible to host for non-local participants */}
+      {/* ✅ Host Control Buttons - Only visible to host for non-local participants */}
       {currentUserIsHost && !isLocalParticipant && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering onClick on parent
-            onKickParticipant && onKickParticipant({ participantId, name });
-          }}
-          title="Remove participant"
-          style={{ width:'32px', height:'32px', background:'#ef4444', color:'#fff', border:'none', borderRadius:'6px', cursor:'pointer' }}
-        >
-          ✖
-        </button>
+        <div style={{ 
+          position: 'absolute', 
+          top: '4px', 
+          right: '4px', 
+          display: 'flex', 
+          gap: '4px', 
+          zIndex: 1000 
+        }}>
+          {/* Lower Hand Button - Only show when hand is raised */}
+          {isHandRaised && onLowerHand && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent triggering onClick on parent
+                onLowerHand && onLowerHand(participantId);
+              }}
+              title="Lower participant's hand"
+              style={{ 
+                width: '32px', 
+                height: '32px', 
+                background: '#f59e0b', 
+                color: '#fff', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}
+            >
+              ✋
+            </button>
+          )}
+          
+          {/* Remove/Kick Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering onClick on parent
+              onKickParticipant && onKickParticipant({ participantId, name });
+            }}
+            title="Remove participant"
+            style={{ 
+              width: '32px', 
+              height: '32px', 
+              background: '#ef4444', 
+              color: '#fff', 
+              border: 'none', 
+              borderRadius: '6px', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              fontWeight: 'bold'
+            }}
+          >
+            ✖
+          </button>
+        </div>
       )}
 
       <div className={styles['thumbnail-info']}>

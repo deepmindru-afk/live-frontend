@@ -220,7 +220,7 @@ const MemberDashboard: React.FC = () => {
         });
         
         console.log('✅ Processed meetings:', allMeetings.length);
-        console.log('✅ Processed meetings STATUS:', allMeetings.map(m => `${m.title}: ${m.status}`));
+        console.log('✅ Processed meetings STATUS:', allMeetings.map((m: Meeting) => `${m.title}: ${m.status}`));
         setMeetings(allMeetings);
         setFilteredMeetings(allMeetings);
       } else if (result.getMeetings && result.getMeetings.meetings && result.getMeetings.meetings.length === 0) {
@@ -555,7 +555,16 @@ const MemberDashboard: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ko-KR');
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? '오후' : '오전';
+    const displayHour = hours % 12 || 12;
+    
+    return `${year}. ${month}. ${day}. ${ampm} ${displayHour}:${minutes}`;
   };
 
   const formatTime = (timeString: string | Date | null | undefined) => {
@@ -582,7 +591,8 @@ const MemberDashboard: React.FC = () => {
     
     return date.toLocaleTimeString('ko-KR', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -603,11 +613,18 @@ const MemberDashboard: React.FC = () => {
 
   const calculateMeetingDuration = (meeting: Meeting) => {
     if (meeting.duration) {
+      // Convert minutes to hours and minutes
       const hours = Math.floor(meeting.duration / 60);
       const minutes = meeting.duration % 60;
-      return `${hours}시간 ${minutes}분`;
+      if (hours > 0 && minutes > 0) {
+        return `${hours}시간 ${minutes}분`;
+      } else if (hours > 0) {
+        return `${hours}시간`;
+      } else {
+        return `${minutes}분`;
+      }
     }
-    return 'N/A';
+    return '정보 없음';
   };
 
   if (loading) {
@@ -787,8 +804,8 @@ const MemberDashboard: React.FC = () => {
                             <span className="info-value">{meeting.inviteCode}</span>
                           </div>
                           <div className="info-item">
-                            <span className="info-label">참가자:</span>
-                            <span className="info-value">{meeting.participantCount}명</span>
+                            <span className="info-label">미팅 시간:</span>
+                            <span className="info-value">{calculateMeetingDuration(meeting)}</span>
                           </div>
                           <div className="info-item">
                             <span className="info-label">생성일:</span>
@@ -804,8 +821,8 @@ const MemberDashboard: React.FC = () => {
                         <button
                           onClick={async () => {
                             if (meeting.status === 'ENDED') {
-                              // Navigate to attendance page for ENDED meetings
-                              router.push(`/attendance/${meeting._id}`);
+                              // Show attendance as popup for ENDED meetings
+                              await handleAttendanceClick(meeting);
                             } else if (meeting.status === 'STARTED') {
                               // Join live meetings
                               router.push(`/prejoin/${meeting._id}`);
@@ -1203,72 +1220,53 @@ const MemberDashboard: React.FC = () => {
                   </div>
                 ) : participantData?.getParticipantByUserAndMeeting ? (
                   <>
-                    <div className="meeting-info">
+                    <div className="meeting-info-card">
                       <h4 className="meeting-title">{selectedMeeting.title}</h4>
-                      <div className="meeting-meta">
-                        <span className="meeting-date">
-                          📅 {formatDate(selectedMeeting.createdAt)}
-                        </span>
-                        <span className="meeting-duration">
-                          ⏱️ {calculateMeetingDuration(selectedMeeting)}
-                        </span>
+                      <div className="meeting-badge">
+                        <span>📅 {formatDate(selectedMeeting.createdAt)}</span>
                       </div>
                     </div>
 
-                    <div className="attendance-stats">
-                      <div className="stat-card">
-                        <div className="stat-icon">⏰</div>
-                        <div className="stat-content">
-                          <div className="stat-label">참여 시간</div>
-                          <div className="stat-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes ? `${participantData.getParticipantByUserAndMeeting.loginInfo.totalDurationMinutes}분` : '0분'}</div>
-                        </div>
-                      </div>
+                    {(() => {
+                      const participantTime = participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes || 0;
+                      const meetingDuration = selectedMeeting.duration || 60; // Default to 60 minutes if not specified
+                      const attendancePercentage = meetingDuration > 0 ? Math.min(Math.round((participantTime / meetingDuration) * 100), 100) : 0;
                       
-                      <div className="stat-card">
-                        <div className="stat-icon">📊</div>
-                        <div className="stat-content">
-                          <div className="stat-label">세션 수</div>
-                          <div className="stat-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalSessions || 0}회</div>
-                        </div>
-                      </div>
-                    </div>
+                      return (
+                        <div className="attendance-main-stats">
+                          <div className="main-stat-card total-meeting">
+                            <div className="stat-icon-large">⏱️</div>
+                            <div className="stat-info">
+                              <div className="stat-label-main">총 미팅 시간</div>
+                              <div className="stat-value-large">{meetingDuration}분</div>
+                            </div>
+                          </div>
 
-                    <div className="attendance-timeline">
-                      <h5 className="timeline-title">참석 타임라인</h5>
-                      <div className="timeline">
-                        {participantData.getParticipantByUserAndMeeting.loginInfo?.sessions?.map((session: any, index: number) => (
-                          <div key={index} className="timeline-item">
-                            <div className="timeline-time">{formatTime(session.joinedAt)}</div>
-                            <div className="timeline-content">
-                              <div className="timeline-title">{index === 0 ? '미팅 참여' : `재입장 ${index}`}</div>
-                              <div className="timeline-desc">
-                                {session.leftAt ? `퇴장: ${formatTime(session.leftAt)} (${session.durationMinutes}분)` : '진행 중'}
+                          <div className="main-stat-card participant-time">
+                            <div className="stat-icon-large">👤</div>
+                            <div className="stat-info">
+                              <div className="stat-label-main">참석 시간</div>
+                              <div className="stat-value-large">{participantTime}분</div>
+                            </div>
+                          </div>
+
+                          <div className="main-stat-card percentage-card">
+                            <div className="stat-icon-large">📊</div>
+                            <div className="stat-info">
+                              <div className="stat-label-main">출석률</div>
+                              <div className="stat-value-large percentage">{attendancePercentage}%</div>
+                              <div className="progress-bar-container">
+                                <div 
+                                  className="progress-bar" 
+                                  style={{ width: `${attendancePercentage}%` }}
+                                ></div>
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        </div>
+                      );
+                    })()}
 
-                    <div className="attendance-summary">
-                      <h5 className="summary-title">참석 요약</h5>
-                      <div className="summary-content">
-                        <div className="summary-item">
-                          <span className="summary-label">참여 시간:</span>
-                          <span className="summary-value">{participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes ? `${participantData.getParticipantByUserAndMeeting.loginInfo.totalDurationMinutes}분` : '0분'}</span>
-                        </div>
-                        <div className="summary-item">
-                          <span className="summary-label">참여 시작:</span>
-                          <span className="summary-value">{formatTime(participantData.getParticipantByUserAndMeeting.loginInfo?.firstLogin)}</span>
-                        </div>
-                        {participantData.getParticipantByUserAndMeeting.loginInfo?.lastLogin && (
-                          <div className="summary-item">
-                            <span className="summary-label">마지막 활동:</span>
-                            <span className="summary-value">{formatTime(participantData.getParticipantByUserAndMeeting.loginInfo.lastLogin)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -1635,9 +1633,9 @@ const MemberDashboard: React.FC = () => {
           background: white;
           border-radius: 16px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-          max-width: 600px;
-          width: 90%;
-          max-height: 80vh;
+          max-width: 1000px;
+          width: 95%;
+          max-height: 85vh;
           overflow-y: auto;
           animation: slideUp 0.3s ease;
           border: 1px solid #e0e0e0;
@@ -1685,93 +1683,108 @@ const MemberDashboard: React.FC = () => {
           padding: 24px;
         }
 
-        .meeting-info {
-          margin-bottom: 24px;
-          padding: 16px;
-          background: #f8f9fa;
-          border-radius: 12px;
-          border-left: 4px solid #dc3545;
-          animation: slideInLeft 0.6s ease;
+        .meeting-info-card {
+          margin-bottom: 30px;
+          padding: 24px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 16px;
+          color: white;
+          text-align: center;
+          box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
         }
 
         .meeting-title {
-          margin: 0 0 8px 0;
-          font-size: 18px;
-          font-weight: 600;
+          margin: 0 0 16px 0;
+          font-size: 22px;
+          font-weight: 700;
+        }
+
+        .meeting-badge {
+          display: inline-block;
+          background: rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(10px);
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .attendance-main-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+
+        .main-stat-card {
+          background: white;
+          padding: 24px;
+          border-radius: 16px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+          transition: all 0.3s ease;
+          border: 2px solid transparent;
+        }
+
+        .main-stat-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .main-stat-card.total-meeting {
+          border-top: 4px solid #667eea;
+        }
+
+        .main-stat-card.participant-time {
+          border-top: 4px solid #f093fb;
+        }
+
+        .main-stat-card.percentage-card {
+          border-top: 4px solid #4facfe;
+        }
+
+        .stat-icon-large {
+          font-size: 36px;
+          margin-bottom: 12px;
+        }
+
+        .stat-info {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .stat-label-main {
+          font-size: 13px;
+          color: #666;
+          font-weight: 500;
+        }
+
+        .stat-value-large {
+          font-size: 28px;
+          font-weight: 700;
           color: #333;
         }
 
-        .meeting-meta {
-          display: flex;
-          gap: 16px;
-          flex-wrap: wrap;
+        .stat-value-large.percentage {
+          color: #4facfe;
         }
 
-        .meeting-date, .meeting-duration {
-          font-size: 14px;
-          color: #666;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .attendance-stats {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-
-        .stat-card {
-          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-          color: white;
-          padding: 20px;
-          border-radius: 12px;
-          text-align: center;
-          animation: fadeInUp 0.6s ease;
-          transition: all 0.3s ease;
-          cursor: pointer;
-          position: relative;
-          overflow: hidden;
-        }
-
-        .stat-card::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
+        .progress-bar-container {
           width: 100%;
+          height: 8px;
+          background: #e9ecef;
+          border-radius: 10px;
+          overflow: hidden;
+          margin-top: 12px;
+        }
+
+        .progress-bar {
           height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-          transition: left 0.5s;
+          background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+          border-radius: 10px;
+          transition: width 0.8s ease;
         }
 
-        .stat-card:hover::before {
-          left: 100%;
-        }
-
-        .stat-card:hover {
-          transform: translateY(-5px) scale(1.02);
-          box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
-        }
-
-        .stat-icon {
-          font-size: 24px;
-          margin-bottom: 8px;
-          animation: bounce 2s infinite;
-        }
-
-        .stat-label {
-          font-size: 12px;
-          opacity: 0.9;
-          margin-bottom: 4px;
-        }
-
-        .stat-value {
-          font-size: 20px;
-          font-weight: 700;
-          animation: countUp 1s ease-out;
-        }
 
         .attendance-timeline {
           margin-bottom: 24px;
@@ -2009,19 +2022,36 @@ const MemberDashboard: React.FC = () => {
           .attendance-popup {
             width: 95%;
             margin: 20px;
+            max-height: 90vh;
           }
           
           .popup-content {
-            padding: 16px;
+            padding: 20px;
           }
           
-          .attendance-stats {
+          .attendance-main-stats {
             grid-template-columns: 1fr;
+            gap: 16px;
           }
           
-          .meeting-meta {
-            flex-direction: column;
-            gap: 8px;
+          .meeting-info-card {
+            padding: 20px;
+          }
+          
+          .meeting-title {
+            font-size: 18px;
+          }
+          
+          .stat-icon-large {
+            font-size: 28px;
+          }
+          
+          .stat-value-large {
+            font-size: 24px;
+          }
+          
+          .main-stat-card {
+            padding: 20px;
           }
         }
 

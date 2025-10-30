@@ -27,6 +27,7 @@ import {
   LOWER_HAND,
   TRANSFER_HOST,
   REMOVE_PARTICIPANT,
+  HOST_LOWER_HAND,
 } from '../apollo/livestream/mutations';
 import {
   START_RECORDING,
@@ -513,6 +514,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [rejectParticipant] = useMutation(REJECT_PARTICIPANT);
   const [raiseHand] = useMutation(RAISE_HAND);
   const [lowerHand] = useMutation(LOWER_HAND);
+  const [hostLowerHand] = useMutation(HOST_LOWER_HAND);
   const [transferHost] = useMutation(TRANSFER_HOST);
   const [removeParticipant] = useMutation(REMOVE_PARTICIPANT);
   
@@ -522,6 +524,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     // Backend updates are handled by WebSocket events in HandRaiseIndicator
     updateHandRaiseStatus(participantId, isRaised);
   }, [updateHandRaiseStatus]);
+
   
   // Recording mutations - Disabled for client-side recording
   // const [startRecordingMutation] = useMutation(START_RECORDING);
@@ -3453,6 +3456,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     currentUserIsHost={isHostState} // ✅ Check if current user is host
                     isRecording={isRecording} // ✅ Pass recording state
                     onKickParticipant={handleKickParticipantClick} // ✅ Kick participant handler
+                    onLowerHand={handleHostLowerHand} // ✅ Lower hand handler for host
                     onClick={() => {
                       console.log('🎯 Thumbnail clicked - participant:', participant.displayName, 'ID:', participant._id);
                       setSelectedParticipantId(participant._id);
