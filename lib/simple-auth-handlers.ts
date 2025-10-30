@@ -573,6 +573,27 @@ export const getCurrentUser = async () => {
       }
       return data.me;
     } else {
+      // If backend returns null or "User not found", attempt SSO exchange using cookie token, then retry once
+      try {
+        const resp = await fetch('/api/auth/session-jwt', { credentials: 'include' });
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.success && json.token) {
+            const ssoOk = await handleSSOLogin(json.token);
+            if (ssoOk) {
+              const retry = await makeGraphQLRequest(GET_CURRENT_USER_QUERY);
+              if (retry && retry.me) {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('user', JSON.stringify(retry.me));
+                }
+                return retry.me;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore and fall through
+      }
       return null;
     }
   } catch (error) {

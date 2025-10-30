@@ -3,6 +3,7 @@ import '../styles/dashboard.scss';
 import '../pages/app/globals.css';
 import ApolloProviderWrapper from '../lib/apollo-provider';
 import { useEffect } from 'react';
+import { handleSSOLogin } from '../lib/simple-auth-handlers';
 
 // Cleanup duplicate tokens on app start
 function cleanupDuplicateTokens() {
@@ -31,6 +32,37 @@ function cleanupDuplicateTokens() {
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
+    // 1) If no jwt in localStorage, fetch it from cookies via API and cache it
+    const ensureJwtFromCookies = async () => {
+      try {
+        if (typeof window === 'undefined') return;
+        const existing = localStorage.getItem('jwt');
+        if (existing) return; // already cached
+
+        const resp = await fetch('/api/auth/session-jwt', { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data && data.success && data.token) {
+          // IMPORTANT: Do NOT use the PHP token directly for GraphQL calls.
+          // Exchange it via ssoLogin so backend creates/fetches the user and returns its own JWT.
+          try {
+            const ok = await handleSSOLogin(data.token);
+            if (ok) {
+              console.log('✅ Completed SSO exchange and cached backend JWT');
+            }
+          } catch (e) {
+            console.warn('⚠️ SSO exchange failed:', e);
+            // Fall back to caching raw token to avoid blank screen, though backend may reject it
+            localStorage.setItem('jwt', data.token);
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Unable to cache JWT from cookies:', e);
+      }
+    };
+
+    ensureJwtFromCookies();
+
     // Disable cleanup completely on login + home page
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
