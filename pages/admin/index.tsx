@@ -573,6 +573,20 @@ const AdminDashboard: React.FC = () => {
                   <span className="nav-icon">📋</span>
                   <span className="nav-text">Attendance</span>
                 </div>
+                <div 
+                  className="nav-item" 
+                  onClick={() => router.push('/instructor')}
+                  style={{ 
+                    cursor: 'pointer',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    marginTop: '8px',
+                    paddingTop: '12px'
+                  }}
+                  title="Create meetings and manage instructor features"
+                >
+                  <span className="nav-icon">🎓</span>
+                  <span className="nav-text">Create Meetings</span>
+                </div>
               </div>
             </nav>
           </div>

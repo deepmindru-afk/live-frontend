@@ -128,8 +128,9 @@ const Dashboard: React.FC = () => {
 
         console.log('✅ User authenticated:', userData);
         
-        // Only allow TUTOR role to access this instructor dashboard
-        if (userData.systemRole === 'TUTOR') {
+        // Allow TUTOR and ADMIN roles to access this instructor dashboard
+        // Admins should have full access to instructor features including meeting creation
+        if (userData.systemRole === 'TUTOR' || userData.systemRole === 'ADMIN') {
           setUser(userData);
           await testBackendConnection();
           await fetchMeetings();
@@ -141,8 +142,6 @@ const Dashboard: React.FC = () => {
           console.log('⚠️ Wrong role, redirecting user with role:', userData.systemRole);
           if (userData.systemRole === 'MEMBER') {
             window.location.href = '/member';
-          } else if (userData.systemRole === 'ADMIN') {
-            window.location.href = '/dashboard';
           } else {
             // User not found or invalid role
             await showErrorAlert('Authentication Error', 'Invalid user role. Please log in again.');
