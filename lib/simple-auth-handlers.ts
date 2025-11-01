@@ -575,15 +575,19 @@ export const getCurrentUser = async () => {
       return data.me;
     } else {
       // If backend returns null or "User not found", attempt SSO exchange using cookie token, then retry once
+      console.log('⚠️ getCurrentUser: No user data from GET_CURRENT_USER_QUERY, checking SSO fallback...');
       try {
         const resp = await fetch('/api/auth/session-jwt', { credentials: 'include' });
         if (resp.ok) {
           const json = await resp.json();
           if (json && json.success && json.token) {
+            console.log('🔄 getCurrentUser: Found PHP cookie token, triggering SSO...');
             const ssoOk = await handleSSOLogin(json.token);
             if (ssoOk) {
+              console.log('✅ getCurrentUser: SSO successful, retrying GET_CURRENT_USER_QUERY...');
               const retry = await makeGraphQLRequest(GET_CURRENT_USER_QUERY);
               if (retry && retry.me) {
+                console.log('✅ getCurrentUser: Got user from retry, saving to localStorage');
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('user', JSON.stringify(retry.me));
                 }
@@ -593,6 +597,7 @@ export const getCurrentUser = async () => {
           }
         }
       } catch (e) {
+        console.log('⚠️ getCurrentUser: SSO fallback error:', e);
         // ignore and fall through
       }
       return null;
