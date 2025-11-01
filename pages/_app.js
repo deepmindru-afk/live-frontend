@@ -72,30 +72,17 @@ export default function App({ Component, pageProps }) {
               
               console.log('🔍 [_app.js] Comparison:', { 
                 phpUserId, 
-                existingUserId: parsedUser.user_id,
-                phpEmail: phpPayload.email,
-                existingEmail: parsedUser.email
+                existingUserId: parsedUser.user_id
               });
               
               // Compare: if PHP user_id matches existing user_id, no need to re-authenticate
               if (phpUserId && parsedUser.user_id && phpUserId === parsedUser.user_id) {
                 shouldReAuth = false;
                 console.log('✅ [_app.js] Same user_id, skipping SSO');
-              } 
-              // Also check email match as secondary validation
-              else if (phpPayload.email && parsedUser.email && 
-                       phpPayload.email.toLowerCase() === parsedUser.email.toLowerCase()) {
-                // Emails match but user_ids don't - this might be a case where user_id wasn't set yet
-                // Check if both have user_id field and they're different
-                if (phpUserId && parsedUser.user_id) {
-                  // Both have user_id but different - user is switching
-                  console.log('⚠️ [_app.js] Different user_ids with same email - switching user');
-                  shouldReAuth = true;
-                } else {
-                  // At least one doesn't have user_id - safe to skip re-auth
-                  console.log('✅ [_app.js] Same email, no user_id conflicts, skipping SSO');
-                  shouldReAuth = false;
-                }
+              } else {
+                // Different user_id - user is switching
+                console.log('⚠️ [_app.js] Different user_id detected - switching user');
+                shouldReAuth = true;
               }
             } catch (e) {
               console.warn('⚠️ Could not decode tokens for comparison, will re-authenticate:', e);
