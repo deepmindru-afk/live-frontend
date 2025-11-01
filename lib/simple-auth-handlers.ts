@@ -126,6 +126,7 @@ const GET_CURRENT_USER_QUERY = `
   query GetCurrentUser {
     me {
       _id
+      user_id
       displayName
       email
       systemRole

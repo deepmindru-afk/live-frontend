@@ -13,15 +13,12 @@ function cleanupDuplicateTokens() {
     const jwt = localStorage.getItem('jwt');
     const token = localStorage.getItem('token');
 
-    console.log('🔍 Token check - jwt:', jwt ? 'exists' : 'missing', 'token:', token ? 'exists' : 'missing');
-
     // ✅ If both exist, keep both (no deletion)
     if (jwt && token) return;
 
     // ✅ If only token exists, rename it to jwt
     if (!jwt && token) {
       localStorage.setItem('jwt', token);
-      console.log('✅ Migrated token → jwt (kept old one)');
     }
 
     // ✅ If only jwt exists, do nothing
@@ -36,6 +33,8 @@ export default function App({ Component, pageProps }) {
     const ssoCheckKey = '__sso_check_done__';
     const hasCheckedSSO = sessionStorage.getItem(ssoCheckKey);
     
+    console.log('🔐 [_app.js] useEffect starting, hasCheckedSSO:', hasCheckedSSO);
+    
     // 1) Check cookies to handle SSO login from PHP (only once per page load)
     const ensureJwtFromCookies = async () => {
       try {
@@ -49,6 +48,7 @@ export default function App({ Component, pageProps }) {
         
         const data = await resp.json();
         if (data && data.success && data.token) {
+          console.log('🔐 [_app.js] PHP cookie token found, checking if re-auth needed...');
           const existing = localStorage.getItem('jwt');
           const existingUser = localStorage.getItem('user');
           
@@ -70,10 +70,32 @@ export default function App({ Component, pageProps }) {
               // Parse existing user to get user_id from localStorage
               const parsedUser = JSON.parse(existingUser);
               
+              console.log('🔍 [_app.js] Comparison:', { 
+                phpUserId, 
+                existingUserId: parsedUser.user_id,
+                phpEmail: phpPayload.email,
+                existingEmail: parsedUser.email
+              });
+              
               // Compare: if PHP user_id matches existing user_id, no need to re-authenticate
               if (phpUserId && parsedUser.user_id && phpUserId === parsedUser.user_id) {
                 shouldReAuth = false;
-                console.log('✅ PHP cookie is for same user, no need to re-authenticate');
+                console.log('✅ [_app.js] Same user_id, skipping SSO');
+              } 
+              // Also check email match as secondary validation
+              else if (phpPayload.email && parsedUser.email && 
+                       phpPayload.email.toLowerCase() === parsedUser.email.toLowerCase()) {
+                // Emails match but user_ids don't - this might be a case where user_id wasn't set yet
+                // Check if both have user_id field and they're different
+                if (phpUserId && parsedUser.user_id) {
+                  // Both have user_id but different - user is switching
+                  console.log('⚠️ [_app.js] Different user_ids with same email - switching user');
+                  shouldReAuth = true;
+                } else {
+                  // At least one doesn't have user_id - safe to skip re-auth
+                  console.log('✅ [_app.js] Same email, no user_id conflicts, skipping SSO');
+                  shouldReAuth = false;
+                }
               }
             } catch (e) {
               console.warn('⚠️ Could not decode tokens for comparison, will re-authenticate:', e);
@@ -81,19 +103,18 @@ export default function App({ Component, pageProps }) {
             }
           }
           
+          console.log('🔍 [_app.js] shouldReAuth:', shouldReAuth);
+          
           // Only call SSO if we need to re-authenticate
           if (shouldReAuth) {
+            console.log('🔄 [_app.js] Triggering SSO login...');
             // CRITICAL: PHP token is different - update session to handle user switching
             // IMPORTANT: Do NOT use the PHP token directly for GraphQL calls.
             // Exchange it via ssoLogin so backend creates/fetches the user and returns its own JWT.
             try {
               const ok = await handleSSOLogin(data.token);
-              if (ok) {
-                if (existing) {
-                  console.log('✅ Updated SSO session from PHP cookie (user switched)');
-                } else {
-                  console.log('✅ Completed SSO exchange and cached backend JWT');
-                }
+              if (!ok) {
+                console.warn('⚠️ SSO login failed');
               }
             } catch (e) {
               console.warn('⚠️ SSO exchange failed:', e);
@@ -119,7 +140,6 @@ export default function App({ Component, pageProps }) {
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
       if (pathname.includes('/login') || pathname === '/' || pathname.includes('/signup')) {
-        console.log('🚫 Skipping token cleanup on auth pages');
         return;
       }
     }
@@ -136,7 +156,6 @@ export default function App({ Component, pageProps }) {
       let mounted = true;
       const timeout = setTimeout(() => {
         if (mounted) {
-          console.log('🔧 Running token cleanup on app mount...');
           cleanupDuplicateTokens();
         }
       }, 1000); // 1 second delay to avoid interfering with login
