@@ -9,6 +9,7 @@ export const GET_MY_MEETINGS = gql`
         title
         status
         inviteCode
+        courseCode
         isPrivate
         scheduledFor
         actualStartAt
@@ -44,6 +45,7 @@ export const GET_ALL_MEETINGS = gql`
         title
         status
         inviteCode
+        courseCode
         isPrivate
         scheduledFor
         actualStartAt
@@ -79,6 +81,7 @@ export const GET_TUTOR_MEETINGS = gql`
         title
         status
         inviteCode
+        courseCode
         isPrivate
         scheduledFor
         actualStartAt
@@ -127,6 +130,7 @@ export const GET_MEETING_BY_ID = gql`
       title
       status
       inviteCode
+      courseCode
       isPrivate
       scheduledFor
       actualStartAt

@@ -17,6 +17,7 @@ interface Meeting {
   status: 'STARTED' | 'SCHEDULED' | 'ENDED';
   schedule?: string;
   inviteCode: string;
+  courseCode?: string;
   createdAt: string;
   updatedAt: string;
   participantCount: number;
@@ -79,7 +80,7 @@ const MemberDashboard: React.FC = () => {
             if (userData?.systemRole === 'TUTOR') {
               router.push('/instructor');
             } else if (userData?.systemRole === 'ADMIN') {
-              router.push('/admin');
+              router.push('/instructor');
             } else {
               // User not found or invalid role
               await showErrorAlert('Authentication Error', 'User not found or invalid role. Please log in again.');
@@ -212,6 +213,7 @@ const MemberDashboard: React.FC = () => {
             status: meetingStatus,
             schedule: meeting.scheduledFor,
             inviteCode: meeting.inviteCode,
+            courseCode: meeting.courseCode,
             createdAt: meeting.createdAt,
             updatedAt: meeting.updatedAt || meeting.createdAt,
             participantCount: meeting.participantCount || 0,
@@ -804,8 +806,8 @@ const MemberDashboard: React.FC = () => {
                             <span className="info-value">{meeting.inviteCode}</span>
                           </div>
                           <div className="info-item">
-                            <span className="info-label">미팅 시간:</span>
-                            <span className="info-value">{calculateMeetingDuration(meeting)}</span>
+                            <span className="info-label">강의코드:</span>
+                            <span className="info-value">{meeting.courseCode || '-'}</span>
                           </div>
                           <div className="info-item">
                             <span className="info-label">생성일:</span>

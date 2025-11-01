@@ -18,6 +18,7 @@ interface Meeting {
   status: 'LIVE' | 'STARTED' | 'SCHEDULED' | 'ENDED';
   schedule?: string;
   inviteCode: string;
+  courseCode?: string;
   createdAt: string;
   updatedAt: string;
   participantCount: number;
@@ -45,6 +46,7 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
+  const [courseCode, setCourseCode] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   
   // VOD state
@@ -310,6 +312,7 @@ const Dashboard: React.FC = () => {
               status: status,
               schedule: meeting.scheduledFor,
               inviteCode: meeting.inviteCode,
+              courseCode: meeting.courseCode,
               createdAt: meeting.createdAt,
               updatedAt: meeting.updatedAt || meeting.createdAt,
               participantCount: meeting.participantCount || 0,
@@ -395,7 +398,8 @@ const Dashboard: React.FC = () => {
             title: newMeetingTitle,
             notes: 'Professional live streaming session',
             scheduledFor: formattedSchedule,
-            isPrivate: false
+            isPrivate: false,
+            courseCode: courseCode.trim() || undefined
           }
         });
 
@@ -407,6 +411,7 @@ const Dashboard: React.FC = () => {
             status: result.createMeeting.status,
             schedule: result.createMeeting.scheduledFor,
             inviteCode: result.createMeeting.inviteCode,
+            courseCode: result.createMeeting.courseCode,
             createdAt: result.createMeeting.createdAt,
             updatedAt: result.createMeeting.updatedAt,
             participantCount: result.createMeeting.participantCount || 0,
@@ -425,6 +430,7 @@ const Dashboard: React.FC = () => {
           // Clear form
           setNewMeetingTitle('');
           setMeetingSchedule('');
+          setCourseCode('');
 
           
           // Only redirect to pre-join page for immediate meetings (not scheduled)
@@ -1017,6 +1023,23 @@ const Dashboard: React.FC = () => {
                 />
                 <button onClick={handleCreateMeeting}>→</button>
               </div>
+              <input
+                type="text"
+                placeholder="강의 코드 (선택사항)"
+                value={courseCode}
+                onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
+                style={{ 
+                  marginTop: '12px',
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  fontSize: '0.9rem',
+                  textTransform: 'uppercase'
+                }}
+              />
             </div>
 
             {/* Schedule Panel */}
@@ -1313,6 +1336,7 @@ const Dashboard: React.FC = () => {
                               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>회의시간</th>
                               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>상태</th>
                               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>초대코드</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>강의코드</th>
                               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>비고</th>
                             </tr>
                           </thead>
@@ -1380,6 +1404,25 @@ const Dashboard: React.FC = () => {
                                   >
                                     🔑 {meeting.inviteCode}
                                   </span>
+                                </td>
+                                <td style={{ padding: '12px' }}>
+                                  {meeting.courseCode ? (
+                                    <span 
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                                        color: 'white',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        display: 'inline-block'
+                                      }}
+                                    >
+                                      📚 {meeting.courseCode}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#999', fontSize: '12px' }}>-</span>
+                                  )}
                                 </td>
                             <td>
                               <div className="actions">

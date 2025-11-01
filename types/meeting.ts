@@ -3,6 +3,7 @@ export interface Meeting {
   title: string;
   status: string;
   inviteCode: string;
+  courseCode?: string;
   isPrivate: boolean;
   scheduledFor?: string;
   actualStartAt?: string;

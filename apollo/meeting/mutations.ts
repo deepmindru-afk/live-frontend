@@ -7,6 +7,7 @@ export interface CreateMeetingInput {
   isPrivate?: boolean;
   scheduledFor?: string;
   durationMin?: number;
+  courseCode?: string;
 }
 
 export interface CreateMeetingResponse {

@@ -426,7 +426,7 @@ const WaitingRoomPage: React.FC = () => {
                           if (currentUser?.systemRole === 'TUTOR') {
                             router.push('/instructor');
                           } else if (currentUser?.systemRole === 'ADMIN') {
-                            router.push('/admin');
+                            router.push('/instructor');
                           } else {
                             router.push('/member');
                           }

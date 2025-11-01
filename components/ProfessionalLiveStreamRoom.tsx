@@ -1466,7 +1466,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               
               // Redirect after notification
               setTimeout(() => {
-                window.location.href = '/';
+                redirectToDashboard();
               }, 3500);
             }
           } catch (error) {
@@ -1482,6 +1482,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     };
   }, [currentParticipant, isLiveKitConnected, liveKitConnectionState, actualMeetingId, endMeeting]);
+
+  // Helper function to redirect based on user role
+  const redirectToDashboard = useCallback(() => {
+    if (currentUser?.systemRole === 'ADMIN') {
+      window.location.href = '/instructor';
+    } else if (currentUser?.systemRole === 'TUTOR') {
+      window.location.href = '/instructor';
+    } else {
+      window.location.href = '/member';
+    }
+  }, [currentUser]);
 
   // Handle leaving meeting from PiP
   const handleLeaveMeetingFromPiP = useCallback(async () => {
@@ -1506,9 +1517,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     // Redirect to dashboard or home
     if (typeof window !== 'undefined') {
-      window.location.href = '/dashboard';
+      redirectToDashboard();
     }
-  }, [currentParticipant, liveKitDisconnect]);
+  }, [currentParticipant, liveKitDisconnect, redirectToDashboard]);
 
   // Close PiP and return to room
   const handleClosePiP = useCallback(() => {
@@ -1587,10 +1598,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (meetingStatus === 'ENDED') {
       // Auto-redirect all participants to dashboard when meeting ends
       setTimeout(() => {
-        window.location.href = '/';
+        redirectToDashboard();
       }, 1000);
     }
-  }, [meetingStatus]);
+  }, [meetingStatus, redirectToDashboard]);
 
   // Handle GraphQL errors
   useEffect(() => {
@@ -1602,11 +1613,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         setIsLive(false);
         // Auto-redirect to dashboard after a short delay
         setTimeout(() => {
-          window.location.href = '/';
+          redirectToDashboard();
         }, 1000);
       }
     }
-  }, [meetingError]);
+  }, [meetingError, redirectToDashboard]);
 
   // Update participants data
   // ✅ CRITICAL FIX: Use a ref to track the actual participant IDs to prevent infinite loops
@@ -1772,7 +1783,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // Auto-redirect to dashboard immediately without showing success message
       // This ensures all participants are redirected automatically
       setTimeout(() => {
-        window.location.href = '/';
+        redirectToDashboard();
       }, 500);
     } catch (error) {
       Swal.fire({
@@ -1829,7 +1840,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if ((leaveResult.data as any)?.leaveMeeting?.success || true) {
         // Auto-redirect after successful leave
         setTimeout(() => {
-          window.location.href = '/';
+          redirectToDashboard();
         }, 1000);
       } else {
         throw new Error('Leave meeting failed');
@@ -1926,7 +1937,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             // Host transferred successfully - no notification needed
             
             setTimeout(() => {
-              window.location.href = '/';
+              redirectToDashboard();
             }, 2000);
           }
       }
@@ -2433,7 +2444,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           This meeting has been ended by the host.
         </p>
         <button 
-          onClick={() => window.location.href = '/'}
+          onClick={() => redirectToDashboard()}
           style={{
             backgroundColor: '#007bff',
             color: 'white',
