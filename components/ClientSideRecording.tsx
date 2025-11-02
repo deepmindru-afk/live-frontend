@@ -192,8 +192,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
         borderRadius: '8px',
         fontSize: isMobile ? '14px' : '16px',
         fontWeight: '600',
-        cursor: isUploading ? 'not-allowed' : 'pointer',
-        opacity: isUploading ? 0.5 : 1,
+        cursor: 'pointer',
         transition: 'all 0.2s ease',
         display: 'flex',
         alignItems: 'center',
@@ -202,11 +201,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
         justifyContent: 'center',
       }}
     >
-      {isUploading ? (
-        <>
-          <span>⏳ Uploading...</span>
-        </>
-      ) : isRecording ? (
+      {isRecording ? (
         <>
           <span style={{
             width: '10px',

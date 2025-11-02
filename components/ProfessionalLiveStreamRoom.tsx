@@ -2378,6 +2378,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     role === 'HOST' ||
     currentUser?.systemRole === 'TUTOR' ||
     currentUser?.systemRole === 'ADMIN';
+  
+  // For recording, ONLY allow the actual meeting host (not system admins)
+  const isMeetingHost = currentParticipant?.role === 'HOST';
 
 
   // Auto-start meeting for host
@@ -2922,8 +2925,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
-            {/* Recording Controls - ONLY for HOST - Participants should NOT see these buttons */}
-            {isHost && (
+            {/* Recording Controls - ONLY for MEETING HOST - Participants should NOT see these buttons */}
+            {isMeetingHost && (
               <>
                 {/* Desktop Controls */}
                 {!isMobile && (
@@ -2933,28 +2936,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       userId={currentUser?.id || currentUser?._id || 'unknown'}
                       meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                       meetingStatus={meetingStatus}
-                      onRecordingComplete={(recordingId) => {
-                        Swal.fire({
-                          icon: 'success',
-                          title: 'Recording Saved!',
-                          text: 'Your meeting recording has been saved successfully.',
-                          timer: 3000,
-                          showConfirmButton: false,
-                          toast: true,
-                          position: 'top-end'
-                        });
-                      }}
-                      onError={(error) => {
-                        Swal.fire({
-                          icon: 'error',
-                          title: 'Recording Failed',
-                          text: 'Failed to save recording. Please try again.',
-                          timer: 3000,
-                          showConfirmButton: false,
-                          toast: true,
-                          position: 'top-end'
-                        });
-                      }}
+                      onRecordingComplete={() => {}}
+                      onError={() => {}}
                     />
                   </>
                 )}
@@ -3115,35 +3098,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       </svg>
                     </button>
 
-                    {/* Client-Side Recording - Only for Host */}
-                    {isHost && (
+                    {/* Client-Side Recording - Only for Meeting Host */}
+                    {isMeetingHost && (
                       <ClientSideRecording
                         meetingId={actualMeetingId}
                         userId={currentUser?.id || currentUser?._id || 'unknown'}
                         meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                         meetingStatus={meetingStatus}
-                        onRecordingComplete={(recordingId) => {
-                          Swal.fire({
-                            icon: 'success',
-                            title: 'Recording Saved!',
-                            text: 'Recording saved successfully.',
-                            timer: 3000,
-                            showConfirmButton: false,
-                            toast: true,
-                            position: 'top-end'
-                          });
-                        }}
-                        onError={(error) => {
-                          Swal.fire({
-                            icon: 'error',
-                            title: 'Recording Failed',
-                            text: 'Failed to save recording.',
-                            timer: 3000,
-                            showConfirmButton: false,
-                            toast: true,
-                            position: 'top-end'
-                          });
-                        }}
+                        onRecordingComplete={() => {}}
+                        onError={() => {}}
                       />
                     )}
                   </div>
