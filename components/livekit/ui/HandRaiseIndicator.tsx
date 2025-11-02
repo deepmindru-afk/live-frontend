@@ -49,6 +49,21 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
   onHandRaiseQueueChange,
   onRaisedHandsChange,
 }) => {
+  // ✅ DEBUG: Log component mount - ALWAYS log to catch issues
+  useEffect(() => {
+    console.log('🎯 HandRaiseIndicator MOUNTED/RENDERED', {
+      mode,
+      hasSocket: !!socket,
+      isConnected,
+      meetingId,
+      hasParticipant: !!currentParticipant,
+      participantId: currentParticipant?._id,
+      displayName: currentParticipant?.displayName,
+      isHost,
+      timestamp: new Date().toISOString()
+    });
+  }, [mode, socket, isConnected, meetingId, currentParticipant, isHost]);
+  
   // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
@@ -60,6 +75,17 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
   // WEBSOCKET HAND RAISE HOOK
   // ============================================================================
   
+  // ✅ CRITICAL: Normalize participant ID to string to ensure consistent matching
+  const participantId = String(currentParticipant?._id || '').trim();
+  
+  console.log('🔧 HandRaiseIndicator: Setting up hook with', {
+    meetingId: meetingId || '',
+    participantId,
+    displayName: currentParticipant?.displayName || '',
+    hasParticipant: !!currentParticipant,
+    rawId: currentParticipant?._id
+  });
+  
   const {
     raisedHands: wsRaisedHands,
     myHandRaised: wsMyHandRaised,
@@ -68,7 +94,7 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
     isLoading,
   } = useWebSocketHandRaise({
     meetingId: meetingId || '',
-    userId: currentParticipant?._id || '',
+    userId: participantId,
     displayName: currentParticipant?.displayName || '',
     socket: socket || undefined,
     isConnected: isConnected,
@@ -224,9 +250,20 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
   // ============================================================================
   
   const handleRaiseHand = useCallback(async () => {
+    console.log('🚀 handleRaiseHand CALLED!', {
+      timestamp: new Date().toISOString(),
+      hasParticipant: !!currentParticipant,
+      participantId: currentParticipant?._id,
+      hasSocket: !!socket,
+      isConnected,
+      wsMyHandRaised,
+      isLoading
+    });
+    
     try {
       // Validation checks
       if (!currentParticipant?._id) {
+        console.error('❌ No participant ID found!');
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -236,6 +273,7 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       }
       
       if (!socket || !isConnected) {
+        console.error('❌ No socket or not connected!', { hasSocket: !!socket, isConnected });
         Swal.fire({
           icon: 'error',
           title: 'Connection Error',
@@ -244,17 +282,45 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
         return;
       }
       
-      // Use WebSocket state as the source of truth
-      if (wsMyHandRaised) {
-        // Lower hand
-        wsLowerHand();
-        onHandRaiseStatusChange?.(currentParticipant._id, false);
+      console.log('✅ Validation passed, proceeding with toggle...');
+      
+      // ✅ CRITICAL FIX: Always use the latest state value, don't rely on closure
+      // Get fresh state value at click time
+      const currentState = wsMyHandRaised;
+      
+      console.log('🔄 Hand toggle clicked!', { 
+        currentState, 
+        participantId: currentParticipant._id,
+        userId: currentParticipant?._id,
+        displayName: currentParticipant?.displayName,
+        isLoading,
+        socketConnected: isConnected,
+        hasLowerHand: !!wsLowerHand,
+        hasRaiseHand: !!wsRaiseHand
+      });
+      
+      // ✅ ALWAYS try to toggle - let backend handle validation
+      if (currentState) {
+        // Current state says raised, so try to lower
+        console.log('⬇️ LOWERING HAND - Calling wsLowerHand()...');
+        try {
+          wsLowerHand();
+          console.log('✅ wsLowerHand() called successfully');
+        } catch (err) {
+          console.error('❌ Error calling wsLowerHand():', err);
+        }
       } else {
-        // Raise hand
-        wsRaiseHand();
-        onHandRaiseStatusChange?.(currentParticipant._id, true);
+        // Current state says not raised, so try to raise
+        console.log('⬆️ RAISING HAND - Calling wsRaiseHand()...');
+        try {
+          wsRaiseHand();
+          console.log('✅ wsRaiseHand() called successfully');
+        } catch (err) {
+          console.error('❌ Error calling wsRaiseHand():', err);
+        }
       }
     } catch (error) {
+      console.error('❌ Error in handleRaiseHand:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -268,7 +334,7 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
     wsMyHandRaised,
     wsRaiseHand,
     wsLowerHand,
-    onHandRaiseStatusChange
+    isLoading
   ]);
 
   // ============================================================================
@@ -276,29 +342,53 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
   // ============================================================================
   
   const renderButton = () => {
-    if (mode === 'indicator') return null;
+    if (mode === 'indicator') {
+      console.log('⚠️ Button not rendered - mode is "indicator"');
+      return null;
+    }
+    
+    // ✅ Force log state on every render
+    console.log('✅ Rendering hand raise button', { 
+      isLoading, 
+      wsMyHandRaised, 
+      hasHandler: !!handleRaiseHand,
+      timestamp: new Date().toISOString() 
+    });
     
     return (
       <button
-        onClick={handleRaiseHand}
+        onClick={(e) => {
+          console.log('🖱️ BUTTON CLICKED!!!', { 
+            event: e, 
+            currentState: wsMyHandRaised,
+            timestamp: new Date().toISOString()
+          });
+          e.preventDefault();
+          e.stopPropagation();
+          handleRaiseHand();
+        }}
         disabled={isLoading}
+        onMouseEnter={() => {
+          // ✅ DEBUG: Force log state on hover
+          console.log('🖱️ Button hover - state:', { isLoading, wsMyHandRaised, mode });
+        }}
         style={{
           width: isMobile ? '40px' : '48px',
           height: isMobile ? '40px' : '48px',
           borderRadius: '50%',
           backgroundColor: wsMyHandRaised ? '#f59e0b' : '#f3f4f6',
-          border: 'none',
+          border: wsMyHandRaised ? '2px solid #f59e0b' : '2px solid transparent',
           cursor: isLoading ? 'not-allowed' : 'pointer',
           color: wsMyHandRaised ? 'white' : '#6b7280',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           transition: 'all 0.2s ease',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          boxShadow: wsMyHandRaised ? '0 4px 12px rgba(245, 158, 11, 0.4)' : '0 2px 8px rgba(0,0,0,0.15)',
           animation: wsMyHandRaised ? 'pulse 1.5s infinite' : 'none',
           opacity: isLoading ? 0.6 : 1,
         }}
-        title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to toggle`}
+        title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to ${wsMyHandRaised ? 'lower' : 'raise'}`}
         aria-label={wsMyHandRaised ? 'Lower hand' : 'Raise hand'}
         aria-pressed={wsMyHandRaised}
       >
@@ -347,6 +437,15 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
   // ============================================================================
   // MAIN RENDER
   // ============================================================================
+  
+  useEffect(() => {
+    console.log('🔄 HandRaiseIndicator render cycle', {
+      mode,
+      buttonRendered: mode !== 'indicator',
+      wsMyHandRaised,
+      isLoading
+    });
+  });
   
   return (
     <>

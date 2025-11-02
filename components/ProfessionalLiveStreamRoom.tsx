@@ -4194,17 +4194,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </button>
 
               {/* Hand Raise Control - Now handled by HandRaiseIndicator */}
-              <HandRaiseIndicator
-                socket={socket}
-                isConnected={wsConnected}
-                meetingId={actualMeetingId}
-                currentParticipant={currentParticipant}
-                isHost={isHost}
-                isMobile={isMobile}
-                mode="button"
-                onHandRaiseStatusChange={handleHandRaiseStatusChange}
-                onRaisedHandsChange={handleRaisedHandsChange}
-              />
+              {(() => {
+                console.log('🔍 Rendering HandRaiseIndicator button', {
+                  hasSocket: !!socket,
+                  wsConnected,
+                  actualMeetingId,
+                  hasParticipant: !!currentParticipant,
+                  participantId: currentParticipant?._id,
+                  isHost,
+                  isMobile
+                });
+                return (
+                  <HandRaiseIndicator
+                    socket={socket}
+                    isConnected={wsConnected}
+                    meetingId={actualMeetingId}
+                    currentParticipant={currentParticipant}
+                    isHost={isHost}
+                    isMobile={isMobile}
+                    mode="button"
+                    onHandRaiseStatusChange={handleHandRaiseStatusChange}
+                    onRaisedHandsChange={handleRaisedHandsChange}
+                  />
+                );
+              })()}
 
               {/* Leave Button */}
               <button
