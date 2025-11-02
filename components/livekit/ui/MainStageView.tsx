@@ -264,28 +264,6 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
           </>
         )}
 
-        {/* Mobile Video Debug Overlay */}
-        {typeof window !== 'undefined' && window.innerWidth <= 768 && videoTrack && !isVideoOff && (
-          <div style={{
-            position: 'absolute',
-            top: '1vh',
-            right: '1vw',
-            background: 'rgba(0,0,0,0.8)',
-            color: 'white',
-            padding: '0.8vh',
-            borderRadius: '0.4vh',
-            fontSize: '1.2vh',
-            zIndex: 1000,
-            fontFamily: 'monospace'
-          }}>
-            Video: {mainVideoRef.current ? 'Attached' : 'Not Attached'}
-            <br />
-            Size: {mainVideoRef.current ? `${mainVideoRef.current.offsetWidth}x${mainVideoRef.current.offsetHeight}` : 'N/A'}
-            <br />
-            Viewport: {typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'N/A'}
-          </div>
-        )}
-
         {/* Overlay Information */}
         <div className={styles['main-stage-overlay']}>
           {/* Top Bar - Participant Info */}

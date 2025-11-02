@@ -2817,21 +2817,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 borderRadius: '8px',
                 backgroundColor: isVideoPlayerMode 
                   ? 'rgba(74, 108, 247, 0.9)' 
-                  : 'rgba(255, 255, 255, 0.1)',
+                  : '#f3f4f6',
                 border: isVideoPlayerMode 
                   ? '1px solid rgba(74, 108, 247, 0.3)'
-                  : '1px solid rgba(255, 255, 255, 0.2)',
+                  : '1px solid #e5e7eb',
                 cursor: 'pointer',
-                color: 'white',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
-                backdropFilter: 'blur(10px)'
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
               }}
               title={isVideoPlayerMode ? 'Exit Video Mode' : 'Enter Video Mode'}
             >
-              <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
+              <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill={isVideoPlayerMode ? "white" : "#374151"}>
                 {isVideoPlayerMode ? (
                   <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                 ) : (
@@ -2840,35 +2839,58 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </svg>
             </button>
 
-            {/* Fullscreen Toggle Button - Video Player Mode */}
-            {isVideoPlayerMode && (
-              <button
-                onClick={toggleFullscreen}
-                style={{
-                  width: isMobile ? '36px' : '44px',
-                  height: isMobile ? '36px' : '44px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  cursor: 'pointer',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease',
-                  backdropFilter: 'blur(10px)'
-                }}
-                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-              >
-                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
-                  {isFullscreen ? (
-                    <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
-                  ) : (
-                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                  )}
-                </svg>
-              </button>
-            )}
+            {/* Fullscreen Toggle Button - Always Visible */}
+            <button
+              onClick={toggleFullscreen}
+              style={{
+                width: isMobile ? '36px' : '44px',
+                height: isMobile ? '36px' : '44px',
+                borderRadius: '8px',
+                backgroundColor: isVideoPlayerMode ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6',
+                border: isVideoPlayerMode ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid #e5e7eb',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+              }}
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            >
+              <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill={isVideoPlayerMode ? "white" : "#374151"}>
+                {isFullscreen ? (
+                  <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+                ) : (
+                  <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                )}
+              </svg>
+            </button>
+
+            {/* Thumbnail Toggle Button - Always Visible */}
+            <button
+              onClick={() => setThumbnailPanelOpen(!thumbnailPanelOpen)}
+              style={{
+                width: isMobile ? '36px' : '44px',
+                height: isMobile ? '36px' : '44px',
+                borderRadius: '8px',
+                backgroundColor: isVideoPlayerMode ? 'rgba(255, 255, 255, 0.1)' : '#f3f4f6',
+                border: isVideoPlayerMode ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid #e5e7eb',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+              }}
+              title={thumbnailPanelOpen ? 'Hide participants' : 'Show participants'}
+            >
+              <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill={isVideoPlayerMode ? "white" : "#374151"} style={{
+                transform: thumbnailPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease'
+              }}>
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
 
             {/* Live Status Badge - Desktop Only */}
             {!isMobile && (
@@ -4183,6 +4205,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 );
               })()}
 
+              {/* Recording Button - Mobile Hosts Only */}
+              {isMobile && isMeetingHost && (
+                <ClientSideRecording
+                  meetingId={actualMeetingId}
+                  userId={currentUser?.id || currentUser?._id || 'unknown'}
+                  meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
+                  meetingStatus={meetingStatus}
+                  onRecordingComplete={() => {}}
+                  onError={() => {}}
+                />
+              )}
+
               {/* Leave Button */}
               <button
                 onClick={handleLeaveMeeting}
@@ -4502,24 +4536,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           </div>
         </div>
         
-        {/* Mobile Debug Overlay - Simplified */}
-        {isMobile && (
-          <div style={{
-            position: 'fixed',
-            top: '10px',
-            left: '10px',
-            background: 'rgba(0,0,0,0.7)',
-            color: 'white',
-            padding: '6px 8px',
-            borderRadius: '6px',
-            fontSize: '11px',
-            zIndex: 9999,
-            fontFamily: 'monospace',
-            backdropFilter: 'blur(5px)'
-          }}>
-            📱 Mobile | 🎥 {isRecording ? 'REC' : 'LIVE'} | 👥 {liveKitParticipants.size} | 📋 {thumbnailPanelOpen ? 'SHOW' : 'HIDE'}
-          </div>
-        )}
       </>
     );
   });

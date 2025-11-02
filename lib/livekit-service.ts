@@ -1,4 +1,4 @@
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, LocalParticipant, ConnectionState, RoomOptions } from 'livekit-client';
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, LocalParticipant, ConnectionState, RoomOptions, VideoPresets } from 'livekit-client';
 import { apolloClient } from '../apollo/client';
 import { CREATE_LIVEKIT_TOKEN } from '../apollo/livekit/mutations';
 
@@ -83,8 +83,8 @@ export class LiveKitService {
         // Explicit video capture settings for better quality and performance
         videoCaptureDefaults: {
           resolution: {
-            width: 1920,  // Higher resolution for better quality
-            height: 1080,
+            width: 1280,  // 720p capture for optimal quality and performance
+            height: 720,
             frameRate: 30,
           },
         },
@@ -96,10 +96,14 @@ export class LiveKitService {
             maxFramerate: 30,
           },
           
-          // CRITICAL FIX: Do NOT use videoSimulcastLayers to avoid scaleResolutionDownBy calculation
-          // LiveKit SDK can calculate invalid scale values from VideoPresets causing WebRTC to fail
-          // Instead, let the server handle adaptive streaming without client-side simulcast
-          // If simulcast is needed, it will be configured server-side with validated parameters
+          // ✅ Simulcast enabled for thumbnail optimization
+          // Layer 1: High quality (720p for main video)
+          // Layer 2: Low quality (360p for thumbnails)
+          simulcast: true,
+          videoSimulcastLayers: [
+            VideoPresets.h720,  // 720p (1280x720) - Main video quality
+            VideoPresets.h360,  // 360p (640x360) - Thumbnail quality
+          ],
         },
       });
 
@@ -350,7 +354,6 @@ export class LiveKitService {
     // Check if this is the local participant by comparing with room's localParticipant
     const isLocalParticipant = this._room?.localParticipant && 
       (participant.identity === this._room.localParticipant.identity || 
-       participant === this._room.localParticipant ||
        participant.sid === this._room.localParticipant.sid);
     
     if (isLocalParticipant && track.kind === 'audio') {
