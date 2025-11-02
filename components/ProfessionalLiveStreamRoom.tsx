@@ -403,7 +403,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     },
     onTrackSubscribed: (track, publication, participant) => {
     },
-    onError: (error) => {
+    onError: (error: Error) => {
+      // Handle banned user errors - redirect to dashboard
+      if (error.message && error.message.includes('removed from this meeting')) {
+        console.log('🔴 LiveKit error: User has been removed from meeting - redirecting immediately');
+        window.location.href = '/member';
+      }
     }
   });
 
@@ -791,20 +796,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       // 🚨 Handle being kicked from meeting
       const handleKicked = async (data: any) => {
-        if (!currentUser) return;
-        const kickedUserId = currentUser._id || currentUser.id;
-        if (data.userId === kickedUserId) {
-          Swal.fire({
-            icon: 'error',
-            title: 'Removed from Meeting',
-            text: data.reason || 'You have been removed by the host.',
-            confirmButtonText: 'OK',
-            confirmButtonColor: '#ef4444'
-          }).then(async () => {
-            if (liveKitDisconnect) await liveKitDisconnect();
-            window.location.href = '/member';
-          });
+        console.log('🔴 KICKED event received:', data);
+        // Don't check currentUser or userId - if we receive KICKED, we're being kicked
+        console.log('✅ KICKED event received - redirecting immediately...');
+        
+        // Disconnect from LiveKit if connected (don't await)
+        if (liveKitDisconnect) {
+          liveKitDisconnect().catch(err => console.error('⚠️ Disconnect error:', err));
         }
+        
+        // Immediate redirect without waiting
+        console.log('🔄 Redirecting to /member immediately...');
+        window.location.href = '/member';
       };
 
       // ✅ Handle host transfer event
@@ -2264,29 +2267,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         return;
       }
       
-      // Add a small delay to ensure backend has processed the host transfer
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      
       const result = await removeParticipant({
         variables: { 
           participantId: participantId
         }
       });
       
-      
       if ((result.data as any)?.removeParticipant?.success) {
         // Emit KICKED event to notify the removed participant
         const removedParticipant = (result.data as any)?.removeParticipant?.removedParticipant;
+        console.log('🔨 Participant removed, attempting to emit KICKED:', removedParticipant);
+        
         if (removedParticipant?.userId && socket) {
           socket.emit('KICKED', {
-            userId: removedParticipant.userId,
+            userId: String(removedParticipant.userId),
             meetingId: removedParticipant.meetingId,
             reason: 'Removed by host'
           });
+          console.log('✅ KICKED event emitted to socket');
+        } else {
+          console.warn('⚠️ Cannot emit KICKED:', { hasUserId: !!removedParticipant?.userId, hasSocket: !!socket });
         }
-        
-      // Participant removed successfully - no notification needed
       } else {
         throw new Error((result.data as any)?.removeParticipant?.message || 'Unknown error');
       }
