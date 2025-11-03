@@ -4139,7 +4139,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
                     isHandRaised={mainIsHandRaised} // ✅ FIX: Use combined hand raise status
                     isMuted={mainParticipant.micState === 'OFF' || false}
-                    isVideoOff={!mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
+                    isVideoOff={!mainVideoTrack || mainVideoTrack?.isMuted || (isMainParticipantLocal && !cameraEnabled)} // ✅ FIX: Check if track is muted - treat muted tracks as video off to show fallback UI
                     isHost={mainParticipant.role === 'HOST' || false}
                     isScreenSharing={isParticipantScreenSharing}
                     screenShareTrack={mainScreenShareTrack}

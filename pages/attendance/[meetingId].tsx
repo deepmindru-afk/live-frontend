@@ -1342,46 +1342,52 @@ const AttendancePage: React.FC = () => {
                 }}>
                   {attendance?.participants
                     .filter(p => p._id !== selectedParticipant._id)
-                    .map((participant, index) => (
-                      <div key={participant._id} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 0',
-                        borderBottom: index < (attendance?.participants.length || 0) - 2 ? '1px solid #dee2e6' : 'none'
-                      }}>
-                        <div>
-                          <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
-                          <span style={{
-                            display: 'inline-block',
-                            backgroundColor: participant.status === 'ONLINE' ? '#28a745' : 
-                                           participant.status === 'PRESENT' ? '#17a2b8' : 
-                                           participant.status === 'LEFT' ? '#6c757d' : '#dc3545',
-                            color: 'white',
-                            padding: '2px 6px',
-                            borderRadius: '8px',
-                            fontSize: '10px',
-                            marginTop: '2px'
-                          }}>
-                            {participant.status === 'ONLINE' ? '온라인' : 
-                             participant.status === 'PRESENT' ? '참석' : 
-                             participant.status === 'LEFT' ? '퇴장' : '미정'}
-                          </span>
+                    .map((participant, index) => {
+                      const totalMeetingDuration = getTotalMeetingDuration();
+                      const cappedAttendanceTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
+                      const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
+                      
+                      return (
+                        <div key={participant._id} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 0',
+                          borderBottom: index < (attendance?.participants.length || 0) - 2 ? '1px solid #dee2e6' : 'none'
+                        }}>
+                          <div>
+                            <div style={{ fontWeight: '500' }}>{participant.displayName}</div>
+                            <span style={{
+                              display: 'inline-block',
+                              backgroundColor: participant.status === 'ONLINE' ? '#28a745' : 
+                                             participant.status === 'PRESENT' ? '#17a2b8' : 
+                                             participant.status === 'LEFT' ? '#6c757d' : '#dc3545',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '8px',
+                              fontSize: '10px',
+                              marginTop: '2px'
+                            }}>
+                              {participant.status === 'ONLINE' ? '온라인' : 
+                               participant.status === 'PRESENT' ? '참석' : 
+                               participant.status === 'LEFT' ? '퇴장' : '미정'}
+                            </span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '14px' }}>
+                              {formatDuration(cappedAttendanceTime)}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                              {participant.leftAt ? '완료' : 
+                               (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행중')}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: '500' }}>
+                              {Math.min(attendancePercentage, 100)}%
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '14px' }}>
-                            {formatDuration(cappedAttendanceTime)}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
-                            {participant.leftAt ? '완료' : 
-                             (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행중')}
-                          </div>
-                          <div style={{ fontSize: '12px', fontWeight: '500' }}>
-                            {Math.min(calculateAttendancePercentage(cappedAttendanceTime, getTotalMeetingDuration()), 100)}%
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
 
