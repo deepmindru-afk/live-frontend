@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useQuery } from '@apollo/client/react';
 import { GET_CHAT_HISTORY } from '../apollo/livestream/queries';
-import { DELETE_CHAT_MESSAGE } from '../apollo/livestream/mutations';
 import { Socket } from 'socket.io-client';
 
 interface ChatViewProps {
@@ -35,9 +34,6 @@ const ChatView: React.FC<ChatViewProps> = ({
     // PERFORMANCE FIX: Removed pollInterval - WebSocket provides real-time chat updates
     fetchPolicy: 'cache-first' // Only fetch initially, WebSocket handles updates
   });
-
-  // GraphQL Mutations
-  const [deleteMessage] = useMutation(DELETE_CHAT_MESSAGE);
 
   // Update messages when chat data changes
   useEffect(() => {
@@ -73,15 +69,32 @@ const ChatView: React.FC<ChatViewProps> = ({
       });
     };
 
+    const handleMessageDeleted = (data: any) => {
+      console.log('Message deleted event received:', data);
+      // Remove deleted message from local state
+      setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+    };
+
+    const handleError = (data: any) => {
+      console.error('Socket error:', data);
+      if (data.message?.includes('delete')) {
+        alert(`Cannot delete message: ${data.message}`);
+      }
+    };
+
     const handleUserTyping = (data: any) => {
       // Handle typing indicators if needed
     };
 
     socket.on('NEW_MESSAGE', handleNewMessage);
+    socket.on('CHAT_MESSAGE_DELETED', handleMessageDeleted);
+    socket.on('ERROR', handleError);
     socket.on('USER_TYPING', handleUserTyping);
 
     return () => {
       socket.off('NEW_MESSAGE', handleNewMessage);
+      socket.off('CHAT_MESSAGE_DELETED', handleMessageDeleted);
+      socket.off('ERROR', handleError);
       socket.off('USER_TYPING', handleUserTyping);
     };
   }, [socket]);
@@ -133,16 +146,21 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handleDeleteMessage = async (messageId: string) => {
+  const handleDeleteMessage = (messageId: string) => {
+    if (!socket) {
+      console.warn('Cannot delete: socket not available');
+      return;
+    }
+    
     try {
-      await deleteMessage({
-        variables: {
-          input: {
-            messageId
-          }
-        }
+      console.log('Attempting to delete message:', messageId, 'from meeting:', meetingId);
+      // Send delete request via WebSocket
+      socket.emit('DELETE_CHAT_MESSAGE', {
+        meetingId,
+        messageId
       });
     } catch (error) {
+      console.error('Failed to delete message:', error);
     }
   };
 
@@ -182,18 +200,45 @@ const ChatView: React.FC<ChatViewProps> = ({
             No messages yet. Start the conversation!
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message._id}
-              style={{
-                padding: '8px 0',
-                borderBottom: '1px solid #333',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start'
-              }}
-            >
-              <div style={{ flex: 1 }}>
+          messages.map((message) => {
+            // Check if message belongs to current user - backend uses userId field
+            const messageUserId = (message as any).userId || message.senderId || '';
+            const currentUserId = currentUser?._id || currentUser?.id || '';
+            
+            // Convert to strings and normalize for comparison
+            const msgUserIdStr = messageUserId ? String(messageUserId).trim() : '';
+            const currUserIdStr = currentUserId ? String(currentUserId).trim() : '';
+            
+            // Strict comparison: must be exact match AND both must exist
+            const isOwnMessage = msgUserIdStr && currUserIdStr && msgUserIdStr === currUserIdStr;
+            
+            // CRITICAL: Host can delete any message, participant can ONLY delete their own
+            // For participants: must have exact userId match, not just displayName match
+            // Only show delete icon if user is host OR if message truly belongs to participant
+            const canDelete = isHost ? true : (msgUserIdStr && currUserIdStr && msgUserIdStr === currUserIdStr);
+            
+            // Debug logging (remove after testing)
+            if (canDelete && !isHost) {
+              console.log('[ChatView] Delete icon showing for own message:', {
+                messageUserId: msgUserIdStr,
+                currentUserId: currUserIdStr,
+                match: msgUserIdStr === currUserIdStr,
+                messageId: message._id,
+                senderDisplayName: message.senderDisplayName
+              });
+            }
+            
+            return (
+              <div
+                key={message._id}
+                style={{
+                  padding: '8px 0',
+                  borderBottom: '1px solid #333',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+              >
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -203,9 +248,9 @@ const ChatView: React.FC<ChatViewProps> = ({
                   <div style={{
                     fontSize: '12px',
                     fontWeight: 'bold',
-                    color: message.senderId === currentUser?._id ? '#4CAF50' : '#2196F3'
+                    color: isOwnMessage ? '#4CAF50' : '#2196F3'
                   }}>
-                    {message.senderDisplayName || 'Unknown'}
+                    {message.senderDisplayName || (message as any).displayName || 'Unknown'}
                   </div>
                   <div style={{
                     fontSize: '10px',
@@ -215,32 +260,75 @@ const ChatView: React.FC<ChatViewProps> = ({
                   </div>
                 </div>
                 <div style={{
-                  fontSize: '14px',
-                  color: '#fff',
-                  wordBreak: 'break-word'
+                  position: 'relative',
+                  display: 'inline-block',
+                  maxWidth: '100%'
                 }}>
-                  {message.message}
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#fff',
+                    wordBreak: 'break-word',
+                    padding: '8px 12px',
+                    paddingRight: canDelete ? '36px' : '12px',
+                    backgroundColor: isOwnMessage ? 'rgba(76, 175, 80, 0.1)' : 'rgba(33, 150, 243, 0.1)',
+                    borderRadius: '8px',
+                    border: `1px solid ${isOwnMessage ? 'rgba(76, 175, 80, 0.3)' : 'rgba(33, 150, 243, 0.3)'}`,
+                    position: 'relative'
+                  }}>
+                    {message.message || message.text}
+                    {canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteMessage(message._id);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          opacity: 0.6,
+                          transition: 'opacity 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '4px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                          e.currentTarget.style.backgroundColor = 'rgba(220, 53, 69, 0.2)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = '0.6';
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title={isHost ? 'Delete message (Host)' : 'Delete your message'}
+                      >
+                        <svg 
+                          width="14" 
+                          height="14" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="#dc3545" 
+                          strokeWidth="2" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-              {(isHost || message.senderId === currentUser?._id) && (
-                <button
-                  onClick={() => handleDeleteMessage(message._id)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#dc3545',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    padding: '4px',
-                    marginLeft: '8px'
-                  }}
-                  title="Delete message"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={chatEndRef} />
       </div>

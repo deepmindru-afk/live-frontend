@@ -207,7 +207,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           email: p.user?.email || '',
         isMuted: p.micState === 'OFF',
         isCameraOff: p.cameraState === 'OFF',
-          joinedAt: p.createdAt || '2024-01-01T00:00:00.000Z',
+          joinedAt: p.sessions?.[0]?.joinedAt || p.createdAt || '2024-01-01T00:00:00.000Z',
         isHost: p.role === 'HOST',
         role: p.role,
         isHandRaised: Boolean(p.isHandRaised || p.hasHandRaised),
@@ -696,8 +696,48 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
       // reflect in participants state so thumbnails/MainStage get isHandRaised=true
       setParticipants(prev =>
-        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: true } : p)
+        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: true, hasHandRaised: true, handRaisedAt: data.raisedAt || new Date().toISOString() } : p)
       );
+
+      // ✅ CRITICAL FIX: Immediately update queue with hand raise status for proper sorting
+      // Find participant in queue by matching userId - check ALL possible ID fields
+      console.log('🔍 [HAND_RAISE] Looking for participant with userId:', data.userId);
+      console.log('🔍 [HAND_RAISE] Queue participants IDs:', queueState.participants.map(p => ({
+        _id: p._id,
+        userId: p.userId,
+        user_id: p.user?._id,
+        backendId: (p as any).backendId,
+        identity: p.identity,
+        displayName: p.displayName
+      })));
+      
+      const queueParticipant = queueState.participants.find(p => {
+        const matches = 
+          p._id === data.userId || 
+          p.userId === data.userId || 
+          p.user?._id === data.userId ||
+          (p as any).backendId === data.userId ||
+          p.identity === data.userId ||
+          // Also check memoizedParticipants for additional ID matching
+          memoizedParticipants.some(mp => 
+            (mp._id === data.userId || (mp as any).backendId === data.userId) &&
+            (mp._id === p._id || mp.user?._id === p._id || (mp as any).backendId === p._id)
+          );
+        return matches;
+      });
+      
+      if (queueParticipant) {
+        console.log('✅ [HAND_RAISE] Found queue participant:', queueParticipant.displayName, 'ID:', queueParticipant._id);
+        updateHandRaiseStatus(queueParticipant._id, true);
+      } else {
+        console.warn('⚠️ [HAND_RAISE] Queue participant NOT FOUND for userId:', data.userId);
+        // Fallback: Try to find by displayName and update all matching participants
+        const foundByName = queueState.participants.find(p => p.displayName === data.displayName);
+        if (foundByName) {
+          console.log('✅ [HAND_RAISE] Found by displayName, updating:', foundByName._id);
+          updateHandRaiseStatus(foundByName._id, true);
+        }
+      }
 
       // tiny notice list if you want to render somewhere
       setRaisedHandNotices(prev => [{id:data.userId, name:data.displayName, at:Date.now()}, ...prev].slice(0,5));
@@ -719,8 +759,31 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       console.log('🔄 HAND_LOWERED received:', data);
       // Update participant state so thumbnails/MainStage get isHandRaised=false
       setParticipants(prev =>
-        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false } : p)
+        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false, hasHandRaised: false } : p)
       );
+
+      // ✅ CRITICAL FIX: Immediately update queue with hand lower status for proper sorting
+      const queueParticipant = queueState.participants.find(p => 
+        p._id === data.userId || 
+        p.userId === data.userId || 
+        p.user?._id === data.userId ||
+        (p as any).backendId === data.userId ||
+        p.identity === data.userId ||
+        // Also check memoizedParticipants for additional ID matching
+        memoizedParticipants.some(mp => 
+          (mp._id === data.userId || (mp as any).backendId === data.userId) &&
+          (mp._id === p._id || mp.user?._id === p._id || (mp as any).backendId === p._id)
+        )
+      );
+      if (queueParticipant) {
+        updateHandRaiseStatus(queueParticipant._id, false);
+      } else {
+        // Fallback: Try to find by displayName
+        const foundByName = queueState.participants.find(p => p.displayName === data.displayName);
+        if (foundByName) {
+          updateHandRaiseStatus(foundByName._id, false);
+        }
+      }
 
       // Remove from notices
       setRaisedHandNotices(prev => prev.filter(n => n.id !== data.userId));
@@ -730,8 +793,31 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       console.log('🔄 HAND_LOWERED_BY_HOST received:', data);
       // Update participant state so thumbnails/MainStage get isHandRaised=false
       setParticipants(prev =>
-        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false } : p)
+        prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false, hasHandRaised: false } : p)
       );
+
+      // ✅ CRITICAL FIX: Immediately update queue with hand lower status for proper sorting
+      const queueParticipant = queueState.participants.find(p => 
+        p._id === data.userId || 
+        p.userId === data.userId || 
+        p.user?._id === data.userId ||
+        (p as any).backendId === data.userId ||
+        p.identity === data.userId ||
+        // Also check memoizedParticipants for additional ID matching
+        memoizedParticipants.some(mp => 
+          (mp._id === data.userId || (mp as any).backendId === data.userId) &&
+          (mp._id === p._id || mp.user?._id === p._id || (mp as any).backendId === p._id)
+        )
+      );
+      if (queueParticipant) {
+        updateHandRaiseStatus(queueParticipant._id, false);
+      } else {
+        // Fallback: Try to find by displayName
+        const foundByName = queueState.participants.find(p => p.displayName === data.displayName);
+        if (foundByName) {
+          updateHandRaiseStatus(foundByName._id, false);
+        }
+      }
 
       // Remove from notices
       setRaisedHandNotices(prev => prev.filter(n => n.id !== data.userId));
@@ -754,7 +840,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       socket.off('HAND_LOWERED');
       socket.off('HAND_LOWERED_BY_HOST');
     };
-  }, [socket, currentParticipant, role, currentUser]);
+  }, [socket, currentParticipant, role, currentUser, queueState.participants, updateHandRaiseStatus, memoizedParticipants]);
 
   // WebSocket event listener for recording announcements
   useEffect(() => {
@@ -1664,7 +1750,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               email: participant.email || '',
               isMuted: participant.micState === 'OFF',
               isCameraOff: participant.cameraState === 'OFF',
-              joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z',
+              joinedAt: participant.sessions?.[0]?.joinedAt || participant.createdAt || '2024-01-01T00:00:00.000Z',
               isHost: participant.role === 'HOST',
               role: participant.role,
               hasHandRaised: Boolean(participant.isHandRaised || participant.hasHandRaised),
@@ -1689,7 +1775,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               email: participant.email || '',
               isMuted: participant.micState === 'OFF',
               isCameraOff: participant.cameraState === 'OFF',
-              joinedAt: participant.joinedAt || '2024-01-01T00:00:00.000Z',
+              joinedAt: participant.sessions?.[0]?.joinedAt || participant.createdAt || '2024-01-01T00:00:00.000Z',
               isHost: participant.role === 'HOST',
               role: participant.role,
               hasHandRaised: Boolean(participant.isHandRaised || participant.hasHandRaised),
@@ -3339,7 +3425,32 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </>
               )}
 
-              {memoizedParticipants.map((participant, index) => {
+              {(() => {
+                // ✅ CRITICAL FIX: Use sorted queue participants for rendering, but merge with memoizedParticipants data for completeness
+                // Create a map of memoized participants for quick lookup
+                const memoizedMap = new Map(memoizedParticipants.map(p => [p._id, p]));
+                
+                // Use sorted queue participants as the source of truth for order
+                const sortedParticipants = queueState.participants.map(queueP => {
+                  // Merge queue participant (sorted) with memoized participant data (has user, identity, etc.)
+                  const memoized = memoizedMap.get(queueP._id);
+                  if (memoized) {
+                    return {
+                      ...memoized,
+                      ...queueP, // Queue data takes precedence for sorting-related fields
+                      // Preserve hand raise status from queue (it's updated immediately)
+                      hasHandRaised: queueP.hasHandRaised ?? memoized.hasHandRaised,
+                      isHandRaised: queueP.hasHandRaised ?? memoized.isHandRaised,
+                      handRaisedAt: queueP.handRaisedAt ?? memoized.handRaisedAt,
+                      // Preserve speaking status from queue
+                      isSpeaking: queueP.isSpeaking ?? memoized.isSpeaking,
+                      audioLevel: queueP.audioLevel ?? memoized.audioLevel
+                    };
+                  }
+                  return queueP;
+                });
+                
+                return sortedParticipants.map((participant, index) => {
                 // Check if participant is speaking (from audio level detection)
                 const isSpeaking = participant.audioLevel > 0.1 || false;
                 
@@ -3529,7 +3640,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     }}
                   />
                 );
-              })}
+                });
+              })()}
               
             </div>
           )}

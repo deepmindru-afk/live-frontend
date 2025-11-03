@@ -145,21 +145,39 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update hand raise status
   const updateHandRaiseStatus = useCallback((participantId: string, hasHandRaised: boolean) => {
+    console.log('🔄 [QUEUE] updateHandRaiseStatus called:', { participantId, hasHandRaised });
     setQueueState(prev => {
-      const updatedParticipants = prev.participants.map(p => 
-        p._id === participantId 
-          ? { 
-              ...p, 
-              hasHandRaised,
-              handRaisedAt: hasHandRaised ? new Date().toISOString() : undefined,
-              lastActivity: new Date().toISOString()
-            }
-          : p
-      );
+      console.log('🔄 [QUEUE] Current participants before update:', prev.participants.map(p => ({
+        _id: p._id,
+        displayName: p.displayName,
+        hasHandRaised: p.hasHandRaised
+      })));
+      
+      const updatedParticipants = prev.participants.map(p => {
+        if (p._id === participantId) {
+          console.log('✅ [QUEUE] Updating participant:', p.displayName, 'hasHandRaised:', hasHandRaised);
+          return { 
+            ...p, 
+            hasHandRaised,
+            handRaisedAt: hasHandRaised ? new Date().toISOString() : undefined,
+            lastActivity: new Date().toISOString()
+          };
+        }
+        return p;
+      });
+      
+      const sorted = sortParticipants(updatedParticipants);
+      console.log('🔄 [QUEUE] Participants after sort:', sorted.map(p => ({
+        _id: p._id,
+        displayName: p.displayName,
+        hasHandRaised: p.hasHandRaised,
+        isHost: p.isHost,
+        position: sorted.indexOf(p)
+      })));
       
       return {
         ...prev,
-        participants: sortParticipants(updatedParticipants)
+        participants: sorted
       };
     });
   }, []); // ✅ FIXED: Remove sortParticipants dependency
@@ -255,18 +273,43 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update participants when initialParticipants changes
   useEffect(() => {
-    const updatedParticipants = initialParticipants.map((p, index) => ({
-      ...p,
-      originalJoinOrder: index,
-      isSpeaking: p.isSpeaking ?? false,
-      audioLevel: p.audioLevel ?? 0,
-      lastActivity: p.lastActivity || '2024-01-01T00:00:00.000Z' // ✅ FIXED: Use static fallback, don't create new timestamp
-    }));
-    
-    setQueueState(prev => ({
-      ...prev,
-      participants: sortParticipants(updatedParticipants)
-    }));
+    console.log('🔄 [QUEUE] initialParticipants changed, updating queue');
+    setQueueState(prev => {
+      // ✅ CRITICAL FIX: Preserve hand raise status and other queue state when syncing
+      // Create a map of current queue participants to preserve their state
+      const queueMap = new Map(prev.participants.map(p => [p._id, p]));
+      
+      const updatedParticipants = initialParticipants.map((p, index) => {
+        // Check if this participant exists in current queue - preserve their state
+        const existingInQueue = queueMap.get(p._id);
+        
+        return {
+          ...p,
+          originalJoinOrder: index,
+          isSpeaking: p.isSpeaking ?? existingInQueue?.isSpeaking ?? false,
+          audioLevel: p.audioLevel ?? existingInQueue?.audioLevel ?? 0,
+          lastActivity: p.lastActivity || existingInQueue?.lastActivity || '2024-01-01T00:00:00.000Z',
+          // ✅ CRITICAL: Preserve hand raise status from queue if participant exists
+          hasHandRaised: existingInQueue?.hasHandRaised ?? p.hasHandRaised ?? false,
+          handRaisedAt: existingInQueue?.handRaisedAt ?? p.handRaisedAt,
+          // Preserve other queue-specific fields
+          isHandRaised: existingInQueue?.hasHandRaised ?? p.hasHandRaised ?? false
+        };
+      });
+      
+      const sorted = sortParticipants(updatedParticipants);
+      console.log('🔄 [QUEUE] Participants after sync:', sorted.map(p => ({
+        _id: p._id,
+        displayName: p.displayName,
+        hasHandRaised: p.hasHandRaised,
+        isHost: p.isHost
+      })));
+      
+      return {
+        ...prev,
+        participants: sorted
+      };
+    });
   }, [initialParticipants]); // ✅ FIXED: Removed sortParticipants from dependencies
 
   // ✅ REMOVED: This useEffect was causing infinite loop

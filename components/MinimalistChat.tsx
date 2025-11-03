@@ -35,17 +35,33 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isUserScrolled = useRef(false);
 
+  // Debug: Log isHost prop when component mounts or changes
+  useEffect(() => {
+    console.log('[MinimalistChat] Component render - isHost:', isHost, 'type:', typeof isHost);
+    console.log('[MinimalistChat] currentUser ID:', currentUser?._id || currentUser?.id);
+  }, [isHost, currentUser]);
+
   // WebSocket connection for real-time chat
-  const { socket, isConnected: wsConnected, messages: webSocketMessages, sendMessage } = useWebSocketChat({
+  const { socket, isConnected: wsConnected, messages: webSocketMessages, sendMessage, deleteMessage: deleteMessageFromHook } = useWebSocketChat({
     meetingId,
     token: token || '',
     onMessage: (message) => {
+      // Debug: Log incoming message structure
+      console.log('[MinimalistChat] Received message from WebSocket:', {
+        _id: message._id,
+        userId: message.userId,
+        senderId: (message as any).senderId,
+        displayName: message.displayName,
+        text: message.text,
+        allKeys: Object.keys(message)
+      });
+
       const newMsg: Message = {
         _id: message._id || Date.now().toString(),
         text: message.text || (message as any).message || '',
         displayName: message.displayName || (message as any).senderName || 'Unknown',
         createdAt: message.createdAt || new Date().toISOString(),
-        userId: message.userId || (message as any).senderId,
+        userId: message.userId || (message as any).senderId || '',
         type: 'chat'
       };
       
@@ -94,6 +110,35 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
       });
     }
   }, [webSocketMessages]);
+
+  // Listen for message deletion events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessageDeleted = (data: any) => {
+      console.log('[MinimalistChat] Message deleted event received:', data);
+      // Remove deleted message from local state (but keep welcome message)
+      setMessages(prev => {
+        if (data.messageId === 'welcome') return prev; // Don't delete welcome message
+        return prev.filter(msg => msg._id !== data.messageId);
+      });
+    };
+
+    const handleError = (data: any) => {
+      console.error('[MinimalistChat] Socket error:', data);
+      if (data.message?.includes('delete') || data.message?.includes('permission')) {
+        alert(`Cannot delete message: ${data.message}`);
+      }
+    };
+
+    socket.on('CHAT_MESSAGE_DELETED', handleMessageDeleted);
+    socket.on('ERROR', handleError);
+
+    return () => {
+      socket.off('CHAT_MESSAGE_DELETED', handleMessageDeleted);
+      socket.off('ERROR', handleError);
+    };
+  }, [socket]);
 
   // Initialize with welcome message and set connection status
   useEffect(() => {
@@ -263,6 +308,20 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     }
   };
 
+  const handleDeleteMessage = (messageId: string) => {
+    if (!isConnected || !deleteMessageFromHook) {
+      console.warn('Cannot delete: not connected or delete function not available');
+      return;
+    }
+    
+    try {
+      console.log('Attempting to delete message:', messageId);
+      deleteMessageFromHook(messageId);
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -354,7 +413,43 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
           }
 
           // Regular chat messages
-          const isOwnMessage = message.displayName === (currentUser?.displayName || 'You');
+          // CRITICAL FIX: Strict check for delete icon visibility
+          // Get userId from message - check multiple possible field names
+          const messageUserId = message.userId || (message as any).senderId || (message as any).userId || '';
+          const currentUserId = currentUser?._id || currentUser?.id || '';
+          
+          // Convert to strings and normalize - must be non-empty strings
+          const msgUserIdStr = messageUserId ? String(messageUserId).trim() : '';
+          const currUserIdStr = currentUserId ? String(currentUserId).trim() : '';
+          
+          // Only proceed if both IDs are non-empty strings
+          const hasValidIds = msgUserIdStr.length > 0 && currUserIdStr.length > 0;
+          
+          // Strict comparison: must be exact match AND both must exist
+          const isOwnMessage = hasValidIds && msgUserIdStr === currUserIdStr;
+          
+          // CRITICAL: Only show delete icon if:
+          // 1. User is ACTUALLY host (strict check - must be exactly true, not truthy)
+          // 2. OR message truly belongs to participant (exact userId match)
+          // IMPORTANT: Use strict === true check to avoid truthy values
+          const isActuallyHost = isHost === true;
+          const canDelete = isActuallyHost ? true : (hasValidIds && isOwnMessage);
+          
+          // Debug: Log the first message to see what's happening
+          if (messages.indexOf(message) === 0) {
+            console.log('[MinimalistChat] First message check:', {
+              isHost,
+              isHostType: typeof isHost,
+              messageUserId: msgUserIdStr,
+              currentUserId: currUserIdStr,
+              hasValidIds,
+              isOwnMessage,
+              canDelete,
+              displayName: message.displayName,
+              messageKeys: Object.keys(message)
+            });
+          }
+          
           return (
             <div
               key={message._id}
@@ -362,7 +457,8 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
                 marginBottom: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: isOwnMessage ? 'flex-end' : 'flex-start'
+                alignItems: isOwnMessage ? 'flex-end' : 'flex-start',
+                position: 'relative'
               }}
             >
               <div style={{
@@ -386,18 +482,74 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
                 </span>
               </div>
               <div style={{
+                display: 'inline-flex',
+                alignItems: 'flex-start',
                 maxWidth: '80%',
-                padding: '12px 16px',
-                borderRadius: '16px',
-                backgroundColor: isOwnMessage ? '#007bff' : '#f8f9fa',
-                color: isOwnMessage ? '#ffffff' : '#333',
-                fontSize: '14px',
-                lineHeight: '1.4',
-                wordWrap: 'break-word',
-                border: isOwnMessage ? 'none' : '1px solid #e9ecef',
-                boxShadow: isOwnMessage ? '0 2px 4px rgba(0,123,255,0.2)' : '0 1px 2px rgba(0,0,0,0.1)'
+                position: 'relative'
               }}>
-                {message.text}
+                <div style={{
+                  padding: '12px 16px',
+                  paddingRight: canDelete ? '36px' : '16px',
+                  borderRadius: '16px',
+                  backgroundColor: isOwnMessage ? '#007bff' : '#f8f9fa',
+                  color: isOwnMessage ? '#ffffff' : '#333',
+                  fontSize: '14px',
+                  lineHeight: '1.4',
+                  wordWrap: 'break-word',
+                  border: isOwnMessage ? 'none' : '1px solid #e9ecef',
+                  boxShadow: isOwnMessage ? '0 2px 4px rgba(0,123,255,0.2)' : '0 1px 2px rgba(0,0,0,0.1)',
+                  position: 'relative'
+                }}>
+                  {message.text}
+                  {canDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteMessage(message._id);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        opacity: 0.6,
+                        transition: 'opacity 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '4px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                        e.currentTarget.style.backgroundColor = isOwnMessage ? 'rgba(255, 255, 255, 0.2)' : 'rgba(220, 53, 69, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '0.6';
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      title={isHost ? 'Delete message (Host)' : 'Delete your message'}
+                    >
+                      <svg 
+                        width="14" 
+                        height="14" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke={isOwnMessage ? '#ffffff' : '#dc3545'} 
+                        strokeWidth="2" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );

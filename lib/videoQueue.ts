@@ -96,11 +96,17 @@ export function sortThumbnailQueue(participants: Participant[]): Participant[] {
     if (a.isCameraOff && !b.isCameraOff) return 1;
 
     // Priority 5: Sort by join time (earlier join first)
-    const joinTimeA = new Date(a.joinedAt || '').getTime();
-    const joinTimeB = new Date(b.joinedAt || '').getTime();
-    if (!isNaN(joinTimeA) && !isNaN(joinTimeB)) {
+    const joinTimeA = a.joinedAt ? new Date(a.joinedAt).getTime() : 0;
+    const joinTimeB = b.joinedAt ? new Date(b.joinedAt).getTime() : 0;
+    
+    // If both have valid timestamps, sort by time
+    if (!isNaN(joinTimeA) && !isNaN(joinTimeB) && joinTimeA > 0 && joinTimeB > 0) {
       return joinTimeA - joinTimeB;
     }
+    
+    // If only one has a valid timestamp, prioritize it
+    if (!isNaN(joinTimeA) && joinTimeA > 0) return -1;
+    if (!isNaN(joinTimeB) && joinTimeB > 0) return 1;
 
     // Fallback: maintain original order
     return 0;
