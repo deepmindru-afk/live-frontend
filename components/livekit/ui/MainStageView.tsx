@@ -171,7 +171,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
               /* Avatar/Placeholder when video is off */
               <div className={styles['avatar-placeholder']}>
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={name || 'Participant'} />
+                  <img src={avatarUrl} alt={name || '참가자'} />
                 ) : (
                   <div className={styles['avatar-initial']}>
                     {name && name.length > 0 ? name.trim().charAt(0).toUpperCase() : '?'}
@@ -184,10 +184,10 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
         
         {/* Participant Info Overlay - Bottom */}
         <div className={styles['participant-info']}>
-          {isHost && <span className={styles['host-badge']}>Host</span>}
+          {isHost && <span className={styles['host-badge']}>호스트</span>}
           {isHandRaised && <span className={styles['hand-raised-badge']}>✋</span>}
           {isMuted && <span className={styles['muted-badge']}>🔇</span>}
-          <span className={styles['participant-name']}>{name || 'Participant'}</span>
+          <span className={styles['participant-name']}>{name || '참가자'}</span>
         </div>
       </div>
     </div>

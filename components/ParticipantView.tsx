@@ -22,7 +22,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
       {isHost && (
         <>
           <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#9ca3af' }}>
-            Active Students ({participants.length})
+            참여 학생 ({participants.length})
           </h4>
           {participants.map((participant) => (
         <div
@@ -55,7 +55,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>
-                  {participant.user?.companyName || participant.displayName || participant.user?.displayName || 'Unknown'}
+                  {participant.user?.companyName || participant.displayName || participant.user?.displayName || '알 수 없음'}
                 </span>
                 {participant.role === 'HOST' && (
                   <span style={{
@@ -66,7 +66,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                     color: 'white',
                     borderRadius: '4px'
                   }}>
-                    HOST
+                    호스트
                   </span>
                 )}
               </div>
@@ -91,7 +91,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                 justifyContent: 'center',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
-              }} title="Hand Raised">
+              }} title="손 들림">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
                   <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>
                 </svg>
@@ -115,7 +115,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                   justifyContent: 'center',
                   transition: 'all 0.2s ease'
                 }}
-                title="Remove Participant"
+                title="참가자 제거"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -132,7 +132,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
       {waitingParticipants.length > 0 && (
         <div style={{ marginTop: '30px' }}>
           <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '600', color: '#9ca3af' }}>
-            Waiting Room ({waitingParticipants.length})
+            대기실 ({waitingParticipants.length})
           </h4>
           {waitingParticipants.map((participant) => (
             <div
@@ -164,10 +164,10 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                 </div>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: '600', color: 'white' }}>
-                    {participant.displayName || participant.user?.displayName || 'Unknown'}
+                    {participant.displayName || participant.user?.displayName || '알 수 없음'}
                   </div>
                   <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                    {participant.user?.email || 'Unknown'}
+                    {participant.user?.email || '알 수 없음'}
                   </div>
                 </div>
               </div>
@@ -188,7 +188,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                       justifyContent: 'center',
                       transition: 'all 0.2s ease'
                     }}
-                    title="Approve"
+                    title="승인"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
                       <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
@@ -209,7 +209,7 @@ const ParticipantView: React.FC<ParticipantViewProps> = ({
                       justifyContent: 'center',
                       transition: 'all 0.2s ease'
                     }}
-                    title="Reject"
+                    title="거부"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
                       <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>

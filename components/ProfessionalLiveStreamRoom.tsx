@@ -855,7 +855,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         if (data.type === 'stop') {
           Swal.fire({
             icon: 'info',
-            title: 'Recording Stopped',
+            title: '녹화 중지',
             text: data.message,
             timer: 2500,
             showConfirmButton: false,
@@ -892,9 +892,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         if (data.userId === transferredUserId && data.token) {
           Swal.fire({
             icon: 'success',
-            title: 'Host Role Transferred',
-            text: 'You are now the host of this meeting.',
-            confirmButtonText: 'OK',
+            title: '호스트 권한 이전',
+            text: '이제 이 회의의 호스트입니다.',
+            confirmButtonText: '확인',
             confirmButtonColor: '#28a745'
           });
           
@@ -1181,9 +1181,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (process.env.NODE_ENV === 'development') {
         Swal.fire({
           icon: 'error',
-          title: 'Mobile Error',
-          text: 'Please refresh the page and try again. If the problem persists, try using Chrome or Safari browser.',
-          confirmButtonText: 'Refresh',
+          title: '모바일 오류',
+          text: '페이지를 새로고침하고 다시 시도해주세요. 문제가 계속되면 Chrome 또는 Safari 브라우저를 사용해보세요.',
+          confirmButtonText: '새로고침',
           confirmButtonColor: '#4A6CF7'
         }).then(() => {
           window.location.reload();
@@ -1201,9 +1201,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (process.env.NODE_ENV === 'development') {
         Swal.fire({
           icon: 'error',
-          title: 'Connection Error',
-          text: 'Please check your internet connection and try again.',
-          confirmButtonText: 'OK',
+          title: '연결 오류',
+          text: '인터넷 연결을 확인하고 다시 시도해주세요.',
+          confirmButtonText: '확인',
           confirmButtonColor: '#4A6CF7'
         });
       } else {
@@ -1349,7 +1349,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       // Show browser confirmation dialog
       e.preventDefault();
-      e.returnValue = 'Do you want to leave the meeting?';
+      e.returnValue = '회의를 나가시겠습니까?';
       return e.returnValue;
     };
     
@@ -1434,7 +1434,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
       
       // Show custom confirmation dialog
-      const confirmed = window.confirm('Do you want to leave the meeting?');
+      const confirmed = window.confirm('회의를 나가시겠습니까?');
       
       if (!confirmed) {
         // Prevent navigation
@@ -1521,8 +1521,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             if (typeof window !== 'undefined') {
               Swal.fire({
                 icon: 'warning',
-                title: 'Connection Lost',
-                text: 'You lost connection to the meeting. The meeting has been ended.',
+                title: '연결 끊김',
+                text: '회의 연결이 끊어졌습니다. 회의가 종료되었습니다.',
                 timer: 3000,
                 showConfirmButton: false
               });
@@ -1615,7 +1615,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             // Show visual notification
             Swal.fire({
               icon: 'info',
-              title: 'Recording Status',
+              title: '녹화 상태',
               text: data.message,
               timer: 2000,
               showConfirmButton: false,
@@ -1829,8 +1829,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to start the meeting. Please try again.'
+        title: '오류',
+        text: '회의 시작에 실패했습니다. 다시 시도해주세요.'
       });
     }
   };
@@ -1851,8 +1851,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to end the meeting. Please try again.'
+        title: '오류',
+        text: '회의 종료에 실패했습니다. 다시 시도해주세요.'
       });
     }
   };
@@ -1870,12 +1870,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleParticipantLeave = async () => {
     try {
       const result = await Swal.fire({
-        title: 'Leave Meeting',
-        text: 'Do you want to leave the meeting?',
+        title: '회의 나가기',
+        text: '회의를 나가시겠습니까?',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Yes',
-        cancelButtonText: 'Cancel',
+        confirmButtonText: '나가기',
+        cancelButtonText: '취소',
         confirmButtonColor: '#dc3545',
         cancelButtonColor: '#6c757d'
       });
@@ -1885,8 +1885,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         if (!currentParticipant?._id) {
           Swal.fire({
             icon: 'error',
-            title: 'Error',
-            text: 'Unable to leave meeting. Please refresh and try again.'
+            title: '오류',
+            text: '회의를 나갈 수 없습니다. 새로고침 후 다시 시도해주세요.'
           });
           return;
         }
@@ -1912,7 +1912,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
+        title: '오류',
         text: 'Failed to leave the meeting. Please try again.'
       });
     }
@@ -1925,9 +1925,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (nonHostParticipants.length === 0) {
         await Swal.fire({
           icon: 'warning',
-          title: 'No Participants',
-          text: 'There are no other participants to transfer host role to.',
-          confirmButtonText: 'OK'
+          title: '참가자 없음',
+          text: '호스트 권한을 이전할 다른 참가자가 없습니다.',
+          confirmButtonText: '확인'
         });
         return;
       }
@@ -1935,27 +1935,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // Create participant selection options
       const participantOptions = nonHostParticipants.map((participant, index) => ({
         value: participant._id,
-        text: `${participant.displayName || participant.user?.displayName || 'Participant'} (${participant.user?.email || 'participant@demo.com'})`
+        text: `${participant.displayName || participant.user?.displayName || '참가자'} (${participant.user?.email || 'participant@demo.com'})`
       }));
 
       const { value: selectedParticipantId } = await Swal.fire({
-          title: 'Transfer Host Role',
-        text: 'Select the participant who will become the new host:',
+          title: '호스트 권한 이전',
+        text: '새로운 호스트가 될 참가자를 선택하세요:',
         icon: 'question',
         input: 'select',
         inputOptions: participantOptions.reduce((acc, option) => {
           acc[option.value] = option.text;
           return acc;
         }, {} as Record<string, string>),
-        inputPlaceholder: 'Choose a participant...',
+        inputPlaceholder: '참가자를 선택하세요...',
           showCancelButton: true,
-        confirmButtonText: 'Transfer Host',
-          cancelButtonText: 'Cancel',
+        confirmButtonText: '호스트 이전',
+          cancelButtonText: '취소',
             confirmButtonColor: '#28a745',
         cancelButtonColor: '#6c757d',
         inputValidator: (value) => {
           if (!value) {
-            return 'You need to select a participant!';
+            return '참가자를 선택해야 합니다!';
           }
           return null;
         }
@@ -2006,8 +2006,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to transfer host role. Please try again.'
+        title: '오류',
+        text: '호스트 권한 이전에 실패했습니다. 다시 시도해주세요.'
       });
     }
   };
@@ -2017,14 +2017,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (isHost && participants.length > 1) {
         // Show options for host
         const result = await Swal.fire({
-          title: 'Exit Meeting',
-          text: 'As the host, you can end the meeting for everyone or transfer host role:',
+          title: '회의 나가기',
+          text: '호스트로서 모든 참가자를 위해 회의를 종료하거나 호스트 권한을 이전할 수 있습니다:',
           icon: 'question',
           showCancelButton: true,
           showDenyButton: true,
-          confirmButtonText: 'End Meeting for All',
-          denyButtonText: 'Transfer Host & Leave',
-          cancelButtonText: 'Cancel',
+          confirmButtonText: '모두 종료',
+          denyButtonText: '호스트 이전 후 나가기',
+          cancelButtonText: '취소',
           confirmButtonColor: '#dc3545',
           denyButtonColor: '#6c757d',
           cancelButtonColor: '#007bff'
@@ -2042,7 +2042,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
+        title: '오류',
         text: 'Failed to leave the meeting. Please try again.'
       });
     }
@@ -2083,8 +2083,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error: any) {
       Swal.fire({
         icon: 'error',
-        title: 'Microphone Error',
-        text: error?.message || 'Failed to toggle microphone.'
+        title: '마이크 오류',
+        text: error?.message || '마이크 전환에 실패했습니다.'
       });
     }
   };
@@ -2124,8 +2124,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error: any) {
       Swal.fire({
         icon: 'error',
-        title: 'Camera Error',
-        text: error?.message || 'Failed to toggle camera.'
+        title: '카메라 오류',
+        text: error?.message || '카메라 전환에 실패했습니다.'
       });
     }
   };
@@ -2142,8 +2142,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         // Show user-friendly error message
         Swal.fire({
           icon: 'error',
-          title: 'Screen Share Error',
-          text: error?.message || 'Failed to toggle screen share. User may have cancelled or browser blocked it.',
+          title: '화면 공유 오류',
+          text: error?.message || '화면 공유 전환에 실패했습니다. 사용자가 취소했거나 브라우저가 차단했을 수 있습니다.',
           timer: 3000
         });
         
@@ -2221,7 +2221,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         message,
         type,
         timestamp: new Date().toISOString(),
-        fromUser: currentUser?.displayName || currentUser?.email || 'Unknown'
+        fromUser: currentUser?.displayName || currentUser?.email || '알 수 없음'
       };
       
       socket.emit('RECORDING_ANNOUNCEMENT', payload);
@@ -2280,8 +2280,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (!updatedIsHost) {
         Swal.fire({
           icon: 'error',
-          title: 'Permission Denied',
-          text: 'Only the meeting host can remove participants.'
+          title: '권한 거부',
+          text: '회의 호스트만 참가자를 제거할 수 있습니다.'
         });
         return;
       }
@@ -2298,8 +2298,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (!isOriginalHost && !isCurrentHost) {
         Swal.fire({
           icon: 'error',
-          title: 'Permission Error',
-          text: 'Only the meeting host can remove participants.'
+          title: '권한 오류',
+          text: '회의 호스트만 참가자를 제거할 수 있습니다.'
         });
         return;
       }
@@ -2315,8 +2315,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (!targetParticipant) {
         Swal.fire({
           icon: 'error',
-          title: 'Error',
-          text: 'Participant not found in the meeting.'
+          title: '오류',
+          text: '회의에서 참가자를 찾을 수 없습니다.'
         });
         return;
       }
@@ -2352,24 +2352,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (isCurrentHost && !isOriginalHost) {
         Swal.fire({
           icon: 'error',
-          title: 'Backend Permission Issue',
+          title: '백엔드 권한 문제',
           html: `
-            <p>As a transferred host, you should be able to kick participants, but the backend is rejecting the request.</p>
-            <p><strong>Issue:</strong> Backend checks against original hostId, not currentHostId</p>
-            <p><strong>Your ID:</strong> ${currentUserId}</p>
-            <p><strong>Original Host ID:</strong> ${meeting?.hostId}</p>
-            <p><strong>Current Host ID:</strong> ${meeting?.currentHostId}</p>
-            <p>This needs to be fixed in the backend permission logic.</p>
+            <p>이전된 호스트로서 참가자를 제거할 수 있어야 하지만, 백엔드가 요청을 거부하고 있습니다.</p>
+            <p><strong>문제:</strong> 백엔드가 원래 hostId를 확인하고 있어 currentHostId를 확인하지 않습니다</p>
+            <p><strong>사용자 ID:</strong> ${currentUserId}</p>
+            <p><strong>원래 호스트 ID:</strong> ${meeting?.hostId}</p>
+            <p><strong>현재 호스트 ID:</strong> ${meeting?.currentHostId}</p>
+            <p>백엔드 권한 로직에서 수정이 필요합니다.</p>
           `,
-          confirmButtonText: 'Understood'
+          confirmButtonText: '확인'
         });
       } else {
         // Show more specific error message
-        const errorMessage = (error as any)?.message || 'Unknown error occurred';
+        const errorMessage = (error as any)?.message || '알 수 없는 오류가 발생했습니다';
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-          text: `Failed to remove participant: ${errorMessage}`
+        title: '오류',
+          text: `참가자 제거 실패: ${errorMessage}`
       });
       }
     }
@@ -2384,8 +2384,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     if (!targetId) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Cannot remove participant: Missing participant ID'
+        title: '오류',
+        text: '참가자를 제거할 수 없습니다: 참가자 ID가 없습니다'
       });
       return;
     }
@@ -2398,8 +2398,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if (!socket || !wsConnected) {
         Swal.fire({
           icon: 'error',
-          title: 'Error',
-          text: 'Not connected to server'
+          title: '오류',
+          text: '서버에 연결되지 않았습니다'
         });
         return;
       }
@@ -2415,8 +2415,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to lower hand'
+        title: '오류',
+        text: '손 내리기 실패'
       });
     }
   };
@@ -3538,7 +3538,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   <ParticipantThumbnail
                     key={`${participant._id}-${index}`}
                     participantId={(participant as any).backendId || participant._id}
-                    name={participant.displayName || 'Unknown'}
+                    name={participant.displayName || '알 수 없음'}
                     videoTrack={videoTrack}
                     audioTrack={audioTrack}
                     isSpeaking={isSpeaking}
@@ -4250,7 +4250,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                 }}
-                title="Leave meeting"
+                title="회의 나가기"
               >
                 <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="white">
                   <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
@@ -4283,7 +4283,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             justifyContent: 'space-between'
         }}>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111827' }}>
-                {isHost ? 'Participants & Chat' : 'Chat'}
+                {isHost ? '참가자 & 채팅' : '채팅'}
               </h3>
         </div>
 
@@ -4308,7 +4308,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                               transition: 'all 0.2s ease'
                             }}
                           >
-                            Active Students ({participants.length})
+                            참여 학생 ({participants.length})
                           </button>
                           <button
                             onClick={() => setActiveTab('chat')}

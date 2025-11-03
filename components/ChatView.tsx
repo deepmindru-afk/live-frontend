@@ -76,7 +76,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
     const handleError = (data: any) => {
       if (data.message?.includes('delete')) {
-        alert(`Cannot delete message: ${data.message}`);
+        alert(`메시지를 삭제할 수 없습니다: ${data.message}`);
       }
     };
 
@@ -168,7 +168,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         height: '200px',
         color: '#ccc'
       }}>
-        Loading chat...
+        채팅 불러오는 중...
       </div>
     );
   }
@@ -192,7 +192,7 @@ const ChatView: React.FC<ChatViewProps> = ({
             color: '#ccc',
             padding: '20px'
           }}>
-            No messages yet. Start the conversation!
+            아직 메시지가 없습니다. 대화를 시작해보세요!
           </div>
         ) : (
           messages.map((message) => {
@@ -234,7 +234,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                     fontWeight: 'bold',
                     color: isOwnMessage ? '#4CAF50' : '#2196F3'
                   }}>
-                    {message.senderDisplayName || (message as any).displayName || 'Unknown'}
+                    {message.senderDisplayName || (message as any).displayName || '알 수 없음'}
                   </div>
                   <div style={{
                     fontSize: '10px',
@@ -292,7 +292,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                           e.currentTarget.style.opacity = '0.6';
                           e.currentTarget.style.backgroundColor = 'transparent';
                         }}
-                        title={isHost ? 'Delete message (Host)' : 'Delete your message'}
+                        title={isHost ? '메시지 삭제 (호스트)' : '내 메시지 삭제'}
                       >
                         <svg 
                           width="14" 
@@ -342,7 +342,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                 handleSendMessage();
               }
             }}
-            placeholder="Type your message... (Press Enter to send)"
+            placeholder="메시지를 입력하세요... (Enter로 전송)"
             style={{
               flex: 1,
               backgroundColor: '#333',
@@ -383,7 +383,7 @@ const ChatView: React.FC<ChatViewProps> = ({
               }
             }}
           >
-            Send
+            전송
           </button>
         </form>
       </div>
