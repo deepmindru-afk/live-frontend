@@ -31,6 +31,7 @@ export interface LiveKitRoomState {
   isCameraEnabled: boolean;
   isScreenSharing: boolean;
   error: string | null;
+  serverNumber?: number; // Server number (1 or 2)
 }
 
 export class LiveKitService {
@@ -48,6 +49,7 @@ export class LiveKitService {
     isCameraEnabled: false,
     isScreenSharing: false,
     error: null,
+    serverNumber: undefined,
   };
 
   private eventListeners: Map<string, ((...args: any[]) => void)[]> = new Map();
@@ -72,6 +74,11 @@ export class LiveKitService {
 
       // Get LiveKit token from backend
       const tokenResponse = await this.getLiveKitToken(options);
+      
+      // Store server number in state
+      if (tokenResponse.serverNumber) {
+        this.updateRoomState({ serverNumber: tokenResponse.serverNumber });
+      }
 
       // Create room instance with safe, validated video encoding configuration
       // FIX: Prevent "scaleResolutionDownBy non-finite value" error in RTCPeerConnection.addTransceiver
@@ -193,7 +200,7 @@ export class LiveKitService {
     }
   }
 
-  private async getLiveKitToken(options: LiveKitConnectionOptions): Promise<{ wsUrl: string; token: string }> {
+  private async getLiveKitToken(options: LiveKitConnectionOptions): Promise<{ wsUrl: string; token: string; serverNumber?: number }> {
     try {
       
       const { data } = await apolloClient.mutate({
@@ -834,6 +841,10 @@ export class LiveKitService {
 
   get state(): LiveKitRoomState {
     return this.roomState;
+  }
+
+  get serverNumber(): number | undefined {
+    return this.roomState.serverNumber;
   }
 }
 

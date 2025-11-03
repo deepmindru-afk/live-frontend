@@ -33,6 +33,9 @@ export interface UseLiveKitReturn {
   isCameraEnabled: boolean;
   isScreenSharing: boolean;
   
+  // Server info
+  serverNumber?: number;
+  
   // Actions
   connect: (options?: Partial<LiveKitConnectionOptions>) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -59,6 +62,7 @@ export const useLiveKit = (options: UseLiveKitOptions = {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraEnabled, setIsCameraEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [serverNumber, setServerNumber] = useState<number | undefined>(undefined);
   
   const liveKitServiceRef = useRef<LiveKitService | null>(null);
   const optionsRef = useRef(options);
@@ -89,6 +93,7 @@ export const useLiveKit = (options: UseLiveKitOptions = {
       setIsConnecting(false);
       setParticipants(new Map());
       setLocalParticipant(null);
+      setServerNumber(undefined);
       optionsRef.current.onDisconnected?.(service.state);
     };
 
@@ -107,6 +112,7 @@ export const useLiveKit = (options: UseLiveKitOptions = {
       setIsCameraEnabled(roomState.isCameraEnabled);
       setIsScreenSharing(roomState.isScreenSharing);
       setError(roomState.error);
+      setServerNumber(roomState.serverNumber);
     };
 
     const handleParticipantConnected = ({ participant }: { participant: LiveKitParticipant }) => {
@@ -322,6 +328,9 @@ export const useLiveKit = (options: UseLiveKitOptions = {
     isMuted,
     isCameraEnabled,
     isScreenSharing,
+    
+    // Server info
+    serverNumber,
     
     // Actions
     connect,

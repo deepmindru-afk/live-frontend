@@ -372,6 +372,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     localParticipant: liveKitLocalParticipant,
     isMuted: liveKitIsMuted,
     isCameraEnabled: liveKitIsCameraEnabled,
+    serverNumber: liveKitServerNumber,
     isScreenSharing: liveKitIsScreenSharing,
     connect: liveKitConnect,
     disconnect: liveKitDisconnect,
@@ -3807,53 +3808,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               </div>
             )}
 
-            {/* Selected Participant Indicator */}
-            {selectedParticipant && (
-            <div style={{
-              position: 'absolute',
-              top: '20px',
-              left: '20px',
-                backgroundColor: '#3b82f6',
-                border: '2px solid #2563eb',
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontSize: '14px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-                color: 'white',
-              zIndex: 1000,
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-            }}>
-                👤 {selectedParticipant.displayName || 'Selected Participant'}
-            </div>
-            )}
-            
-
-            {/* LiveKit Connection Status */}
-            <div style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              backgroundColor: isLiveKitConnected ? '#d1fae5' : '#fef2f2',
-              border: `2px solid ${isLiveKitConnected ? '#10b981' : '#ef4444'}`,
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontSize: '14px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: isLiveKitConnected ? '#065f46' : '#991b1b',
-              zIndex: 1000,
-              boxShadow: `0 4px 12px rgba(${isLiveKitConnected ? '16, 185, 129' : '239, 68, 68'}, 0.3)`
-            }}>
-              {isLiveKitConnected ? '🎥 LiveKit Connected' : '❌ LiveKit Disconnected'}
-              {isLiveKitConnecting && ' (Connecting...)'}
-              {isLiveKitConnected && liveKitParticipants.size === 0 && ' (No Participants)'}
-            </div>
-            
             {/* Debug Info */}
 
             {/* Hand Raise Indicator - Host Notifications (handled by component) */}
