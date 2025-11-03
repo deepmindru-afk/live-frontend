@@ -58,11 +58,10 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          mediaSource: 'screen',
           width: { ideal: 1280 },
           height: { ideal: 720 },
           frameRate: { ideal: 30 },
-        },
+        } as MediaTrackConstraints,
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -180,48 +179,97 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   // Detect mobile
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
+  const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isUploading) {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    }
+  }, [isRecording, isUploading, startRecording, stopRecording]);
+
   return (
     <button
-      onClick={isRecording ? stopRecording : startRecording}
+      onClick={handleClick}
+      onTouchEnd={handleClick}
       disabled={isUploading}
+      title={isRecording ? 'Stop Recording' : 'Start Recording'}
+      aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
       style={{
-        padding: isMobile ? '10px 20px' : '12px 24px',
+        width: isMobile ? '44px' : '48px',
+        height: isMobile ? '44px' : '48px',
+        padding: '0',
         backgroundColor: isRecording ? '#ef4444' : '#3b82f6',
         color: 'white',
         border: 'none',
-        borderRadius: '8px',
-        fontSize: isMobile ? '14px' : '16px',
-        fontWeight: '600',
-        cursor: 'pointer',
+        borderRadius: '50%',
+        cursor: isUploading ? 'not-allowed' : 'pointer',
         transition: 'all 0.2s ease',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        minWidth: isMobile ? '140px' : '160px',
         justifyContent: 'center',
+        boxShadow: isRecording ? '0 4px 12px rgba(239, 68, 68, 0.4)' : '0 4px 12px rgba(59, 130, 246, 0.4)',
+        position: 'relative',
+        opacity: isUploading ? 0.6 : 1,
+        zIndex: 1000,
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'manipulation',
       }}
     >
       {isRecording ? (
         <>
-          <span style={{
-            width: '10px',
-            height: '10px',
+          {/* Stop Recording Icon (Square) */}
+          <svg 
+            width={isMobile ? "20" : "24"} 
+            height={isMobile ? "20" : "24"} 
+            viewBox="0 0 24 24" 
+            fill="none"
+            style={{
+              animation: 'pulse 1.5s infinite'
+            }}
+          >
+            <rect x="6" y="6" width="12" height="12" rx="2" fill="white"/>
+          </svg>
+          {/* Pulsing dot indicator */}
+          <div style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            width: '8px',
+            height: '8px',
             backgroundColor: 'white',
             borderRadius: '50%',
-            animation: 'pulse 1s infinite'
-          }}></span>
-          <span>Stop Recording</span>
+            animation: 'pulse 1s infinite',
+            pointerEvents: 'none'
+          }}></div>
         </>
       ) : (
         <>
-          <span>🎥</span>
-          <span>Start Recording</span>
+          {/* Start Recording Icon (Record Circle) */}
+          <svg 
+            width={isMobile ? "20" : "24"} 
+            height={isMobile ? "20" : "24"} 
+            viewBox="0 0 24 24" 
+            fill="none"
+          >
+            <circle cx="12" cy="12" r="8" fill="white"/>
+            <circle cx="12" cy="12" r="3" fill="#3b82f6"/>
+          </svg>
         </>
       )}
       <style jsx>{`
         @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
+          0%, 100% { 
+            opacity: 1; 
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 0.7; 
+            transform: scale(1.1);
+          }
         }
       `}</style>
     </button>

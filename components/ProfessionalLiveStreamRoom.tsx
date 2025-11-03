@@ -2810,7 +2810,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             <div style={{ display: 'flex', gap: isMobile ? '4px' : '12px', alignItems: 'center' }}>
             {/* Video Player Mode Toggle */}
             <button
-              onClick={() => setIsVideoPlayerMode(!isVideoPlayerMode)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsVideoPlayerMode(!isVideoPlayerMode);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsVideoPlayerMode(!isVideoPlayerMode);
+              }}
               style={{
                 width: isMobile ? '36px' : '44px',
                 height: isMobile ? '36px' : '44px',
@@ -2826,7 +2835,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
-                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none',
+                zIndex: 1000,
+                position: 'relative'
               }}
               title={isVideoPlayerMode ? 'Exit Video Mode' : 'Enter Video Mode'}
             >
@@ -2841,7 +2852,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
             {/* Fullscreen Toggle Button - Always Visible */}
             <button
-              onClick={toggleFullscreen}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
               style={{
                 width: isMobile ? '36px' : '44px',
                 height: isMobile ? '36px' : '44px',
@@ -2853,7 +2873,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
-                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none',
+                zIndex: 1000,
+                position: 'relative'
               }}
               title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
             >
@@ -2868,7 +2890,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
             {/* Thumbnail Toggle Button - Always Visible */}
             <button
-              onClick={() => setThumbnailPanelOpen(!thumbnailPanelOpen)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setThumbnailPanelOpen(!thumbnailPanelOpen);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setThumbnailPanelOpen(!thumbnailPanelOpen);
+              }}
               style={{
                 width: isMobile ? '36px' : '44px',
                 height: isMobile ? '36px' : '44px',
@@ -2880,7 +2911,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.2s ease',
-                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+                backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none',
+                zIndex: 1000,
+                position: 'relative'
               }}
               title={thumbnailPanelOpen ? 'Hide participants' : 'Show participants'}
             >
@@ -2965,8 +2998,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   </>
                 )}
 
-                {/* Mobile Controls - REMOVED FROM TOP HEADER - Now only in bottom control bar */}
-                {false && isMobile && (
+                {/* ✅ FIX: Mobile Controls - Now in TOP HEADER */}
+                {isMobile && (
+                  <ClientSideRecording
+                    meetingId={actualMeetingId}
+                    userId={currentUser?.id || currentUser?._id || 'unknown'}
+                    meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
+                    meetingStatus={meetingStatus}
+                    onRecordingComplete={() => {}}
+                    onError={() => {}}
+                  />
+                )}
+
+                {/* Old Mobile Controls - REMOVED - Now only in top header */}
+                {false && (
                   <div style={{ 
                     display: 'flex', 
                     gap: '8px', 
@@ -4226,17 +4271,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 );
               })()}
 
-              {/* Recording Button - Mobile Hosts Only */}
-              {isMobile && isMeetingHost && (
-                <ClientSideRecording
-                  meetingId={actualMeetingId}
-                  userId={currentUser?.id || currentUser?._id || 'unknown'}
-                  meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
-                  meetingStatus={meetingStatus}
-                  onRecordingComplete={() => {}}
-                  onError={() => {}}
-                />
-              )}
+              {/* ✅ FIX: Recording Button removed from bottom - Now only in TOP HEADER for mobile */}
 
               {/* Leave Button */}
               <button
