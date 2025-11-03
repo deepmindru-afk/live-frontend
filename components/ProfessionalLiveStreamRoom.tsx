@@ -643,13 +643,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
       });
 
+      // Listen for meeting ended event
+      socket.on('MEETING_ENDED', async (data) => {
+        console.log('[MEETING_ENDED] Meeting has ended, redirecting to dashboard');
+        await Swal.fire({
+          icon: 'info',
+          title: '회의 종료',
+          text: '호스트가 회의를 종료했습니다.',
+          confirmButtonText: '확인'
+        });
+        router.push('/dashboard');
+      });
+
       return () => {
         socket.off('PARTICIPANT_ADMITTED');
         socket.off('MEETING_STATUS_CHANGED');
         socket.off('PARTICIPANT_LEFT_WAITING');
+        socket.off('MEETING_ENDED');
       };
     }
-  }, [socket, actualMeetingId, refetchParticipants]);
+  }, [socket, actualMeetingId, refetchParticipants, router]);
 
   // 🎯 Live mic/camera state updates from backend or other participants
   useEffect(() => {
