@@ -107,7 +107,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [actualMeetingId, setActualMeetingId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('participants');
+  const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('chat');
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingInProgress, setIsRecordingInProgress] = useState(false);
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
@@ -2374,14 +2374,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Get meeting data
   const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
-  const isHost =
-    currentParticipant?.role === 'HOST' ||
-    role === 'HOST' ||
-    currentUser?.systemRole === 'TUTOR' ||
-    currentUser?.systemRole === 'ADMIN';
+  // Strict host check - must be actual meeting host, not just system admin/tutor
+  // Only show Active Students to actual meeting hosts
+  const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
   
   // For recording, ONLY allow the actual meeting host (not system admins)
   const isMeetingHost = currentParticipant?.role === 'HOST';
+
+  // Ensure non-hosts default to chat tab and cannot access participants tab
+  useEffect(() => {
+    // Strict check - must be actual host with participant role confirmed
+    const isConfirmedHost = currentParticipant && currentParticipant.role === 'HOST';
+    if (!isConfirmedHost && activeTab === 'participants') {
+      setActiveTab('chat');
+    }
+  }, [currentParticipant, activeTab]);
+
+  // When sidebar opens, ensure non-hosts are on chat tab
+  useEffect(() => {
+    // Strict check - must be actual host with participant role confirmed
+    const isConfirmedHost = currentParticipant && currentParticipant.role === 'HOST';
+    if (sidebarOpen && !isConfirmedHost) {
+      setActiveTab('chat');
+    }
+  }, [sidebarOpen, currentParticipant]);
 
 
   // Auto-start meeting for host
@@ -4323,72 +4339,119 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             justifyContent: 'space-between'
         }}>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111827' }}>
-                Participants & Chat
+                {isHost ? 'Participants & Chat' : 'Chat'}
               </h3>
         </div>
 
-                      <div style={{
-                        display: 'flex',
-              borderBottom: '1px solid #e5e7eb'
-          }}>
-          <button
-              onClick={() => setActiveTab('participants')}
-                  style={{
-                flex: 1,
-                  padding: '16px',
-              border: 'none',
-                backgroundColor: activeTab === 'participants' ? '#3b82f6' : 'transparent',
-                  color: activeTab === 'participants' ? 'white' : '#6b7280',
-                    cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  borderBottom: activeTab === 'participants' ? '2px solid #3b82f6' : '2px solid transparent',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                Active Students ({participants.length})
-            </button>
-              <button
-                onClick={() => setActiveTab('chat')}
-                style={{
-                  flex: 1,
-                  padding: '16px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'chat' ? '#3b82f6' : 'transparent',
-                  color: activeTab === 'chat' ? 'white' : '#6b7280',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  borderBottom: activeTab === 'chat' ? '2px solid #3b82f6' : '2px solid transparent',
-                  position: 'relative',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                Chat
-                {unreadMessageCount > 0 && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '8px',
-                    right: '8px',
-                    backgroundColor: '#ef4444',
-                    color: 'white',
-                    borderRadius: '50%',
-                    width: '18px',
-                    height: '18px',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
-                  </span>
-                )}
-              </button>
-        </div>
+                      {/* Only show Active Students tab if user is confirmed meeting host - strict check */}
+                      {isHost && currentParticipant && currentParticipant.role === 'HOST' ? (
+                        <div style={{
+                          display: 'flex',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <button
+                            onClick={() => setActiveTab('participants')}
+                            style={{
+                              flex: 1,
+                              padding: '16px',
+                              border: 'none',
+                              backgroundColor: activeTab === 'participants' ? '#3b82f6' : 'transparent',
+                              color: activeTab === 'participants' ? 'white' : '#6b7280',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              borderBottom: activeTab === 'participants' ? '2px solid #3b82f6' : '2px solid transparent',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Active Students ({participants.length})
+                          </button>
+                          <button
+                            onClick={() => setActiveTab('chat')}
+                            style={{
+                              flex: 1,
+                              padding: '16px',
+                              border: 'none',
+                              backgroundColor: activeTab === 'chat' ? '#3b82f6' : 'transparent',
+                              color: activeTab === 'chat' ? 'white' : '#6b7280',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              borderBottom: activeTab === 'chat' ? '2px solid #3b82f6' : '2px solid transparent',
+                              position: 'relative',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Chat
+                            {unreadMessageCount > 0 && (
+                              <span style={{
+                                position: 'absolute',
+                                top: '8px',
+                                right: '8px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '18px',
+                                height: '18px',
+                                fontSize: '10px',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'flex',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <button
+                            onClick={() => setActiveTab('chat')}
+                            style={{
+                              width: '100%',
+                              padding: '16px',
+                              border: 'none',
+                              backgroundColor: '#3b82f6',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              borderBottom: '2px solid #3b82f6',
+                              position: 'relative',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Chat
+                            {unreadMessageCount > 0 && (
+                              <span style={{
+                                position: 'absolute',
+                                top: '8px',
+                                right: '8px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '18px',
+                                height: '18px',
+                                fontSize: '10px',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      )}
 
             <div style={{ flex: 1, overflow: 'auto' }}>
-            {activeTab === 'participants' && (
+            {/* Double check - only show participants list if user is confirmed host - strict check */}
+            {activeTab === 'participants' && isHost && currentParticipant && currentParticipant.role === 'HOST' && (
                 <div key="participants-tab" style={{ padding: '16px' }}>
                   {participantsWithHandRaise.map((participant, index) => (
                     <div key={`${participant._id}-${index}`} style={{
@@ -4417,21 +4480,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         position: 'relative'
                       }}>
                         {participant.role === 'HOST' ? 'H' : participant.displayName?.charAt(0)?.toUpperCase() || 'S'}
-                        
-                        {/* Speaking indicator */}
-                        {participant.micState === 'ON' && (
-                          <div style={{
-                            position: 'absolute',
-                            bottom: '-2px',
-                            right: '-2px',
-                            width: '12px',
-                            height: '12px',
-                            backgroundColor: '#22c55e',
-                            borderRadius: '50%',
-                            border: '2px solid #ffffff',
-                            animation: 'pulse 1s infinite'
-                          }}></div>
-                        )}
                           </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ 
@@ -4464,57 +4512,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {/* Mic Status */}
-                        <div style={{ 
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '6px',
-                          backgroundColor: participant.micState === 'ON' ? '#22c55e' : '#ef4444',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isHost && participant.role !== 'HOST' ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease'
-                        }}
-                        title={isHost && participant.role !== 'HOST' ? 'Force mute' : (participant.micState === 'ON' ? 'Mic On' : 'Mic Off')}
-                        >
-                          {participant.micState === 'ON' ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M12 14c1.66 0 3-1.34 3-3V5a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3z"/>
-                              <path d="M17 11a5 5 0 0 1-10 0H5a7 7 0 0 0 14 0h-2z"/>
-                            </svg>
-                          ) : (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M19 11h-1.7a6.97 6.97 0 0 1-.43 2.05l1.23 1.23a8.994 8.994 0 0 0 .9-3.28zM12 3a3 3 0 0 0-3 3v.18l6 6V6a3 3 0 0 0-3-3zM4.27 3L3 4.27l6.01 6.01V11a3 3 0 0 0 3 3c.22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52a5 5 0 0 1-5-5H5a7 7 0 0 0 11.29 5.29L19.73 21 21 19.73 4.27 3z"/>
-                            </svg>
-                          )}
-                        </div>
-
-                        {/* Camera Status */}
-                        <div style={{ 
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '6px',
-                          backgroundColor: participant.cameraState === 'ON' ? '#22c55e' : '#ef4444',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: isHost && participant.role !== 'HOST' ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease'
-                        }}
-                        title={isHost && participant.role !== 'HOST' ? 'Force camera off' : (participant.cameraState === 'ON' ? 'Camera On' : 'Camera Off')}
-                        >
-                          {participant.cameraState === 'ON' ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/>
-                            </svg>
-                          ) : (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                              <path d="M21 6.5l-4 4V7a1 1 0 0 0-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-                            </svg>
-                          )}
-                        </div>
-
                         {isHost && participant.role !== 'HOST' && (
                           <>
                             {participant.hasHandRaised && (
