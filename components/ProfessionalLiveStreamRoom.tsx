@@ -3282,18 +3282,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // Check if participant is speaking (from audio level detection)
                 const isSpeaking = participant.audioLevel > 0.1 || false;
                 
-                // Check hand raise status from wsRaisedHands
-                const hasHandRaised = wsRaisedHands.some(hand => {
-                  const match = hand.userId === participant._id;
+                // ✅ FIX: Check hand raise status from wsRaisedHands - match by multiple ID fields
+                const hasHandRaisedFromWS = wsRaisedHands.some(hand => {
+                  // Match by userId, participant._id, or participant.user?._id
+                  const match = hand.userId === participant._id || 
+                                hand.userId === participant.userId || 
+                                hand.userId === participant.user?._id ||
+                                hand.participantId === participant._id;
                   if (match) {
-                    console.log('✅ HAND RAISED MATCH:', participant.displayName, 'hand.userId:', hand.userId, 'participant._id:', participant._id);
+                    console.log('✅ HAND RAISED MATCH:', participant.displayName, 'hand.userId:', hand.userId, 'hand.participantId:', hand.participantId, 'participant._id:', participant._id, 'participant.userId:', participant.userId);
                   }
                   return match;
-                }) || false;
+                });
+                
+                // ✅ FIX: Combine participant.isHandRaised with WebSocket data for accurate detection
+                const isHandRaised = Boolean(participant.isHandRaised || participant.hasHandRaised || hasHandRaisedFromWS);
                 
                 // Debug log for hand raise status
-                if (hasHandRaised) {
-                  console.log('🎉 HAND RAISED DETECTED for:', participant.displayName, 'wsRaisedHands:', wsRaisedHands);
+                if (isHandRaised) {
+                  console.log('🎉 HAND RAISED DETECTED for:', participant.displayName, 'isHandRaised:', participant.isHandRaised, 'hasHandRaised:', participant.hasHandRaised, 'hasHandRaisedFromWS:', hasHandRaisedFromWS, 'wsRaisedHands:', wsRaisedHands);
                 }
                 
                 // Get video and audio tracks from LiveKit room
@@ -3443,7 +3450,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     videoTrack={videoTrack}
                     audioTrack={audioTrack}
                     isSpeaking={isSpeaking}
-                    isHandRaised={Boolean(participant.isHandRaised)}
+                    isHandRaised={isHandRaised} // ✅ FIX: Use combined hand raise status from both participant state and WebSocket
                     isMuted={audioTrack?.isMuted || !audioTrack || participant.micState === 'OFF'} // ✅ Use actual LiveKit track state
                     isVideoOff={!videoTrack || videoTrack?.isMuted || (isLocalParticipant && !cameraEnabled)} // ✅ Use actual LiveKit track state
                     isHost={participant.role === 'HOST'}
@@ -3920,6 +3927,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // Note: isLocalParticipant was already defined above, reuse it
                 const isMainParticipantLocal = isLocalParticipant;
 
+                // ✅ FIX: Check hand raise status for main participant (same logic as thumbnails)
+                const hasHandRaisedFromWS = wsRaisedHands.some(hand => {
+                  // Match by userId, participant._id, or participant.user?._id
+                  const match = hand.userId === mainParticipant._id || 
+                                hand.userId === mainParticipant.userId || 
+                                hand.userId === mainParticipant.user?._id ||
+                                hand.participantId === mainParticipant._id;
+                  return match;
+                });
+                
+                // ✅ FIX: Combine participant.isHandRaised with WebSocket data for accurate detection
+                const mainIsHandRaised = Boolean(mainParticipant.isHandRaised || mainParticipant.hasHandRaised || hasHandRaisedFromWS);
+
                 // ✅ COMPREHENSIVE DEBUG: Log all main video assignments
                 console.log('🎬 MAIN VIDEO FINAL ASSIGNMENT:', {
                   participant: mainParticipant.displayName,
@@ -3932,7 +3952,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   videoOff: !mainVideoTrack || (isMainParticipantLocal && !cameraEnabled),
                   cameraEnabled: cameraEnabled,
                   queueScreenShareMode: queueState.screenShareMode,
-                  liveKitScreenSharing: liveKitIsScreenSharing
+                  liveKitScreenSharing: liveKitIsScreenSharing,
+                  isHandRaised: mainIsHandRaised // ✅ Add hand raise status to debug
                 });
 
 
@@ -3943,7 +3964,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     videoTrack={mainVideoTrack}
                     audioTrack={mainAudioTrack}
                     isSpeaking={(mainParticipant.audioLevel || 0) > 0.1}
-                    isHandRaised={Boolean(mainParticipant.isHandRaised)}
+                    isHandRaised={mainIsHandRaised} // ✅ FIX: Use combined hand raise status
                     isMuted={mainParticipant.micState === 'OFF' || false}
                     isVideoOff={!mainVideoTrack || (isMainParticipantLocal && !cameraEnabled)} // Show video only if track exists AND (not local participant OR camera enabled)
                     isHost={mainParticipant.role === 'HOST' || false}

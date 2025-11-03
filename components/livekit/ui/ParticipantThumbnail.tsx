@@ -106,13 +106,13 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
     };
   }, [audioTrack, participantId, isLocalParticipant]);
   
-  // Shake animation when hand is raised
+  // ✅ FIX: Shake animation when hand is raised - trigger initial shake and maintain continuous
   useEffect(() => {
-    // Trigger shake only when hand changes from NOT raised to RAISED
+    // Trigger initial shake when hand changes from NOT raised to RAISED
     if (isHandRaised && !previousHandRaised.current) {
       setShouldShake(true);
       
-      // Remove shake class after animation completes (500ms)
+      // Remove initial shake class after animation completes (500ms) - continuous shake will remain via CSS class
       const timer = setTimeout(() => {
         setShouldShake(false);
       }, 500);
@@ -131,11 +131,10 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
       style={{
         position: 'relative',
         zIndex: isHandRaised ? 10 : 5, // Higher z-index when hand is raised
-        border: isSelected ? '3px solid #3b82f6' : isHandRaised ? '3px solid #3b82f6' : '3px solid transparent',
-        boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : isHandRaised ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none',
-        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-        transition: 'all 0.3s ease',
-        animation: isHandRaised ? 'shake-continuous 0.6s ease-in-out infinite' : 'none'
+        border: isSelected ? '3px solid #3b82f6' : isHandRaised ? '3px solid #f59e0b' : '3px solid transparent', // ✅ FIX: Use orange border for hand raised
+        boxShadow: isSelected ? '0 0 20px rgba(59, 130, 246, 0.5)' : isHandRaised ? '0 0 15px rgba(245, 158, 11, 0.6)' : 'none', // ✅ FIX: Orange glow for hand raised
+        // ✅ FIX: Don't use transform here as it conflicts with shake animation - let CSS handle it
+        transition: isHandRaised ? 'none' : 'all 0.3s ease', // ✅ FIX: Disable transition during shake to prevent conflicts
       }}
     >
       {/* ✅ Audio element for remote participants - local is muted to prevent echo */}

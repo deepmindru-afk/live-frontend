@@ -222,15 +222,17 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                   playsInline
                   muted
                   style={{
-                    // Mobile-specific fixes
+                    // ✅ FIX: Use contain to match thumbnail framing - show whole body without cropping
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover',
+                    objectFit: 'contain', // ✅ Changed from 'cover' to 'contain' to match thumbnail visible framing
+                    objectPosition: 'center', // ✅ Center the video content
                     display: 'block',
                     visibility: 'visible',
                     opacity: 1,
                     zIndex: 1,
-                    position: 'relative'
+                    position: 'relative',
+                    backgroundColor: '#000000' // ✅ Black background for letterboxing
                   }}
                 />
               </>
