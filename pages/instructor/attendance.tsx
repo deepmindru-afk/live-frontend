@@ -78,7 +78,6 @@ const InstructorAttendanceDashboard: React.FC = () => {
               return;
             }
           } catch (error) {
-            console.error('Test login failed:', error);
           }
         }
         // If user chose "데모 모드로 보기", continue with mock data
@@ -138,7 +137,6 @@ const InstructorAttendanceDashboard: React.FC = () => {
 
       setSummary(mockSummary);
     } catch (error) {
-      console.error('❌ Failed to load attendance summary:', error);
       Swal.fire({ 
         icon: 'error', 
         title: '데이터 로딩 실패', 

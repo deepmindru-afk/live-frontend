@@ -272,25 +272,18 @@ export const useLiveKit = (options: UseLiveKitOptions = {
 
   const toggleScreenShare = useCallback(async () => {
     if (!liveKitServiceRef.current) {
-      console.log('🖥️ toggleScreenShare: No LiveKit service available');
       return;
     }
 
     try {
-      console.log('🖥️ toggleScreenShare: Current screen sharing state:', isScreenSharing);
       
       if (isScreenSharing) {
-        console.log('🖥️ toggleScreenShare: Stopping screen share...');
         await liveKitServiceRef.current.stopScreenShare();
-        console.log('🖥️ toggleScreenShare: Screen share stopped');
       } else {
-        console.log('🖥️ toggleScreenShare: Starting screen share...');
         await liveKitServiceRef.current.startScreenShare();
-        console.log('🖥️ toggleScreenShare: Screen share started');
       }
       
     } catch (err: any) {
-      console.error('🖥️ toggleScreenShare error:', err);
       
       // Don't set error state to prevent UI disruption
       // The service handles graceful degradation internally

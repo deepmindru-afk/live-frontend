@@ -94,7 +94,6 @@ const VODPage: React.FC = () => {
         setVods(result.getAllVods.vods);
       }
     } catch (error) {
-      console.error('Failed to load VODs:', error);
       // VOD data should come from mock service, so this should rarely be reached
       setVods([]);
     }

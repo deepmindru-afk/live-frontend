@@ -58,16 +58,11 @@ const MemberDashboard: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log('🔍 Checking authentication...');
-        console.log('🔍 isAuthenticated():', isAuthenticated());
         
         if (isAuthenticated()) {
-          console.log('🔍 User is authenticated, getting user data...');
           const userData = await getCurrentUser();
-          console.log('🔍 User data:', userData);
           
           if (userData && userData.systemRole === 'MEMBER') {
-            console.log('🔍 User is a MEMBER, proceeding...');
             setUser(userData);
             setProfileData({
               displayName: userData.displayName || '',
@@ -104,20 +99,15 @@ const MemberDashboard: React.FC = () => {
     try {
       // Check if user is authenticated before making the request
       if (!isAuthenticated()) {
-        console.log('User not authenticated, redirecting to login');
         router.push('/login');
         return;
       }
       
       if (!GET_MY_MEETINGS) {
-        console.log('GET_MY_MEETINGS query not found');
         setMeetings([]);
         return;
       }
       
-      console.log('Making GraphQL request for meetings...');
-      console.log('Using query:', GET_MY_MEETINGS);
-      console.log('Query type:', typeof GET_MY_MEETINGS);
       
       // Wrap the GraphQL request in a try-catch to handle auth errors gracefully
       let result;
@@ -131,24 +121,13 @@ const MemberDashboard: React.FC = () => {
           }
         };
         
-        console.log('🔍 Attempting to fetch meetings with:', { variables });
         
         result = await makeGraphQLRequest(queryToUse, variables);
-        console.log('GraphQL request successful:', result);
-        console.log('🔍 Raw GraphQL result keys:', Object.keys(result || {}));
-        console.log('🔍 Result.hasOwnProperty("getMeetings"):', result?.hasOwnProperty('getMeetings'));
-        console.log('🔍 Result.getMeetings type:', typeof result?.getMeetings);
         if (result?.getMeetings) {
-          console.log('🔍 getMeetings keys:', Object.keys(result.getMeetings));
-          console.log('🔍 meetings is array?', Array.isArray(result.getMeetings.meetings));
-          console.log('🔍 meetings length:', result.getMeetings?.meetings?.length);
-          console.log('🔍 first meeting sample:', result.getMeetings?.meetings?.[0]);
         }
       } catch (authError: any) {
-        console.error('GraphQL request failed:', authError);
         // Handle authentication errors immediately
         if (authError.message === 'JWT_EXPIRED' || authError.message === 'TOKEN_NOT_EXIST' || authError.message === 'Invalid credentials') {
-          console.log('Authentication error detected, showing login prompt');
           await Swal.fire({
             icon: 'warning',
             title: '세션이 만료되었습니다',
@@ -176,27 +155,12 @@ const MemberDashboard: React.FC = () => {
       }
       
       
-      console.log('📊 Full GraphQL result:', JSON.stringify(result, null, 2));
-      console.log('📊 getMeetings:', result.getMeetings);
-      console.log('📊 meetings array:', result.getMeetings?.meetings);
-      console.log('📊 meetings count:', result.getMeetings?.meetings?.length);
-      console.log('📊 meetings array type:', Array.isArray(result.getMeetings?.meetings));
-      console.log('📊 meetings value:', result.getMeetings?.meetings);
       
       // Check if meetings is actually an empty array vs undefined
       if (result.getMeetings) {
-        console.log('📊 getMeetings object:', {
-          hasMeetings: !!result.getMeetings.meetings,
-          isArray: Array.isArray(result.getMeetings.meetings),
-          length: result.getMeetings.meetings?.length,
-          value: result.getMeetings.meetings,
-          total: result.getMeetings.total,
-          allKeys: Object.keys(result.getMeetings)
-        });
       }
       
       if (result.getMeetings && result.getMeetings.meetings && Array.isArray(result.getMeetings.meetings)) {
-        console.log('✅ Meetings data received:', result.getMeetings.meetings.length, 'meetings');
         
         // Show ALL meetings - LIVE (STARTED), SCHEDULED, and ENDED (participated or not)
         const allMeetings = result.getMeetings.meetings.map((meeting: any) => {
@@ -205,7 +169,6 @@ const MemberDashboard: React.FC = () => {
                                 meeting.status === 'ENDED' ? 'ENDED' : 
                                 meeting.status === 'LIVE' ? 'STARTED' : 'STARTED';
           
-          console.log('📝 Processing meeting:', meeting.title, 'status:', meeting.status, '→', meetingStatus);
           
           return {
             _id: meeting._id,
@@ -221,26 +184,16 @@ const MemberDashboard: React.FC = () => {
           };
         });
         
-        console.log('✅ Processed meetings:', allMeetings.length);
-        console.log('✅ Processed meetings STATUS:', allMeetings.map((m: Meeting) => `${m.title}: ${m.status}`));
         setMeetings(allMeetings);
         setFilteredMeetings(allMeetings);
       } else if (result.getMeetings && result.getMeetings.meetings && result.getMeetings.meetings.length === 0) {
-        console.warn('⚠️ Response has getMeetings but meetings array is empty');
-        console.warn('⚠️ This could mean:');
-        console.warn('   1. You have not joined any meetings as a participant');
-        console.warn('   2. You have not created any meetings as a host');
-        console.warn('   3. All meetings you joined have ended and been filtered out');
-        console.warn('⚠️ Total meetings in response:', result.getMeetings.total);
         setMeetings([]);
         setFilteredMeetings([]);
       } else {
-        console.warn('⚠️ Unexpected response structure:', result);
         setMeetings([]);
         setFilteredMeetings([]);
       }
     } catch (error: any) {
-      console.error('❌ Error in fetchMeetings:', error);
       
       // Handle authentication errors specifically
       if (error.message === 'JWT_EXPIRED' || error.message === 'TOKEN_NOT_EXIST' || error.message === 'Invalid credentials') {
@@ -534,10 +487,8 @@ const MemberDashboard: React.FC = () => {
       const result = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
         meetingId: meetingId
       });
-      console.log('Participant attendance data:', result);
       setParticipantData(result);
     } catch (error: any) {
-      console.error('Error fetching participant attendance:', error);
       await showErrorAlert('Error', 'Failed to load attendance data');
     } finally {
       setLoadingAttendance(false);
@@ -784,7 +735,6 @@ const MemberDashboard: React.FC = () => {
               {filteredMeetings.length > 0 ? (
                 <div className="meetings-grid">
                   {filteredMeetings.map((meeting) => {
-                    console.log('🎨 RENDERING meeting in UI:', meeting.title, 'status:', meeting.status, 'has _id:', !!meeting._id, 'inviteCode:', meeting.inviteCode);
                     return (
                     <div
                       key={meeting._id}

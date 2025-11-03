@@ -493,7 +493,6 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('📹 enableCamera: Starting camera enable process');
       
       // FIX: Use explicit, finite video constraints to prevent "scaleResolutionDownBy non-finite" error
       const safeVideoConstraints = {
@@ -515,13 +514,10 @@ export class LiveKitService {
       // Try to enable camera with constraints
       try {
         await this._room.localParticipant.setCameraEnabled(true, safeVideoConstraints);
-        console.log('📹 enableCamera: Camera enabled with constraints');
       } catch (cameraError: any) {
         // Try without constraints as fallback
-        console.log('📹 enableCamera: Retrying without constraints');
         try {
           await this._room.localParticipant.setCameraEnabled(true);
-          console.log('📹 enableCamera: Camera enabled without constraints');
         } catch (fallbackError) {
           throw fallbackError;
         }
@@ -529,18 +525,14 @@ export class LiveKitService {
       
       // Read the actual state from LiveKit SDK after enable
       const actualCameraEnabled = this._room.localParticipant.isCameraEnabled;
-      console.log('📹 enableCamera: Actual camera state from SDK:', actualCameraEnabled);
       
       // Update state with actual value from SDK
       this.updateRoomState({ isCameraEnabled: actualCameraEnabled });
       
-      console.log('📹 enableCamera: Camera state updated to:', actualCameraEnabled);
     } catch (error: any) {
-      console.error('📹 enableCamera: Error:', error);
       
       // Check if it's the specific WebRTC encoding error
       if (error?.message && error.message.includes('scaleResolutionDownBy')) {
-        console.error('📹 enableCamera: scaleResolutionDownBy error detected');
       }
       
       throw error;
@@ -551,22 +543,18 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('📹 disableCamera: Starting camera disable process');
       
       // Gracefully disable camera without stopping the entire stream
       await this._room.localParticipant.setCameraEnabled(false);
       
       // Read the actual state from LiveKit SDK after disable
       const actualCameraEnabled = this._room.localParticipant.isCameraEnabled;
-      console.log('📹 disableCamera: Actual camera state from SDK:', actualCameraEnabled);
       
       // Update state with actual value from SDK
       this.updateRoomState({ isCameraEnabled: actualCameraEnabled });
       
-      console.log('📹 disableCamera: Camera state updated to:', actualCameraEnabled);
       
     } catch (error) {
-      console.error('📹 disableCamera: Error:', error);
       
       // Read the actual state even if disable fails
       const actualCameraEnabled = this._room?.localParticipant?.isCameraEnabled ?? false;
@@ -690,16 +678,13 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🖥️ LiveKit startScreenShare: Starting screen share...');
       
       // Check if screen sharing is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         throw new Error('Screen sharing is not supported in this browser');
       }
       
-      console.log('🖥️ LiveKit startScreenShare: Calling setScreenShareEnabled(true)...');
       await this._room.localParticipant.setScreenShareEnabled(true);
-      console.log('🖥️ LiveKit startScreenShare: setScreenShareEnabled completed');
       this.updateRoomState({ isScreenSharing: true });
     } catch (error: any) {
       
@@ -720,15 +705,12 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      console.log('🖥️ LiveKit stopScreenShare: Stopping screen share...');
       
       // Gracefully stop screen share without stopping the entire stream
       await this._room.localParticipant.setScreenShareEnabled(false);
-      console.log('🖥️ LiveKit stopScreenShare: setScreenShareEnabled(false) completed');
       
       // Update state after successful stop
       this.updateRoomState({ isScreenSharing: false });
-      console.log('🖥️ LiveKit stopScreenShare: State updated to isScreenSharing: false');
       
     } catch (error) {
       

@@ -19,7 +19,6 @@ const SSOLoginPage: React.FC = () => {
           throw new Error('No JWT token provided in URL parameters');
         }
 
-        console.log('🔐 Processing SSO login with token:', token.substring(0, 50) + '...');
 
         // Attempt SSO login
         const success = await handleSSOLogin(token);
@@ -29,7 +28,6 @@ const SSOLoginPage: React.FC = () => {
           const userData = localStorage.getItem('user');
           if (userData) {
             const user = JSON.parse(userData);
-            console.log('✅ SSO login successful, redirecting user:', user);
             
             // Show success message
             await Swal.fire({
@@ -49,7 +47,6 @@ const SSOLoginPage: React.FC = () => {
           throw new Error('SSO login failed');
         }
       } catch (error: any) {
-        console.error('❌ SSO login error:', error);
         setError(error.message);
         
         // Show error message

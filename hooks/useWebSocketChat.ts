@@ -305,14 +305,12 @@ export const useWebSocketChat = ({
 
   const deleteMessage = useCallback((messageId: string) => {
     if (socket && isConnected) {
-      console.log('[useWebSocketChat] Deleting message:', messageId, 'from meeting:', meetingId);
       socket.emit('DELETE_CHAT_MESSAGE', {
         meetingId,
         messageId,
       });
     } else {
       const errorMsg = 'Not connected to chat server';
-      console.error('[useWebSocketChat]', errorMsg);
       setError(errorMsg);
     }
   }, [socket, isConnected, meetingId]);

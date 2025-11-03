@@ -223,12 +223,9 @@ const AttendancePage: React.FC = () => {
   const loadMeetingData = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching attendance for', meetingId);
-      
       // Check if user is authenticated
       const token = localStorage.getItem('token') || localStorage.getItem('jwt');
       if (!token) {
-        console.error('❌ No authentication token found');
         Swal.fire({ 
           icon: 'error', 
           title: '인증 필요', 
@@ -247,53 +244,20 @@ const AttendancePage: React.FC = () => {
         
         if (meetingResult.getMeetingById) {
           const meeting = meetingResult.getMeetingById;
-          console.log('🏢 Meeting info:', {
-            id: meeting._id,
-            title: meeting.title,
-            hostId: meeting.hostId,
-            currentHostId: meeting.currentHostId,
-            status: meeting.status,
-            actualStartAt: meeting.actualStartAt,
-            endedAt: meeting.endedAt,
-            duration: meeting.duration,
-            durationMin: meeting.durationMin,
-            createdAt: meeting.createdAt
-          });
           setMeeting(meeting);
         }
       } catch (error) {
-        console.error('❌ Meeting query failed:', error);
       }
 
       // Load attendance data
       try {
         // First, let's check the current user's info
         const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          console.log('👤 [FRONTEND] Current user info:', {
-            id: user._id,
-            displayName: user.displayName,
-            systemRole: user.systemRole,
-            email: user.email
-          });
-        }
-
-        console.log('🔄 [FRONTEND] Requesting attendance data for meeting:', meetingId);
         const attendanceResult = await enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         });
         
-        console.log('📊 [FRONTEND] Attendance result received:', {
-          hasData: !!attendanceResult,
-          hasGetMeetingAttendance: !!attendanceResult?.getMeetingAttendance,
-          totalParticipants: attendanceResult?.getMeetingAttendance?.totalParticipants,
-          participantsCount: attendanceResult?.getMeetingAttendance?.participants?.length,
-          fullResult: attendanceResult
-        });
-        
         if (!attendanceResult?.getMeetingAttendance) {
-          console.error('⚠️ [FRONTEND] No attendance data found:', attendanceResult);
           Swal.fire({ 
             icon: 'error', 
             title: '출석 데이터 없음', 
@@ -302,31 +266,8 @@ const AttendancePage: React.FC = () => {
           return;
         }
         
-        console.log('✅ [FRONTEND] Setting attendance data:', {
-          totalParticipants: attendanceResult.getMeetingAttendance.totalParticipants,
-          participants: attendanceResult.getMeetingAttendance.participants?.map((p: any) => ({
-            name: p.displayName,
-            role: p.role,
-            status: p.status
-          }))
-        });
-        
-        // DEBUG: Log date fields for first participant
-        if (attendanceResult.getMeetingAttendance.participants?.length > 0) {
-          const firstParticipant = attendanceResult.getMeetingAttendance.participants[0];
-          console.log('🔍 [FRONTEND DEBUG] First participant date fields:', {
-            displayName: firstParticipant.displayName,
-            joinedAt: firstParticipant.joinedAt,
-            joinedAtType: typeof firstParticipant.joinedAt,
-            leftAt: firstParticipant.leftAt,
-            leftAtType: typeof firstParticipant.leftAt,
-            fullParticipant: firstParticipant
-          });
-        }
-        
         setAttendance(attendanceResult.getMeetingAttendance);
       } catch (err) {
-        console.error('❌ [FRONTEND] Attendance query failed:', err);
         
         // Check if it's a permission error
         if (err instanceof Error && err.message && err.message.includes('Only meeting hosts and tutors can view attendance')) {
@@ -346,7 +287,6 @@ const AttendancePage: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('❌ Load meeting data failed:', error);
     } finally {
       setLoading(false);
     }
@@ -374,7 +314,6 @@ const AttendancePage: React.FC = () => {
     
     // Check if the date is valid
     if (isNaN(date.getTime())) {
-      console.error('❌ [FRONTEND] Invalid date:', timeString, typeof timeString);
       return 'Invalid Date';
     }
     
@@ -433,31 +372,18 @@ const AttendancePage: React.FC = () => {
       const endTime = new Date(meeting.endedAt).getTime();
       const durationSeconds = Math.floor((endTime - startTime) / 1000);
       
-      console.log('📊 [MEETING DURATION]', {
-        actualStartAt: meeting.actualStartAt,
-        endedAt: meeting.endedAt,
-        startTimeMs: startTime,
-        endTimeMs: endTime,
-        durationSeconds: durationSeconds,
-        durationMinutes: Math.floor(durationSeconds / 60)
-      });
-      
       // Only use this if it makes sense (not negative or zero)
       if (durationSeconds > 0) {
         return durationSeconds;
       }
     }
     
-    // Priority 2: Use scheduled duration from backend  
-    if (meeting.duration || meeting.durationMin) {
-      // meeting.duration is in minutes, convert to seconds
-      const durationMinutes = meeting.duration || meeting.durationMin || 0;
-      const durationSeconds = durationMinutes * 60;
-      console.log('📊 [MEETING DURATION] Using scheduled duration:', {
-        durationMinutes: durationMinutes,
-        durationSeconds: durationSeconds
-      });
-      return durationSeconds;
+      // Priority 2: Use scheduled duration from backend  
+      if (meeting.duration || meeting.durationMin) {
+        // meeting.duration is in minutes, convert to seconds
+        const durationMinutes = meeting.duration || meeting.durationMin || 0;
+        const durationSeconds = durationMinutes * 60;
+        return durationSeconds;
     }
     
     // Priority 3: Calculate from actual start time to now (for ongoing meetings)
@@ -465,15 +391,10 @@ const AttendancePage: React.FC = () => {
       const startTime = new Date(meeting.actualStartAt).getTime();
       const currentTime = Date.now();
       const durationSeconds = Math.floor((currentTime - startTime) / 1000);
-      console.log('📊 [MEETING DURATION] Using ongoing duration:', {
-        durationSeconds: durationSeconds,
-        durationMinutes: Math.floor(durationSeconds / 60)
-      });
       return durationSeconds;
     }
     
     // Fallback: return 0
-    console.warn('⚠️ [MEETING DURATION] No valid duration data found');
     return 0;
   };
 
@@ -903,19 +824,6 @@ const AttendancePage: React.FC = () => {
                 // ✅ FIX: Cap participant attendance time to not exceed total meeting duration
                 const cappedAttendanceTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
                 const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
-                
-                // DEBUG: Log participant dates before formatting
-                console.log('🔍 [FRONTEND DEBUG] Participant dates:', {
-                  displayName: participant.displayName,
-                  joinedAt: participant.joinedAt,
-                  joinedAtType: typeof participant.joinedAt,
-                  joinedAtValue: participant.joinedAt,
-                  leftAt: participant.leftAt,
-                  leftAtType: typeof participant.leftAt,
-                  leftAtValue: participant.leftAt,
-                  formattedJoined: formatTime(participant.joinedAt),
-                  formattedLeft: participant.leftAt ? formatTime(participant.leftAt) : 'N/A'
-                });
                 
                 return (
                   <tr 

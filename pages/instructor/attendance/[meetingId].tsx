@@ -124,7 +124,6 @@ const MeetingAttendanceDetail: React.FC = () => {
               return;
             }
           } catch (error) {
-            console.error('Test login failed:', error);
           }
         }
         // If user chose "데모 모드로 보기", continue with mock data
@@ -140,7 +139,6 @@ const MeetingAttendanceDetail: React.FC = () => {
           setMeeting(meetingResult.getMeetingById);
         }
       } catch (error) {
-        console.error('❌ Meeting query failed:', error);
         // Use mock data if query fails
         setMeeting({
           _id: meetingId as string,
@@ -223,7 +221,6 @@ const MeetingAttendanceDetail: React.FC = () => {
         }
         setAttendance(attendanceResult.getMeetingAttendance);
       } catch (err) {
-        console.error('❌ Attendance query failed:', err);
         // Use mock data on error
         const mockAttendance: MeetingAttendance = {
           meetingId: meetingId as string,
@@ -260,7 +257,6 @@ const MeetingAttendanceDetail: React.FC = () => {
         setAttendance(mockAttendance);
       }
     } catch (error) {
-      console.error('❌ Load meeting data failed:', error);
     } finally {
       setLoading(false);
     }

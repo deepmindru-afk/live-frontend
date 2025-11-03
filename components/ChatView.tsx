@@ -70,13 +70,11 @@ const ChatView: React.FC<ChatViewProps> = ({
     };
 
     const handleMessageDeleted = (data: any) => {
-      console.log('Message deleted event received:', data);
       // Remove deleted message from local state
       setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
     };
 
     const handleError = (data: any) => {
-      console.error('Socket error:', data);
       if (data.message?.includes('delete')) {
         alert(`Cannot delete message: ${data.message}`);
       }
@@ -148,19 +146,16 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   const handleDeleteMessage = (messageId: string) => {
     if (!socket) {
-      console.warn('Cannot delete: socket not available');
       return;
     }
     
     try {
-      console.log('Attempting to delete message:', messageId, 'from meeting:', meetingId);
       // Send delete request via WebSocket
       socket.emit('DELETE_CHAT_MESSAGE', {
         meetingId,
         messageId
       });
     } catch (error) {
-      console.error('Failed to delete message:', error);
     }
   };
 
@@ -216,17 +211,6 @@ const ChatView: React.FC<ChatViewProps> = ({
             // For participants: must have exact userId match, not just displayName match
             // Only show delete icon if user is host OR if message truly belongs to participant
             const canDelete = isHost ? true : (msgUserIdStr && currUserIdStr && msgUserIdStr === currUserIdStr);
-            
-            // Debug logging (remove after testing)
-            if (canDelete && !isHost) {
-              console.log('[ChatView] Delete icon showing for own message:', {
-                messageUserId: msgUserIdStr,
-                currentUserId: currUserIdStr,
-                match: msgUserIdStr === currUserIdStr,
-                messageId: message._id,
-                senderDisplayName: message.senderDisplayName
-              });
-            }
             
             return (
               <div

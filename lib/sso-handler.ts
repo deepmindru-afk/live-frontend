@@ -11,7 +11,6 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
   try {
     // Check if user is already authenticated
     if (isAuthenticated()) {
-      console.log('✅ User already authenticated, skipping SSO check');
       return true;
     }
 
@@ -20,11 +19,9 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
     const token = urlParams.get('token');
 
     if (!token) {
-      console.log('ℹ️ No SSO token found in URL parameters');
       return false;
     }
 
-    console.log('🔐 SSO token found in URL, attempting automatic login...');
 
     // Attempt SSO login
     const success = await handleSSOLogin(token);
@@ -34,7 +31,6 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
       const userData = localStorage.getItem('user');
       if (userData) {
         const user = JSON.parse(userData);
-        console.log('✅ SSO login successful, redirecting user:', user);
         
         // Redirect based on user role
         redirectBasedOnRole(user);
@@ -44,7 +40,6 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
 
     return false;
   } catch (error: any) {
-    console.error('❌ SSO login failed:', error);
     return false;
   }
 };
@@ -70,15 +65,12 @@ export const getPHPTokenFromStorage = (): string | null => {
     for (const key of possibleKeys) {
       const token = localStorage.getItem(key);
       if (token && token.startsWith('eyJ')) { // JWT tokens start with 'eyJ'
-        console.log(`🔍 Found JWT token in localStorage key: ${key}`);
         return token;
       }
     }
 
-    console.log('ℹ️ No JWT token found in localStorage');
     return null;
   } catch (error) {
-    console.error('❌ Error reading localStorage:', error);
     return null;
   }
 };
@@ -91,11 +83,9 @@ export const handleSSOLoginFromStorage = async (): Promise<boolean> => {
     const token = getPHPTokenFromStorage();
     
     if (!token) {
-      console.log('ℹ️ No JWT token found in localStorage');
       return false;
     }
 
-    console.log('🔐 Attempting SSO login with token from localStorage...');
     
     const success = await handleSSOLogin(token);
     
@@ -103,7 +93,6 @@ export const handleSSOLoginFromStorage = async (): Promise<boolean> => {
       const userData = localStorage.getItem('user');
       if (userData) {
         const user = JSON.parse(userData);
-        console.log('✅ SSO login successful from localStorage, redirecting user:', user);
         redirectBasedOnRole(user);
         return true;
       }
@@ -111,7 +100,6 @@ export const handleSSOLoginFromStorage = async (): Promise<boolean> => {
 
     return false;
   } catch (error: any) {
-    console.error('❌ SSO login from localStorage failed:', error);
     return false;
   }
 };
@@ -128,9 +116,7 @@ export const cleanupSSOUrl = () => {
     
     // Update URL without the token parameter
     window.history.replaceState({}, document.title, url.pathname + url.search);
-    console.log('🧹 Cleaned up SSO token from URL');
   } catch (error) {
-    console.error('❌ Error cleaning up URL:', error);
   }
 };
 

@@ -23,7 +23,6 @@ function cleanupDuplicateTokens() {
 
     // ✅ If only jwt exists, do nothing
   } catch (error) {
-    console.error('❌ Token cleanup error:', error);
   }
 }
 
@@ -33,7 +32,6 @@ export default function App({ Component, pageProps }) {
     const ssoCheckKey = '__sso_check_done__';
     const hasCheckedSSO = sessionStorage.getItem(ssoCheckKey);
     
-    console.log('🔐 [_app.js] useEffect starting, hasCheckedSSO:', hasCheckedSSO);
     
     // 1) Check cookies to handle SSO login from PHP (only once per page load)
     const ensureJwtFromCookies = async () => {
@@ -48,7 +46,6 @@ export default function App({ Component, pageProps }) {
         
         const data = await resp.json();
         if (data && data.success && data.token) {
-          console.log('🔐 [_app.js] PHP cookie token found, checking if re-auth needed...');
           const existing = localStorage.getItem('jwt');
           const existingUser = localStorage.getItem('user');
           
@@ -70,41 +67,30 @@ export default function App({ Component, pageProps }) {
               // Parse existing user to get user_id from localStorage
               const parsedUser = JSON.parse(existingUser);
               
-              console.log('🔍 [_app.js] Comparison:', { 
-                phpUserId, 
-                existingUserId: parsedUser.user_id
-              });
               
               // Compare: if PHP user_id matches existing user_id, no need to re-authenticate
               if (phpUserId && parsedUser.user_id && phpUserId === parsedUser.user_id) {
                 shouldReAuth = false;
-                console.log('✅ [_app.js] Same user_id, skipping SSO');
               } else {
                 // Different user_id - user is switching
-                console.log('⚠️ [_app.js] Different user_id detected - switching user');
                 shouldReAuth = true;
               }
             } catch (e) {
-              console.warn('⚠️ Could not decode tokens for comparison, will re-authenticate:', e);
               shouldReAuth = true;
             }
           }
           
-          console.log('🔍 [_app.js] shouldReAuth:', shouldReAuth);
           
           // Only call SSO if we need to re-authenticate
           if (shouldReAuth) {
-            console.log('🔄 [_app.js] Triggering SSO login...');
             // CRITICAL: PHP token is different - update session to handle user switching
             // IMPORTANT: Do NOT use the PHP token directly for GraphQL calls.
             // Exchange it via ssoLogin so backend creates/fetches the user and returns its own JWT.
             try {
               const ok = await handleSSOLogin(data.token);
               if (!ok) {
-                console.warn('⚠️ SSO login failed');
               }
             } catch (e) {
-              console.warn('⚠️ SSO exchange failed:', e);
               // Only fall back if we don't have an existing token
               if (!existing) {
                 localStorage.setItem('jwt', data.token);
@@ -113,7 +99,6 @@ export default function App({ Component, pageProps }) {
           }
         }
       } catch (e) {
-        console.warn('⚠️ Unable to cache JWT from cookies:', e);
       }
     };
 
@@ -165,13 +150,11 @@ export default function App({ Component, pageProps }) {
 if (typeof window !== 'undefined') {
   // Global error handler for production
   window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
     // Don't show error alerts in production
   });
 
   // Unhandled promise rejection handler
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
     // Don't show error alerts in production
   });
 }

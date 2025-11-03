@@ -80,7 +80,6 @@ const LoginPage: React.FC = () => {
         // handleLogin already has delays and token verification built in
         // User data is already saved to localStorage during login
         // Simply redirect to member dashboard
-        console.log('✅ Login successful, redirecting to member dashboard');
         router.push('/member');
       }
     } catch (error: any) {

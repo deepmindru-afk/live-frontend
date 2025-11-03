@@ -18,13 +18,11 @@ const RecordingIntegration: React.FC<RecordingIntegrationProps> = ({
   const handleRecordingComplete = (url: string) => {
     setRecordingUrl(url);
     setError(null);
-    console.log('Recording completed and uploaded:', url);
   };
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
     setRecordingUrl(null);
-    console.error('Recording error:', errorMessage);
   };
 
   if (!isHost) {

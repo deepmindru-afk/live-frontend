@@ -476,7 +476,6 @@ const Dashboard: React.FC = () => {
                 await handleLogout();
                 router.push('/');
               } catch (error) {
-                console.error('Logout failed:', error);
               }
             }}
             style={{

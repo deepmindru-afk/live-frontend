@@ -35,7 +35,6 @@ const PrejoinPage = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
-  // Debug logging
   useEffect(() => {
   }, [meetingId, isLoading, meetingInfo]);
 
@@ -1100,37 +1099,6 @@ const PrejoinPage = () => {
 
       {/* Hidden audio element for testing */}
       <audio ref={audioRef} style={{ display: 'none' }} />
-      
-      {/* Debug Panel */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '10px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          zIndex: 1000,
-          maxWidth: '300px'
-        }}>
-          <div><strong>Debug Info:</strong></div>
-          <div>Local Stream: {localStream ? 'Yes' : 'No'}</div>
-          <div>Video On: {isVideoOn ? 'Yes' : 'No'}</div>
-          <div>Mic On: {isMicOn ? 'Yes' : 'No'}</div>
-          <div>Speaker On: {isSpeakerOn ? 'Yes' : 'No'}</div>
-          <div>Testing: {isTestingDevices ? 'Yes' : 'No'}</div>
-          <div>Video Ref: {videoRef.current ? 'Yes' : 'No'}</div>
-          {localStream && (
-            <>
-              <div>Video Tracks: {localStream.getVideoTracks().length}</div>
-              <div>Audio Tracks: {localStream.getAudioTracks().length}</div>
-            </>
-          )}
-          {deviceError && <div style={{ color: '#ff6b6b' }}>Error: {deviceError}</div>}
-        </div>
-      )}
       </div>
     </>
   );

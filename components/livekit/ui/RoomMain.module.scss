@@ -446,6 +446,54 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     border-radius: 0 !important;
     box-shadow: none !important;
   }
+
+  // Avatar placeholder for main stage (when video is off)
+  .avatar-placeholder {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, $primary-blue, $primary-purple);
+    box-shadow: 0 8px 32px rgba($primary-blue, 0.3);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .avatar-initial {
+      font-size: 80px;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    // Ensure no extra text content appears
+    &::before,
+    &::after {
+      content: none !important;
+    }
+  }
+
+  // Ensure no text appears directly in the container
+  &::before,
+  &::after {
+    content: none !important;
+  }
 }
 
 .main-stage-video {
@@ -633,9 +681,17 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 .participant-info {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  border-radius: 0 0 16px 16px;
+  z-index: 10;
 }
 
 .participant-name {
@@ -643,6 +699,35 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   font-weight: 600;
   color: $text-primary;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.host-badge {
+  background: linear-gradient(135deg, $primary-blue, $primary-purple);
+  color: $text-primary;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba($primary-blue, 0.3);
+}
+
+.hand-raised-badge {
+  background: linear-gradient(135deg, $warning-orange, #FF8C42);
+  color: $text-primary;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba($warning-orange, 0.3);
+}
+
+.muted-badge {
+  background: rgba($danger-red, 0.8);
+  color: $text-primary;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba($danger-red, 0.3);
 }
 
 .connection-quality {

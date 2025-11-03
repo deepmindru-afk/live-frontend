@@ -82,7 +82,6 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log('🔍 Instructor page - Starting auth check...');
         
         // Add a delay to ensure localStorage is accessible after redirect
         // Increased delay to allow token to be properly saved
@@ -90,10 +89,8 @@ const Dashboard: React.FC = () => {
         
         // Check if user is authenticated
         const authStatus = isAuthenticated();
-        console.log('🔍 Instructor page - isAuthenticated():', authStatus);
         
         if (!authStatus) {
-          console.log('❌ No authentication found, clearing stale tokens and redirecting to login');
           // Clear any stale/invalid tokens
           localStorage.removeItem('jwt');
           localStorage.removeItem('token');
@@ -110,16 +107,12 @@ const Dashboard: React.FC = () => {
         if (userStr) {
           try {
             userData = JSON.parse(userStr);
-            console.log('✅ Got user from localStorage:', userData);
           } catch (e) {
-            console.error('❌ Failed to parse user from localStorage:', e);
           }
         }
         
-        console.log('🔍 Instructor page - userData:', userData ? 'found' : 'null');
         
         if (!userData) {
-          console.log('❌ No user data in localStorage, clearing and redirecting to login');
           // Clear any stale data
           localStorage.removeItem('jwt');
           localStorage.removeItem('token');
@@ -128,7 +121,6 @@ const Dashboard: React.FC = () => {
           return;
         }
 
-        console.log('✅ User authenticated:', userData);
         
         // Allow TUTOR and ADMIN roles to access this instructor dashboard
         // Admins should have full access to instructor features including meeting creation
@@ -141,7 +133,6 @@ const Dashboard: React.FC = () => {
           setVods([]);
         } else {
           // Redirect based on role
-          console.log('⚠️ Wrong role, redirecting user with role:', userData.systemRole);
           if (userData.systemRole === 'MEMBER') {
             window.location.href = '/member';
           } else {
@@ -151,7 +142,6 @@ const Dashboard: React.FC = () => {
           }
         }
       } catch (error: any) {
-        console.error('❌ Authentication check failed:', error);
         await showErrorAlert('Authentication Error', 'Failed to verify user. Please log in again.');
         window.location.href = '/login';
       } finally {
@@ -178,7 +168,6 @@ const Dashboard: React.FC = () => {
   // Load VODs when VOD tab is selected
   useEffect(() => {
     if (activeTab === 'VOD') {
-      console.log('📹 VOD tab selected - attempting to load VODs');
       // Define loadVODs inline to avoid dependency issues
       const fetchVODs = async () => {
         try {
@@ -188,20 +177,16 @@ const Dashboard: React.FC = () => {
           
           if (result && result.getAllVods && result.getAllVods.vods) {
             setVods(result.getAllVods.vods);
-            console.log('✅ VODs loaded successfully, count:', result.getAllVods.vods.length);
           } else {
-            console.log('⚠️ No VODs found');
             setVods([]);
           }
         } catch (error: any) {
           // Handle role permission error gracefully
           if (error && (error.message === 'ONLY_SPECIFIC_ROLES_ALLOWED' || error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || error.status === 403)) {
-            console.warn('⚠️ Instructor role cannot access VOD API - recording status unavailable');
             setVods([]);
             setVodAccessDenied(true); // Mark that VOD access is denied
             return;
           }
-          console.error('❌ Failed to load VODs:', error);
           setVods([]);
         }
       };
@@ -248,10 +233,8 @@ const Dashboard: React.FC = () => {
       // Check if token exists
       const { getAuthToken } = await import('../../lib/simple-auth-handlers');
       const token = getAuthToken();
-      console.log('🔍 Token in fetchMeetings:', token ? 'Found' : 'Missing');
       
       if (!token) {
-        console.error('❌ No token found, cannot fetch meetings');
         setMeetings([]);
         return;
       }
@@ -278,7 +261,6 @@ const Dashboard: React.FC = () => {
         
         // Check if result is null
         if (!result) {
-          console.warn('⚠️ GraphQL returned null - showing empty meetings list');
           // Don't redirect to login - just show empty state
           // The actual GraphQL error handling happens in makeGraphQLRequest
           setMeetings([]);
@@ -325,11 +307,9 @@ const Dashboard: React.FC = () => {
           return;
         }
       } catch (graphqlError: any) {
-        console.error('❌ Meeting loading failed:', graphqlError);
         
         // For ALL errors, just show empty state - don't redirect
         // The auth check at page load will handle authentication issues
-        console.warn('⚠️ Failed to load meetings - showing empty state');
         setMeetings([]);
         
         // Only show error modal for actual connection issues (not auth issues)
@@ -348,10 +328,8 @@ const Dashboard: React.FC = () => {
       setMeetings([]);
       
     } catch (error: any) {
-      console.error('❌ fetchMeetings error:', error);
       
       // For ALL errors, just show empty state - don't redirect
-      console.warn('⚠️ Failed to load meetings - showing empty state');
       setMeetings([]);
     }
   };
@@ -687,34 +665,29 @@ const Dashboard: React.FC = () => {
         setVods([]);
       }
     } catch (error: any) {
-      console.error('❌ Failed to load VODs:', error);
       
       // Check if it's a role permission error
       if (error && (error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || 
                     error.message?.includes('Authentication') ||
                     error.message?.includes('TOKEN_NOT_EXIST') ||
                     error.status === 403)) {
-        console.warn('⚠️ VOD query requires specific role permissions - showing empty state');
         setVods([]);
         return; // Don't show error for permission issues
       }
       
       // Check for 400 errors
       if (error && error.status === 400) {
-        console.warn('⚠️ Bad request (400) - showing empty state');
         setVods([]);
         return;
       }
       
       // Check for 500 server errors
       if (error && error.status === 500) {
-        console.error('❌ Server error (500) - Backend may be having issues');
         setVods([]);
         return;
       }
       
       // For other errors, just show empty state
-      console.warn('⚠️ VOD load failed - showing empty state');
       setVods([]);
     }
   };
@@ -968,7 +941,6 @@ const Dashboard: React.FC = () => {
                   router.push('/');
                 }
               } catch (error) {
-                console.error('Logout failed:', error);
               }
             }}
             style={{

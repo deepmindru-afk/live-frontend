@@ -40,7 +40,6 @@ const GRAPHQL_ENDPOINT = (() => {
   return 'http://localhost:3007/graphql';
 })();
 
-console.log('🔗 GraphQL Endpoint:', GRAPHQL_ENDPOINT);
 
 // Login mutation
 const LOGIN_MUTATION = `
@@ -144,9 +143,7 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     // If it's a GraphQL AST object, convert it to string using print
     if (query && typeof query === 'object' && query.kind) {
       queryString = print(query);
-      console.log('🔍 Converted GraphQL query:', queryString);
     } else {
-      console.error('❌ Invalid GraphQL query:', query);
       throw new Error('Invalid GraphQL query: query is undefined or not a valid GraphQL AST');
     }
   }
@@ -163,12 +160,6 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     queryName = 'GetAllMeetings';
   }
 
-  console.log('🔍 GraphQL Request:', {
-    endpoint: GRAPHQL_ENDPOINT,
-    hasToken: !!token,
-    queryName: queryName,
-    variables
-  });
 
   const requestBody = {
     query: queryString,
@@ -185,21 +176,12 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
   const freshToken = getAuthToken();
   if (freshToken) {
     headers['Authorization'] = `Bearer ${freshToken}`;
-    console.log('🔐 Using token for authentication');
   } else {
-    console.warn('⚠️ No token found for GraphQL request');
     // Debug: Check localStorage directly
     if (typeof window !== 'undefined') {
-      console.log('🔍 Debug localStorage:', {
-        jwt: localStorage.getItem('jwt'),
-        token: localStorage.getItem('token'),
-        user: localStorage.getItem('user')
-      });
     }
   }
   
-  console.log('📡 Making GraphQL request to:', GRAPHQL_ENDPOINT);
-  console.log('📡 Request body:', JSON.stringify(requestBody, null, 2));
 
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: 'POST',
@@ -207,35 +189,19 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     body: JSON.stringify(requestBody),
   });
 
-  console.log('📡 Response status:', response.status);
-  console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ GraphQL request failed:', {
-      status: response.status,
-      statusText: response.statusText,
-      url: GRAPHQL_ENDPOINT,
-      error: errorText
-    });
     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
   }
 
   let data;
   try {
     data = await response.json();
-    console.log('📊 GraphQL Response:', {
-      hasData: !!data,
-      hasErrors: !!data.errors,
-      dataKeys: data ? Object.keys(data) : [],
-      errors: data?.errors || null
-    });
     
     if (data.errors) {
-      console.error('❌ GraphQL Errors:', data.errors);
     }
   } catch (jsonError) {
-    console.error('❌ JSON Parse Error:', jsonError);
     throw new Error('Invalid JSON response from server');
   }
   
@@ -246,15 +212,8 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     const firstError = data.errors[0];
     
     // Log the actual error message for debugging
-    console.error('🚨 GraphQL Error Details:', {
-      message: firstError.message,
-      code: firstError.extensions?.code,
-      fullError: firstError
-    });
     
     // Also log message separately to make sure it's visible
-    console.error('📌 ERROR MESSAGE:', firstError.message);
-    console.error('📌 ERROR CODE:', firstError.extensions?.code || 'NO_CODE');
     
     if (firstError.message === 'Invalid credentials' || firstError.extensions?.code === 'UNAUTHENTICATED') {
       throw new Error('Invalid credentials');
@@ -269,7 +228,6 @@ export async function makeGraphQLRequest(query: string | any, variables: any = {
     if (firstError.message === 'TOKEN_NOT_EXIST' || firstError.extensions?.code === 'TOKEN_NOT_EXIST') {
       // DON'T clear tokens here - caller should handle it properly
       // Return null instead of throwing to allow caller to handle gracefully
-      console.warn('⚠️ TOKEN_NOT_EXIST error - returning null without clearing tokens');
       return null;
     }
     
@@ -316,22 +274,18 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
 
     // Check if data is null (authentication error)
     if (!data) {
-      console.error('❌ Login failed - makeGraphQLRequest returned null');
       throw new Error('Invalid credentials');
     }
 
     if (data.login && data.login.token) {
       // Save JWT to localStorage
       setAuthToken(data.login.token);
-      console.log('✅ Token saved to localStorage (member login)');
       
       // Save user data to localStorage
       localStorage.setItem('user', JSON.stringify(data.login.user));
-      console.log('✅ User data saved to localStorage:', data.login.user);
       
       // Verify token is saved
       const savedToken = getAuthToken();
-      console.log('🔍 Verifying saved token:', savedToken ? 'Token found' : 'No token found');
       
       // 🕒 Small delay to ensure storage sync
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -339,18 +293,15 @@ export const handleLogin = async (credentials: LoginCredentials): Promise<boolea
       // Double-check token exists before redirect
       const verifyToken = localStorage.getItem('jwt');
       if (!verifyToken) {
-        console.warn('⚠️ Token not yet available after login - retrying...');
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
       
-      console.log('✅ Verified jwt before redirect:', localStorage.getItem('jwt') ? 'found' : 'missing');
       
       // Show success message
       alert(`Welcome back, ${data.login.user.displayName}!`);
       
       return true;
     } else {
-      console.error('❌ Login failed - no token in response:', data);
       throw new Error('Login failed - no token received');
     }
   } catch (error: any) {
@@ -372,22 +323,18 @@ export const handleTutorLogin = async (credentials: LoginCredentials): Promise<b
 
     // Check if data is null (authentication error)
     if (!data) {
-      console.error('❌ Tutor login failed - makeGraphQLRequest returned null');
       throw new Error('Invalid credentials');
     }
 
     if (data.tutorLogin && data.tutorLogin.token) {
       // Save JWT to localStorage
       setAuthToken(data.tutorLogin.token);
-      console.log('✅ Token saved to localStorage');
       
       // Save user data to localStorage
       localStorage.setItem('user', JSON.stringify(data.tutorLogin.user));
-      console.log('✅ User data saved to localStorage:', data.tutorLogin.user);
       
       // Verify token is saved
       const savedToken = getAuthToken();
-      console.log('🔍 Verifying saved token:', savedToken ? 'Token found' : 'No token found');
       
       // 🕒 Small delay to ensure storage sync
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -395,18 +342,15 @@ export const handleTutorLogin = async (credentials: LoginCredentials): Promise<b
       // Double-check token exists before redirect
       const verifyToken = localStorage.getItem('jwt');
       if (!verifyToken) {
-        console.warn('⚠️ Token not yet available after tutor login - retrying...');
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
       
-      console.log('✅ Verified jwt before redirect:', localStorage.getItem('jwt') ? 'found' : 'missing');
       
       // Show success message
       alert(`Welcome back, Tutor ${data.tutorLogin.user.displayName}!`);
       
       return true;
     } else {
-      console.error('❌ Login failed - no token in response:', data);
       throw new Error('Tutor login failed - no token received');
     }
   } catch (error: any) {
@@ -481,7 +425,6 @@ export const handleTutorSignup = async (input: SignupData): Promise<boolean> => 
 // Handle SSO login from PHP website
 export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
   try {
-    console.log('🔐 Starting SSO login with PHP token...');
     
     const data = await makeGraphQLRequest(SSO_LOGIN_MUTATION, {
       input: {
@@ -489,7 +432,6 @@ export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
       }
     });
 
-    console.log('🔐 SSO login response:', data);
 
     if (data.ssoLogin && data.ssoLogin.success && data.ssoLogin.token) {
       // Save JWT to localStorage
@@ -498,14 +440,12 @@ export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
       // Save user data to localStorage
       localStorage.setItem('user', JSON.stringify(data.ssoLogin.user));
       
-      console.log(`✅ SSO login successful for ${data.ssoLogin.user.displayName} (${data.ssoLogin.existed ? 'existing' : 'new'} user)`);
       
       return true;
     } else {
       throw new Error('SSO login failed - no token received');
     }
   } catch (error: any) {
-    console.error('❌ SSO login failed:', error);
     // Re-throw the error so the calling function can handle it
     throw error;
   }
@@ -514,15 +454,12 @@ export const handleSSOLogin = async (phpToken: string): Promise<boolean> => {
 // Check if user is authenticated
 export const isAuthenticated = (): boolean => {
   if (typeof window === 'undefined') {
-    console.log('🔍 isAuthenticated - Server side, returning false');
     return false;
   }
   
   const token = getAuthToken();
-  console.log('🔍 isAuthenticated - token:', token ? 'exists' : 'missing');
   
   if (!token) {
-    console.log('❌ isAuthenticated - No token, returning false');
     return false;
   }
   
@@ -531,10 +468,8 @@ export const isAuthenticated = (): boolean => {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const now = Math.floor(Date.now() / 1000);
     const isValid = payload.exp > now;
-    console.log('🔍 isAuthenticated - Token valid:', isValid, 'exp:', payload.exp, 'now:', now);
     return isValid;
   } catch (error) {
-    console.error('❌ isAuthenticated - Token validation error:', error);
     return false;
   }
 };
@@ -548,17 +483,14 @@ export const getCurrentUser = async () => {
       const user = JSON.parse(userStr);
       // Verify user has required fields
       if (user && user._id && user.email) {
-        console.log('✅ Got user from localStorage:', user);
         return user;
       }
     } catch (e) {
-      console.warn('⚠️ Failed to parse user from localStorage:', e);
     }
   }
   
   // If no user in localStorage, check authentication status
   if (!isAuthenticated()) {
-    console.warn('⚠️ No user in localStorage and not authenticated');
     return null;
   }
   
@@ -575,19 +507,15 @@ export const getCurrentUser = async () => {
       return data.me;
     } else {
       // If backend returns null or "User not found", attempt SSO exchange using cookie token, then retry once
-      console.log('⚠️ getCurrentUser: No user data from GET_CURRENT_USER_QUERY, checking SSO fallback...');
       try {
         const resp = await fetch('/api/auth/session-jwt', { credentials: 'include' });
         if (resp.ok) {
           const json = await resp.json();
           if (json && json.success && json.token) {
-            console.log('🔄 getCurrentUser: Found PHP cookie token, triggering SSO...');
             const ssoOk = await handleSSOLogin(json.token);
             if (ssoOk) {
-              console.log('✅ getCurrentUser: SSO successful, retrying GET_CURRENT_USER_QUERY...');
               const retry = await makeGraphQLRequest(GET_CURRENT_USER_QUERY);
               if (retry && retry.me) {
-                console.log('✅ getCurrentUser: Got user from retry, saving to localStorage');
                 if (typeof window !== 'undefined') {
                   localStorage.setItem('user', JSON.stringify(retry.me));
                 }
@@ -597,13 +525,11 @@ export const getCurrentUser = async () => {
           }
         }
       } catch (e) {
-        console.log('⚠️ getCurrentUser: SSO fallback error:', e);
         // ignore and fall through
       }
       return null;
     }
   } catch (error) {
-    console.error('❌ Failed to get current user:', error);
     // Don't clear token on error - let the page handle it
     return null;
   }
@@ -679,9 +605,7 @@ export const setAuthToken = (token: string) => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem('jwt', token);
-    console.log('✅ Token saved under jwt key only');
   } catch (error) {
-    console.error('❌ Error saving jwt:', error);
   }
 };
 
@@ -693,7 +617,6 @@ export const getAuthToken = (): string | null => {
   const token = localStorage.getItem('token');
   if (token) {
     localStorage.setItem('jwt', token);
-    console.log('✅ Migrated old token → jwt');
     return token;
   }
   return null;
@@ -704,7 +627,6 @@ export const clearAuthToken = () => {
   localStorage.removeItem('jwt');
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  console.log('🧹 Cleared jwt, token, and user data');
 };
 
 // Force login for testing

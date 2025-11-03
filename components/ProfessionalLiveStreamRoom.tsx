@@ -81,7 +81,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   role = 'HOST',
   userId = 'p1'
 }) => {
-  // AGGRESSIVE DEBUGGING: Track parent component renders
   const parentRenderCountRef = useRef(0);
   parentRenderCountRef.current += 1;
   
@@ -284,9 +283,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     // ✅ FIX: Look in memoizedParticipants instead of queueState.participants
     // because memoizedParticipants has the correct _id structure that matches what we set from thumbnails
-    console.log('🔍 Looking for participant:', selectedParticipantId, 'in', memoizedParticipants.map(p => p._id));
     const found = memoizedParticipants.find(p => p._id === selectedParticipantId);
-    console.log('✅ Found participant:', found);
     
     // Only update the ref if the participant ID changed or the participant object is different
     if (!found) {
@@ -334,7 +331,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   
   // Memoize callback functions to prevent new function references on every render
   const handleParticipantClick = useCallback((participant: any) => {
-    console.log('🎯 Participant clicked:', participant._id, participant.displayName);
     setSelectedParticipantId(participant._id);
     // Participant selection only updates the main video display - no navigation needed
   }, []);
@@ -406,7 +402,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onError: (error: Error) => {
       // Handle banned user errors - redirect to dashboard
       if (error.message && error.message.includes('removed from this meeting')) {
-        console.log('🔴 LiveKit error: User has been removed from meeting - redirecting immediately');
         window.location.href = '/member';
       }
     }
@@ -614,7 +609,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Note: Meeting room joining is now handled automatically by the new presence system
   // when the WebSocket connects via JOIN_MEETING and HEARTBEAT events
 
-  // Debug WebSocket connection
   useEffect(() => {
   }, [socket, wsConnected, currentUser, actualMeetingId]);
 
@@ -645,7 +639,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
       // Listen for meeting ended event
       socket.on('MEETING_ENDED', async (data) => {
-        console.log('[MEETING_ENDED] Meeting has ended, redirecting to dashboard');
         await Swal.fire({
           icon: 'info',
           title: '회의 종료',
@@ -714,15 +707,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
       // ✅ CRITICAL FIX: Immediately update queue with hand raise status for proper sorting
       // Find participant in queue by matching userId - check ALL possible ID fields
-      console.log('🔍 [HAND_RAISE] Looking for participant with userId:', data.userId);
-      console.log('🔍 [HAND_RAISE] Queue participants IDs:', queueState.participants.map(p => ({
-        _id: p._id,
-        userId: p.userId,
-        user_id: p.user?._id,
-        backendId: (p as any).backendId,
-        identity: p.identity,
-        displayName: p.displayName
-      })));
       
       const queueParticipant = queueState.participants.find(p => {
         const matches = 
@@ -740,14 +724,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       });
       
       if (queueParticipant) {
-        console.log('✅ [HAND_RAISE] Found queue participant:', queueParticipant.displayName, 'ID:', queueParticipant._id);
         updateHandRaiseStatus(queueParticipant._id, true);
       } else {
-        console.warn('⚠️ [HAND_RAISE] Queue participant NOT FOUND for userId:', data.userId);
         // Fallback: Try to find by displayName and update all matching participants
         const foundByName = queueState.participants.find(p => p.displayName === data.displayName);
         if (foundByName) {
-          console.log('✅ [HAND_RAISE] Found by displayName, updating:', foundByName._id);
           updateHandRaiseStatus(foundByName._id, true);
         }
       }
@@ -764,12 +745,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         audio.volume = 0.4;
         audio.play().catch(() => {});
       } catch (err) {
-        console.warn('Chime play failed:', err);
       }
     };
 
     const handleHandLowered = (data: {userId:string; displayName:string}) => {
-      console.log('🔄 HAND_LOWERED received:', data);
       // Update participant state so thumbnails/MainStage get isHandRaised=false
       setParticipants(prev =>
         prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false, hasHandRaised: false } : p)
@@ -803,7 +782,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     };
 
     const handleHandLoweredByHost = (data: {userId:string; displayName:string; hostId?:string}) => {
-      console.log('🔄 HAND_LOWERED_BY_HOST received:', data);
       // Update participant state so thumbnails/MainStage get isHandRaised=false
       setParticipants(prev =>
         prev.map(p => matchesParticipantId(p, data.userId) ? { ...p, isHandRaised: false, hasHandRaised: false } : p)
@@ -895,17 +873,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       
       // 🚨 Handle being kicked from meeting
       const handleKicked = async (data: any) => {
-        console.log('🔴 KICKED event received:', data);
         // Don't check currentUser or userId - if we receive KICKED, we're being kicked
-        console.log('✅ KICKED event received - redirecting immediately...');
         
         // Disconnect from LiveKit if connected (don't await)
         if (liveKitDisconnect) {
-          liveKitDisconnect().catch(err => console.error('⚠️ Disconnect error:', err));
+          liveKitDisconnect().catch(() => {});
         }
         
         // Immediate redirect without waiting
-        console.log('🔄 Redirecting to /member immediately...');
         window.location.href = '/member';
       };
 
@@ -914,7 +889,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         if (!currentUser) return;
         const transferredUserId = currentUser._id || currentUser.id;
         if (data.userId === transferredUserId && data.token) {
-          console.log('🎯 Host transfer received for current user');
           Swal.fire({
             icon: 'success',
             title: 'Host Role Transferred',
@@ -925,7 +899,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           // ✅ Store the new token for future reconnections
           if (data.token) {
-            console.log('✅ Received new LiveKit token for host transfer');
             // Note: Token is already in place on the server, we just need to ensure
             // our local state reflects the new permissions. LiveKit permissions are
             // server-side, so the new token will be used on next connection.
@@ -934,7 +907,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           // Update host state
           setIsHostState(true);
           
-          console.log('✅ Role updated to HOST, permissions upgraded on server');
         }
       };
 
@@ -1025,14 +997,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
       // LiveKit connection with camera and mic state
       const liveKitIdentity = currentUser._id || currentUser.id || userId;
-      console.log('🔌 CONNECTING TO LIVEKIT:', {
-        participantName: currentUser.displayName || currentUser.name || 'User',
-        identity: liveKitIdentity,
-        currentUser_id: currentUser._id,
-        currentUser_id_field: currentUser.id,
-        userId: userId,
-        currentUserObject: currentUser
-      });
 
       liveKitConnect({
         roomName: actualMeetingId,
@@ -1043,13 +1007,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         enableMicrophone: micEnabled,
         enableScreenShare: true
       }).catch(error => {
-        console.error('🔌 LiveKit connection error:', error);
         // Connection error handled
       });
     }
   }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
 
-  // Debug: Log when dependencies change
   useEffect(() => {
   }, [authComplete, actualMeetingId, currentUser, role, cameraEnabled, micEnabled, liveKitConnect, isLiveKitConnected, isLiveKitConnecting]);
 
@@ -1175,7 +1137,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           setShowControls(false);
         }, 2000);
       } catch (error) {
-        console.log('Auto-fullscreen not available:', error);
       }
     };
 
@@ -1320,7 +1281,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         }
       }
     } catch (error) {
-      console.error('Fullscreen toggle failed:', error);
     }
   }, []);
 
@@ -2018,7 +1978,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           // ✅ Check if LiveKit token was generated and store it
           const transferResult = (result?.data as any)?.transferHost;
           if (transferResult?.newLiveKitToken) {
-            console.log('✅ New LiveKit token generated for host transfer');
           }
 
           // Refetch data to update host status
@@ -2171,17 +2130,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleScreenShareToggle = async () => {
-    console.log('🖥️ Screen share toggle clicked - isLiveKitConnected:', isLiveKitConnected, 'currentScreenSharing:', liveKitIsScreenSharing);
     
     if (isLiveKitConnected) {
       try {
-        console.log('🖥️ Calling liveKitToggleScreenShare...');
         await liveKitToggleScreenShare();
-        console.log('🖥️ Screen share toggle completed');
         // ✅ FIX: Don't manually set screenSharing state - let the useEffect handle it
         // The LiveKit state change will trigger the useEffect to update queue state
       } catch (error: any) {
-        console.error('🖥️ Screen share toggle error:', error);
         
         // Show user-friendly error message
         Swal.fire({
@@ -2193,7 +2148,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         
       }
     } else {
-      console.log('🖥️ LiveKit not connected, using fallback');
       // Fallback for when LiveKit is not connected
       if (currentParticipant?._id) {
         if (queueState.screenShareMode) {
@@ -2375,7 +2329,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       if ((result.data as any)?.removeParticipant?.success) {
         // Emit KICKED event to notify the removed participant
         const removedParticipant = (result.data as any)?.removeParticipant?.removedParticipant;
-        console.log('🔨 Participant removed, attempting to emit KICKED:', removedParticipant);
         
         if (removedParticipant?.userId && socket) {
           socket.emit('KICKED', {
@@ -2383,9 +2336,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             meetingId: removedParticipant.meetingId,
             reason: 'Removed by host'
           });
-          console.log('✅ KICKED event emitted to socket');
         } else {
-          console.warn('⚠️ Cannot emit KICKED:', { hasUserId: !!removedParticipant?.userId, hasSocket: !!socket });
         }
       } else {
         throw new Error((result.data as any)?.removeParticipant?.message || 'Unknown error');
@@ -2430,7 +2381,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     const targetId = participant?.participantId || participant?._id || participant?.id || participant;
     
     if (!targetId) {
-      console.warn('⚠️ Cannot remove participant: Missing ID or identity');
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -2439,7 +2389,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       return;
     }
     
-    console.log('🔨 Attempting to remove participant:', targetId);
     handleKickParticipant(targetId);
   }, [handleKickParticipant]);
 
@@ -3474,19 +3423,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                                 hand.userId === participant.userId || 
                                 hand.userId === participant.user?._id ||
                                 hand.participantId === participant._id;
-                  if (match) {
-                    console.log('✅ HAND RAISED MATCH:', participant.displayName, 'hand.userId:', hand.userId, 'hand.participantId:', hand.participantId, 'participant._id:', participant._id, 'participant.userId:', participant.userId);
-                  }
                   return match;
                 });
                 
                 // ✅ FIX: Combine participant.isHandRaised with WebSocket data for accurate detection
                 const isHandRaised = Boolean(participant.isHandRaised || participant.hasHandRaised || hasHandRaisedFromWS);
-                
-                // Debug log for hand raise status
-                if (isHandRaised) {
-                  console.log('🎉 HAND RAISED DETECTED for:', participant.displayName, 'isHandRaised:', participant.isHandRaised, 'hasHandRaised:', participant.hasHandRaised, 'hasHandRaisedFromWS:', hasHandRaisedFromWS, 'wsRaisedHands:', wsRaisedHands);
-                }
                 
                 // Get video and audio tracks from LiveKit room
                 let videoTrack = null;
@@ -3498,37 +3439,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // So we must use the same format here
                 // Use participant.identity FIRST (set in line 217) since it's the correct LiveKit identity
                 const participantIdentity = participant.identity || participant.user?._id || participant.userId || participant._id;
-                console.log('🎥 Thumbnail - Participant:', participant.displayName, 'Identity:', participantIdentity, 'Participant identity field:', participant.identity, 'User ID:', participant.user?._id);
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
                 // Compare with multiple possible identity formats
-                console.log('🔍 Checking isLocalParticipant for:', participant.displayName, 'participantIdentity:', participantIdentity, 'localParticipant identity:', liveKitService?.room?.localParticipant?.identity);
-                console.log('🔍 Comparison - participantIdentity:', participantIdentity, 'localParticipant?.identity:', liveKitService?.room?.localParticipant?.identity, 'match:', participantIdentity === liveKitService?.room?.localParticipant?.identity);
                 
                 // ✅ CRITICAL FIX: ONLY compare identity strings - don't use multiple fallback comparisons
                 const isLocalParticipant = liveKitService?.room ? (
                   participantIdentity === liveKitService.room.localParticipant?.identity
                 ) : false;
                 
-                console.log('🔍 RESULT isLocalParticipant for', participant.displayName, ':', isLocalParticipant);
                 
                 if (liveKitService?.room) {
                   // Debug: Log available LiveKit participants
-                  console.log('🔍 Available LiveKit participants:', Array.from(liveKitService.room.remoteParticipants.keys()));
-                  console.log('🔍 Local participant identity:', liveKitService.room.localParticipant?.identity);
-                  console.log('🔍 All participant identities in room:', [
-                    liveKitService.room.localParticipant?.identity,
-                    ...Array.from(liveKitService.room.remoteParticipants.keys())
-                  ]);
                   
                   // Debug: Log detailed participant info
-                  console.log('🔍 LiveKit remote participants details:', 
-                    Array.from(liveKitService.room.remoteParticipants.entries()).map(([identity, participant]) => ({
-                      identity,
-                      name: participant.name,
-                      sid: participant.sid
-                    }))
-                  );
                   
                   if (isLocalParticipant) {
                     // ✅ LOCAL PARTICIPANT: Get camera video track for thumbnail (NOT screen share)
@@ -3553,42 +3477,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     // Local participant tracks retrieved
                   } else {
                     // ✅ REMOTE PARTICIPANT: Get tracks from remoteParticipants
-                    console.log('🎯 ENTERING REMOTE PARTICIPANT BLOCK for:', participant.displayName);
-                    console.log('🔍 Looking for remote participant with identity:', participantIdentity);
-                    console.log('🔍 Remote participants map keys:', Array.from(liveKitService.room.remoteParticipants.keys()));
                     let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
-                    console.log('🔍 Direct lookup result:', liveKitRoomParticipant ? 'FOUND' : 'NOT FOUND');
                     
                     // ✅ FALLBACK: If direct lookup fails, try to find by iterating through all participants
                     if (!liveKitRoomParticipant && liveKitService.room.remoteParticipants.size > 0) {
-                      console.log('🔍 Direct lookup failed, trying to find by iterating through participants');
                       for (const [identity, p] of liveKitService.room.remoteParticipants.entries()) {
-                        console.log('🔍 Checking participant - Identity:', identity, 'Name:', p.name, 'Looking for:', participantIdentity);
                         if (identity === participantIdentity || 
                             p.identity === participantIdentity ||
                             p.name === participant.displayName ||
                             identity === participant.user?._id ||
                             identity === participant._id) {
                           liveKitRoomParticipant = p;
-                          console.log('✅ Found participant via iteration:', identity);
                           break;
                         }
                       }
                     }
                     
-                    console.log('🔍 Final result - Found remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
                       // Debug: Log all available video tracks
                       const allVideoTracks = Array.from(liveKitRoomParticipant.videoTrackPublications.values());
-                      console.log('🎥 REMOTE PARTICIPANT FOUND:', participant.displayName);
-                      console.log('🎥 Available video tracks for', participant.displayName, ':', allVideoTracks.map(pub => ({
-                        source: pub.source,
-                        trackSource: pub.track?.source,
-                        hasTrack: !!pub.track,
-                        trackSid: pub.track?.sid
-                      })));
-                      console.log('🎥 Number of video tracks:', allVideoTracks.length);
                       
                       // ✅ IMPORTANT: Get camera video track for thumbnail (try multiple sources)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
@@ -3598,8 +3506,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           return source === 'camera' || (!source && !track?.source?.includes('screen'));
                         });
                       videoTrack = cameraTrackPub?.track;
-                      console.log('🎥 Thumbnail video track assigned:', !!videoTrack, 'Source:', cameraTrackPub?.source, 'Track source:', cameraTrackPub?.track?.source);
-                      console.log('🎥 isLocalParticipant for this remote:', isLocalParticipant, '- should be FALSE');
                       
                       // Check if this participant has screen share active
                       const screenSharePub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
@@ -3647,7 +3553,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     onKickParticipant={handleKickParticipantClick} // ✅ Kick participant handler
                     onLowerHand={handleHostLowerHand} // ✅ Lower hand handler for host
                     onClick={() => {
-                      console.log('🎯 Thumbnail clicked - participant:', participant.displayName, 'ID:', participant._id);
                       setSelectedParticipantId(participant._id);
                       // Participant selection only updates the main video display - no navigation needed
                     }}
@@ -3990,7 +3895,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               
               // Get the participant for main stage (selected or active speaker or first available)
               const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
-              console.log('🎬 Main video participant:', mainParticipant?.displayName, 'ID:', mainParticipant?._id, 'Selected:', !!selectedParticipant);
               if (!mainParticipant) {
                 return null;
               }
@@ -4007,15 +3911,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // So we must use the same format here
                 // Use participant.identity FIRST (set in line 217) since it's the correct LiveKit identity
                 const participantIdentity = mainParticipant.identity || mainParticipant.user?._id || mainParticipant.userId || mainParticipant._id;
-                console.log('🎬 Main Video - Participant:', mainParticipant.displayName, 'Identity:', participantIdentity, 'Participant identity field:', mainParticipant.identity, 'User ID:', mainParticipant.user?._id);
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
                 // Compare with multiple possible identity formats (same as thumbnails)
-                console.log('🔍 Main Video - Checking isLocalParticipant for:', mainParticipant.displayName, 'participantIdentity:', participantIdentity, 'localParticipant identity:', liveKitService?.room?.localParticipant?.identity);
                 const isLocalParticipant = liveKitService?.room ? (
                   participantIdentity === liveKitService.room.localParticipant?.identity
                 ) : false;
-                console.log('🔍 Main Video - RESULT isLocalParticipant for', mainParticipant.displayName, ':', isLocalParticipant);
                 
                 if (liveKitService?.room && mainParticipant._id) {
                   
@@ -4039,39 +3940,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                     mainScreenShareTrack = screenShareTrackPub?.track;
                     isParticipantScreenSharing = !!mainScreenShareTrack;
-                    console.log('🎬 Local participant screen share check - Track:', !!mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
                   } else {
                     // Remote participant - get tracks from remoteParticipants
-                    console.log('🎬 Looking for main video remote participant with identity:', participantIdentity);
                     let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
                     // ✅ FALLBACK: If direct lookup fails, try to find by iterating through all participants
                     if (!liveKitRoomParticipant && liveKitService.room.remoteParticipants.size > 0) {
-                      console.log('🎬 Direct lookup failed, trying to find by iterating through participants');
                       for (const [identity, p] of liveKitService.room.remoteParticipants.entries()) {
-                        console.log('🎬 Checking participant - Identity:', identity, 'Name:', p.name, 'Looking for:', participantIdentity);
                         if (identity === participantIdentity || 
                             p.identity === participantIdentity ||
                             p.name === mainParticipant.displayName ||
                             identity === mainParticipant.user?._id ||
                             identity === mainParticipant._id) {
                           liveKitRoomParticipant = p;
-                          console.log('✅ Found main video participant via iteration:', identity);
                           break;
                         }
                       }
                     }
                     
-                    console.log('🎬 Final result - Found main video remote participant:', !!liveKitRoomParticipant, 'Identity:', liveKitRoomParticipant?.identity);
                     
                     if (liveKitRoomParticipant) {
                       // Debug: Log all available video tracks for main video
                       const allVideoTracks = Array.from(liveKitRoomParticipant.videoTrackPublications.values());
-                      console.log('🎬 Available video tracks for main video', mainParticipant.displayName, ':', allVideoTracks.map(pub => ({
-                        source: pub.source,
-                        trackSource: pub.track?.source,
-                        hasTrack: !!pub.track
-                      })));
                       
                       // Get CAMERA video track (not screen share)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
@@ -4081,7 +3971,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           return source === 'camera' || (!source && !track?.source?.includes('screen'));
                         });
                       mainVideoTrack = cameraTrackPub?.track;
-                      console.log('🎬 Main video track assigned:', !!mainVideoTrack, 'Source:', cameraTrackPub?.source, 'Track source:', cameraTrackPub?.track?.source);
                       
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
@@ -4091,7 +3980,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
                       mainScreenShareTrack = screenShareTrackPub?.track;
                       isParticipantScreenSharing = !!mainScreenShareTrack;
-                      console.log('🎬 Screen share check - Track:', !!mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
                     }
                     
                     // ✅ Guard: If no valid remote track found, enforce placeholder
@@ -4127,20 +4015,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 const mainIsHandRaised = Boolean(mainParticipant.isHandRaised || mainParticipant.hasHandRaised || hasHandRaisedFromWS);
 
                 // ✅ COMPREHENSIVE DEBUG: Log all main video assignments
-                console.log('🎬 MAIN VIDEO FINAL ASSIGNMENT:', {
-                  participant: mainParticipant.displayName,
-                  identity: participantIdentity,
-                  isLocal: isMainParticipantLocal,
-                  hasVideoTrack: !!mainVideoTrack,
-                  hasAudioTrack: !!mainAudioTrack,
-                  hasScreenShareTrack: !!mainScreenShareTrack,
-                  isScreenSharing: isParticipantScreenSharing,
-                  videoOff: !mainVideoTrack || (isMainParticipantLocal && !cameraEnabled),
-                  cameraEnabled: cameraEnabled,
-                  queueScreenShareMode: queueState.screenShareMode,
-                  liveKitScreenSharing: liveKitIsScreenSharing,
-                  isHandRaised: mainIsHandRaised // ✅ Add hand raise status to debug
-                });
 
 
                 return (
@@ -4388,15 +4262,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
               {/* Hand Raise Control - Now handled by HandRaiseIndicator */}
               {(() => {
-                console.log('🔍 Rendering HandRaiseIndicator button', {
-                  hasSocket: !!socket,
-                  wsConnected,
-                  actualMeetingId,
-                  hasParticipant: !!currentParticipant,
-                  participantId: currentParticipant?._id,
-                  isHost,
-                  isMobile
-                });
                 return (
                   <HandRaiseIndicator
                     socket={socket}

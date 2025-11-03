@@ -145,17 +145,9 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update hand raise status
   const updateHandRaiseStatus = useCallback((participantId: string, hasHandRaised: boolean) => {
-    console.log('🔄 [QUEUE] updateHandRaiseStatus called:', { participantId, hasHandRaised });
     setQueueState(prev => {
-      console.log('🔄 [QUEUE] Current participants before update:', prev.participants.map(p => ({
-        _id: p._id,
-        displayName: p.displayName,
-        hasHandRaised: p.hasHandRaised
-      })));
-      
       const updatedParticipants = prev.participants.map(p => {
         if (p._id === participantId) {
-          console.log('✅ [QUEUE] Updating participant:', p.displayName, 'hasHandRaised:', hasHandRaised);
           return { 
             ...p, 
             hasHandRaised,
@@ -167,13 +159,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
       });
       
       const sorted = sortParticipants(updatedParticipants);
-      console.log('🔄 [QUEUE] Participants after sort:', sorted.map(p => ({
-        _id: p._id,
-        displayName: p.displayName,
-        hasHandRaised: p.hasHandRaised,
-        isHost: p.isHost,
-        position: sorted.indexOf(p)
-      })));
       
       return {
         ...prev,
@@ -273,7 +258,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
 
   // Update participants when initialParticipants changes
   useEffect(() => {
-    console.log('🔄 [QUEUE] initialParticipants changed, updating queue');
     setQueueState(prev => {
       // ✅ CRITICAL FIX: Preserve hand raise status and other queue state when syncing
       // Create a map of current queue participants to preserve their state
@@ -298,12 +282,6 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
       });
       
       const sorted = sortParticipants(updatedParticipants);
-      console.log('🔄 [QUEUE] Participants after sync:', sorted.map(p => ({
-        _id: p._id,
-        displayName: p.displayName,
-        hasHandRaised: p.hasHandRaised,
-        isHost: p.isHost
-      })));
       
       return {
         ...prev,

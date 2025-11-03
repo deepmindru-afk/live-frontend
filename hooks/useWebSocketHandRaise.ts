@@ -44,7 +44,6 @@ export const useWebSocketHandRaise = ({
   useEffect(() => {
     if (isLoading) {
       const stuckTimeout = setTimeout(() => {
-        console.warn('⚠️ isLoading stuck for too long, forcing reset');
         setIsLoading(false);
       }, 5000); // 5 second max loading time
       
@@ -74,7 +73,6 @@ export const useWebSocketHandRaise = ({
 
   // Raise hand
   const raiseHand = useCallback(() => {
-    console.log('🔧 raiseHand() called', { socket: !!socket, isConnected, meetingId, userId, displayName, myHandRaised, currentLoading: isLoading });
     
     if (!socket || !isConnected) {
       callbacksRef.current.onError?.('Not connected to server');
@@ -83,12 +81,10 @@ export const useWebSocketHandRaise = ({
     }
 
     if (myHandRaised) {
-      console.log('⚠️ Hand already raised, skipping');
       setIsLoading(false);
       return;
     }
 
-    console.log('📤 Setting isLoading to TRUE before emitting RAISE_HAND');
     setIsLoading(true);
     
     socket.emit('RAISE_HAND', {
@@ -99,7 +95,6 @@ export const useWebSocketHandRaise = ({
     
     // ✅ Add a timeout to detect if the event is not being processed
     setTimeout(() => {
-      console.log('⏰ RAISE_HAND timeout - resetting isLoading to false');
       setIsLoading(false);
       callbacksRef.current.onError?.('Hand raise timeout - no response from server');
     }, 3000);
@@ -107,11 +102,9 @@ export const useWebSocketHandRaise = ({
 
   // Lower hand
   const lowerHand = useCallback(() => {
-    console.log('🔧 lowerHand() called', { socket: !!socket, isConnected, meetingId, userId, displayName, currentLoading: isLoading });
     
     if (!socket || !isConnected) {
       const errorMsg = 'Not connected to server';
-      console.error('❌', errorMsg);
       callbacksRef.current.onError?.(errorMsg);
       setIsLoading(false); // ✅ Ensure loading is false on error
       return;
@@ -119,10 +112,8 @@ export const useWebSocketHandRaise = ({
 
     // ✅ CRITICAL FIX: Always emit LOWER_HAND, don't check myHandRaised
     // The backend will determine if hand was actually raised
-    console.log('📤 Setting isLoading to TRUE before emitting LOWER_HAND');
     setIsLoading(true);
     
-    console.log('📤 Emitting LOWER_HAND event:', { meetingId, userId, displayName });
     socket.emit('LOWER_HAND', {
       meetingId,
       userId,
@@ -132,7 +123,6 @@ export const useWebSocketHandRaise = ({
     // ✅ CRITICAL: Add timeout to ensure loading state resets even if no response
     // Reduce timeout to 2 seconds for faster recovery
     setTimeout(() => {
-      console.log('⏰ LOWER_HAND timeout - resetting isLoading to false');
       setIsLoading(false);
     }, 2000);
   }, [socket, isConnected, meetingId, userId, displayName]);
@@ -151,8 +141,6 @@ export const useWebSocketHandRaise = ({
     if (!socket) return;
 
     const handleHandRaised = (data: HandRaiseInfo) => {
-      console.log('📥 HAND_RAISED event received:', data);
-      console.log('🔄 Setting isLoading to FALSE after HAND_RAISED');
       setIsLoading(false);
       
       // ✅ CRITICAL: Check if this is our hand - use string comparison to handle type differences
@@ -160,49 +148,32 @@ export const useWebSocketHandRaise = ({
       const myUserIdStr = String(userId || '').trim();
       const isMyHand = dataUserIdStr === myUserIdStr && dataUserIdStr !== '';
       
-      console.log('🔍 HAND_RAISED ID check:', { 
-        dataUserId: data.userId,
-        dataUserIdStr,
-        userId,
-        myUserIdStr,
-        isMyHand,
-        exactMatch: data.userId === userId,
-        stringMatch: dataUserIdStr === myUserIdStr,
-        bothNonEmpty: dataUserIdStr !== '' && myUserIdStr !== ''
-      });
       
       setRaisedHands(prev => {
         // Remove any existing entry for this user
         const filtered = prev.filter(hand => hand.userId !== data.userId);
         const newHands = [...filtered, data];
-        console.log('📋 HAND_RAISED: Updated raisedHands', { before: prev.length, after: newHands.length });
         return newHands;
       });
       
       // ✅ CRITICAL: Update my hand status - use multiple methods to ensure update
       if (isMyHand) {
-        console.log('✅ HAND_RAISED: It\'s MY hand - Setting myHandRaised to TRUE', { userId, dataUserId: data.userId });
         setMyHandRaised(true);
         // Double-update to ensure it sticks
         setTimeout(() => {
-          console.log('🔄 HAND_RAISED: Double-update myHandRaised to TRUE');
           setMyHandRaised(true);
         }, 10);
         // Triple-update just to be sure
         setTimeout(() => {
-          console.log('🔄 HAND_RAISED: Triple-update myHandRaised to TRUE');
           setMyHandRaised(true);
         }, 50);
       } else {
-        console.log('ℹ️ HAND_RAISED: Not my hand', { userId, dataUserId: data.userId });
       }
       
       callbacksRef.current.onHandRaised?.(data);
     };
 
     const handleHandLowered = (data: HandRaiseInfo & { participantId?: string }) => {
-      console.log('📥 HAND_LOWERED event received:', data);
-      console.log('🔄 Setting isLoading to FALSE after HAND_LOWERED');
       setIsLoading(false);
       
       // ✅ FIX: Handle both userId and participantId fields - use string comparison
@@ -210,14 +181,6 @@ export const useWebSocketHandRaise = ({
       const myUserIdStr = String(userId || '').trim();
       const isMyHand = idToCheck === myUserIdStr && idToCheck !== '';
       
-      console.log('🔍 HAND_LOWERED ID check:', { 
-        idToCheck, 
-        userId,
-        myUserIdStr,
-        isMyHand,
-        exactMatch: data.userId === userId,
-        stringMatch: idToCheck === myUserIdStr
-      });
       
       // Check if we had a raised hand in our list - use string comparison
       setRaisedHands(prev => {
@@ -226,15 +189,12 @@ export const useWebSocketHandRaise = ({
           return handUserIdStr === idToCheck || handUserIdStr === myUserIdStr;
         });
         
-        console.log('🔍 Hand check:', { isMyHand, wasInList, idToCheck, userId, prevHands: prev.map(h => h.userId) });
         
         if (isMyHand || wasInList) {
-          console.log('✅ HAND_LOWERED: Updating myHandRaised to false', { isMyHand, wasInList });
           // Force update immediately
           setMyHandRaised(false);
           // Also update after a tiny delay to ensure it sticks
           setTimeout(() => {
-            console.log('🔄 HAND_LOWERED: Double-update myHandRaised to false');
             setMyHandRaised(false);
           }, 10);
         }
@@ -245,13 +205,11 @@ export const useWebSocketHandRaise = ({
           const handUserIdStr = String(hand.userId || '').trim();
           return handUserIdStr !== idToCheck;
         });
-        console.log('📋 HAND_LOWERED: raisedHands updated', { before: prev.length, after: newHands.length });
         return newHands;
       });
       
       // ✅ ALWAYS update if it's explicitly our hand
       if (isMyHand) {
-        console.log('✅ HAND_LOWERED: Direct match - FORCE updating myHandRaised to false');
         setMyHandRaised(false);
       }
       
@@ -309,18 +267,14 @@ export const useWebSocketHandRaise = ({
     };
 
     const handleHandLowerSuccess = (data: { participantId?: string; userId?: string; message: string }) => {
-      console.log('✅ HAND_LOWER_SUCCESS received!', data);
-      console.log('🔄 Setting isLoading to FALSE after HAND_LOWER_SUCCESS');
       setIsLoading(false);
       
       // ✅ CRITICAL: ALWAYS set to false when we receive HAND_LOWER_SUCCESS
       // We sent the request, so this response is definitely for us
-      console.log('🔄 FORCE UPDATING myHandRaised to false');
       setMyHandRaised(false);
       
       // Also try setTimeout to ensure update happens
       setTimeout(() => {
-        console.log('🔄 Double-check: Setting myHandRaised to false');
         setMyHandRaised(false);
       }, 10);
       
@@ -332,18 +286,14 @@ export const useWebSocketHandRaise = ({
           const handUserIdStr = String(hand.userId || '').trim();
           const shouldRemove = !idToCheck ? handUserIdStr === myUserIdStr : (handUserIdStr === idToCheck || handUserIdStr === myUserIdStr);
           if (shouldRemove) {
-            console.log('🗑️ Removing hand from list:', hand.userId);
           }
           return !shouldRemove;
         });
-        console.log('📋 raisedHands updated:', { before: prev.length, after: filtered.length });
         return filtered;
       });
     };
 
     const handleHandRaiseSuccess = (data: { participantId?: string; userId?: string; message: string }) => {
-      console.log('✅ HAND_RAISE_SUCCESS received!', data);
-      console.log('🔄 Setting isLoading to FALSE after HAND_RAISE_SUCCESS');
       setIsLoading(false);
       
       // ✅ FIX: Handle both participantId and userId fields - use string comparison
@@ -351,26 +301,15 @@ export const useWebSocketHandRaise = ({
       const myUserIdStr = String(userId || '').trim();
       const isMyHand = idToCheck === myUserIdStr && idToCheck !== '';
       
-      console.log('🔍 HAND_RAISE_SUCCESS ID check:', { 
-        idToCheck, 
-        userId,
-        myUserIdStr,
-        isMyHand,
-        exactMatch: data.participantId === userId || data.userId === userId,
-        stringMatch: idToCheck === myUserIdStr
-      });
       
       // ✅ CRITICAL: Always update if ID matches OR if no ID (assume it's us since we sent the request)
       if (isMyHand || (!idToCheck && myUserIdStr)) {
-        console.log('✅ HAND_RAISE_SUCCESS: Setting myHandRaised to TRUE');
         setMyHandRaised(true);
         // Double-update to ensure it sticks
         setTimeout(() => {
-          console.log('🔄 HAND_RAISE_SUCCESS: Double-update myHandRaised to TRUE');
           setMyHandRaised(true);
         }, 10);
       } else {
-        console.log('ℹ️ HAND_RAISE_SUCCESS: ID mismatch, not my hand', { idToCheck, userId });
       }
     };
 

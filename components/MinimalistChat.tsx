@@ -35,27 +35,12 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isUserScrolled = useRef(false);
 
-  // Debug: Log isHost prop when component mounts or changes
-  useEffect(() => {
-    console.log('[MinimalistChat] Component render - isHost:', isHost, 'type:', typeof isHost);
-    console.log('[MinimalistChat] currentUser ID:', currentUser?._id || currentUser?.id);
-  }, [isHost, currentUser]);
 
   // WebSocket connection for real-time chat
   const { socket, isConnected: wsConnected, messages: webSocketMessages, sendMessage, deleteMessage: deleteMessageFromHook } = useWebSocketChat({
     meetingId,
     token: token || '',
     onMessage: (message) => {
-      // Debug: Log incoming message structure
-      console.log('[MinimalistChat] Received message from WebSocket:', {
-        _id: message._id,
-        userId: message.userId,
-        senderId: (message as any).senderId,
-        displayName: message.displayName,
-        text: message.text,
-        allKeys: Object.keys(message)
-      });
-
       const newMsg: Message = {
         _id: message._id || Date.now().toString(),
         text: message.text || (message as any).message || '',
@@ -116,7 +101,6 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     if (!socket) return;
 
     const handleMessageDeleted = (data: any) => {
-      console.log('[MinimalistChat] Message deleted event received:', data);
       // Remove deleted message from local state (but keep welcome message)
       setMessages(prev => {
         if (data.messageId === 'welcome') return prev; // Don't delete welcome message
@@ -125,7 +109,6 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     };
 
     const handleError = (data: any) => {
-      console.error('[MinimalistChat] Socket error:', data);
       if (data.message?.includes('delete') || data.message?.includes('permission')) {
         alert(`Cannot delete message: ${data.message}`);
       }
@@ -310,15 +293,12 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
 
   const handleDeleteMessage = (messageId: string) => {
     if (!isConnected || !deleteMessageFromHook) {
-      console.warn('Cannot delete: not connected or delete function not available');
       return;
     }
     
     try {
-      console.log('Attempting to delete message:', messageId);
       deleteMessageFromHook(messageId);
     } catch (error) {
-      console.error('Failed to delete message:', error);
     }
   };
 
@@ -434,21 +414,6 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
           // IMPORTANT: Use strict === true check to avoid truthy values
           const isActuallyHost = isHost === true;
           const canDelete = isActuallyHost ? true : (hasValidIds && isOwnMessage);
-          
-          // Debug: Log the first message to see what's happening
-          if (messages.indexOf(message) === 0) {
-            console.log('[MinimalistChat] First message check:', {
-              isHost,
-              isHostType: typeof isHost,
-              messageUserId: msgUserIdStr,
-              currentUserId: currUserIdStr,
-              hasValidIds,
-              isOwnMessage,
-              canDelete,
-              displayName: message.displayName,
-              messageKeys: Object.keys(message)
-            });
-          }
           
           return (
             <div
