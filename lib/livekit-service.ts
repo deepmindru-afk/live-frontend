@@ -87,29 +87,27 @@ export class LiveKitService {
         adaptiveStream: true,
         dynacast: true,
         
-        // Explicit video capture settings for better quality and performance
+        // Explicit video capture settings for 360p quality
         videoCaptureDefaults: {
           resolution: {
-            width: 1280,  // 720p capture for optimal quality and performance
-            height: 720,
+            width: 640,  // 360p capture for grid mode
+            height: 360,
             frameRate: 30,
           },
         },
         
         publishDefaults: {
-          // Explicit video encoding parameters for better quality
+          // Explicit video encoding parameters for 360p quality
           videoEncoding: {
-            maxBitrate: 3_000_000,  // Higher bitrate for better quality
+            maxBitrate: 1_000_000,  // Lower bitrate for 360p
             maxFramerate: 30,
           },
           
-          // ✅ Simulcast enabled for thumbnail optimization
-          // Layer 1: High quality (720p for main video)
-          // Layer 2: Low quality (360p for thumbnails)
+          // ✅ Simulcast enabled for grid mode optimization
+          // Layer 1: 360p (for grid view)
           simulcast: true,
           videoSimulcastLayers: [
-            VideoPresets.h720,  // 720p (1280x720) - Main video quality
-            VideoPresets.h360,  // 360p (640x360) - Thumbnail quality
+            VideoPresets.h360,  // 360p (640x360) - Primary quality for grid mode
           ],
         },
       });

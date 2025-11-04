@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { isAuthenticated } from '../../lib/simple-auth-handlers';
 import ProfessionalLiveStreamRoom from '../../components/ProfessionalLiveStreamRoom';
+
+const REDIRECT_URL = 'https://hrdeedu.co.kr';
 
 const LiveStreamRoomPage: React.FC = () => {
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // CRITICAL FIX: Derive meetingId directly from router.query instead of storing in state
   // This prevents infinite re-render loops caused by router.query updates
@@ -14,7 +18,23 @@ const LiveStreamRoomPage: React.FC = () => {
     setIsClient(true);
   }, []);
 
-  if (!isClient || !meetingId) {
+  // Check authentication and redirect if not authenticated
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (isClient && meetingId) {
+        const authenticated = await isAuthenticated();
+        if (!authenticated) {
+          // Redirect to hrdeedu.co.kr if not authenticated
+          window.location.href = REDIRECT_URL;
+          return;
+        }
+        setAuthChecked(true);
+      }
+    };
+    checkAuth();
+  }, [isClient, meetingId]);
+
+  if (!isClient || !meetingId || !authChecked) {
     return (
       <div style={{
         display: 'flex',

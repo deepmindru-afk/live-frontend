@@ -18,9 +18,11 @@ const ChatView: React.FC<ChatViewProps> = ({
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
+  // DISABLED: Typing indicators removed to reduce server requests
+  // const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // DISABLED: Typing timeout removed
+  // const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // GraphQL Queries
   const { data: chatData, loading: chatLoading } = useQuery(GET_CHAT_HISTORY, {
@@ -80,20 +82,23 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
     };
 
-    const handleUserTyping = (data: any) => {
-      // Handle typing indicators if needed
-    };
+    // DISABLED: Typing indicator handler removed
+    // const handleUserTyping = (data: any) => {
+    //   // Handle typing indicators if needed
+    // };
 
     socket.on('NEW_MESSAGE', handleNewMessage);
     socket.on('CHAT_MESSAGE_DELETED', handleMessageDeleted);
     socket.on('ERROR', handleError);
-    socket.on('USER_TYPING', handleUserTyping);
+    // DISABLED: Typing indicator removed
+    // socket.on('USER_TYPING', handleUserTyping);
 
     return () => {
       socket.off('NEW_MESSAGE', handleNewMessage);
       socket.off('CHAT_MESSAGE_DELETED', handleMessageDeleted);
       socket.off('ERROR', handleError);
-      socket.off('USER_TYPING', handleUserTyping);
+      // DISABLED: Typing indicator removed
+      // socket.off('USER_TYPING', handleUserTyping);
     };
   }, [socket]);
 
@@ -110,31 +115,17 @@ const ChatView: React.FC<ChatViewProps> = ({
       
       setNewMessage('');
       
-      // Stop typing indicator
-      socket.emit('TYPING_STOP', { meetingId });
-      setIsTyping(false);
+      // DISABLED: Typing indicator removed
+      // socket.emit('TYPING_STOP', { meetingId });
+      // setIsTyping(false);
     } catch (error) {
     }
   };
 
+  // DISABLED: Typing indicator removed to reduce server requests
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
-    
-    if (!isTyping) {
-      setIsTyping(true);
-      socket?.emit('TYPING_START', { meetingId });
-    }
-    
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    // Set new timeout to stop typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      socket?.emit('TYPING_STOP', { meetingId });
-    }, 1000);
+    // Typing indicator functionality removed - no TYPING_START/TYPING_STOP events sent
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

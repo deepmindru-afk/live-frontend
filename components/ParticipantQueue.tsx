@@ -70,6 +70,11 @@ const ParticipantQueue: React.FC<ParticipantQueueProps> = ({
   const mainStageParticipants = getMainStageParticipants();
   const thumbnailParticipants = getThumbnailParticipants();
 
+  // Don't render if no participants
+  if (participants.length === 0) {
+    return null;
+  }
+
   // Render participant video
   const renderParticipantVideo = (participant: Participant, isMainStage: boolean = false) => {
     const isActiveSpeaker = activeSpeaker?._id === participant._id;

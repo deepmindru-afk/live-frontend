@@ -76,6 +76,8 @@ interface ProfessionalLiveStreamRoomProps {
   userId?: string;
 }
 
+const REDIRECT_URL = 'https://hrdeedu.co.kr';
+
 const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = memo(({
   meetingId: propMeetingId,
   role = 'HOST',
@@ -358,6 +360,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   }, [queueState.screenShareMode]);
 
+  // Auto-close thumbnail panel when grid mode is active
+  useEffect(() => {
+    if (viewMode === 'grid') {
+      setThumbnailPanelOpen(false);
+    }
+  }, [viewMode]);
+
   const [isPiPVisible, setIsPiPVisible] = useState(false);
   const [isPageHidden, setIsPageHidden] = useState(false);
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -401,9 +410,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onTrackSubscribed: (track, publication, participant) => {
     },
     onError: (error: Error) => {
-      // Handle banned user errors - redirect to dashboard
-      if (error.message && error.message.includes('removed from this meeting')) {
-        window.location.href = '/member';
+      // Handle banned user errors or authentication errors - redirect to hrdeedu.co.kr
+      if (error.message && (
+        error.message.includes('removed from this meeting') ||
+        error.message.includes('UNAUTHENTICATED') ||
+        error.message.includes('No authentication token') ||
+        error.message.includes('Invalid authentication token') ||
+        error.message.includes('User not found')
+      )) {
+        window.location.href = REDIRECT_URL;
       }
     }
   });
@@ -602,7 +617,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     },
     onError: (error) => {
-      // WebSocket error
+      // WebSocket error - check for authentication errors
+      if (error && (
+        (error as any).message?.includes('UNAUTHENTICATED') ||
+        (error as any).message?.includes('No authentication token') ||
+        (error as any).message?.includes('Invalid authentication token') ||
+        (error as any).message?.includes('Connection failed')
+      )) {
+        window.location.href = REDIRECT_URL;
+      }
     },
     // Hand raise events are handled through participants data changes
   });
@@ -913,12 +936,28 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
       socket.on('KICKED', handleKicked);
       socket.on('host-transfer', handleHostTransfer); // ✅ Listen for host transfer
+      
+      // Handle WebSocket ERROR events (authentication failures, etc.)
+      const handleSocketError = (error: any) => {
+        if (error && (
+          error.message?.includes('UNAUTHENTICATED') ||
+          error.message?.includes('No authentication token') ||
+          error.message?.includes('Invalid authentication token') ||
+          error.message?.includes('Connection failed') ||
+          error.message?.includes('User not found')
+        )) {
+          window.location.href = REDIRECT_URL;
+        }
+      };
+      
+      socket.on('ERROR', handleSocketError);
 
       return () => {
         socket.off('RECORDING_ANNOUNCEMENT', handleRecordingAnnouncement);
         socket.off('TEST_BROADCAST', handleTestBroadcast);
         socket.off('KICKED', handleKicked);
         socket.off('host-transfer', handleHostTransfer); // ✅ Clean up host transfer listener
+        socket.off('ERROR', handleSocketError);
       };
     } else {
     }
@@ -962,19 +1001,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               setCurrentParticipant((joinResult.data as any).joinMeeting);
             } else {
             }
-          } catch (joinError) {
+          } catch (joinError: any) {
+            // Check for authentication errors in join error
+            if (joinError?.message?.includes('UNAUTHENTICATED') || 
+                joinError?.message?.includes('Forbidden') ||
+                joinError?.graphQLErrors?.some((err: any) => err.extensions?.code === 'UNAUTHENTICATED')) {
+              window.location.href = REDIRECT_URL;
+              return;
+            }
             // Don't fail the entire initialization, just log the error
           }
-          } else {
-          const mockUser = {
-            id: userId,
-            displayName: role === 'HOST' ? 'Host User' : 'Participant User',
-            email: role === 'HOST' ? 'host@demo.com' : 'participant@demo.com',
-            role: role,
-            token: 'mock-token'
-          };
-          setCurrentUser(mockUser);
-          setActualUserId(userId);
+        } else {
+          // Not authenticated - redirect to hrdeedu.co.kr
+          window.location.href = REDIRECT_URL;
+          return;
         }
         
         setAuthComplete(true);
@@ -1669,6 +1709,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Handle GraphQL errors
   useEffect(() => {
     if (meetingError) {
+      // Check for authentication errors - redirect to hrdeedu.co.kr
+      const errorMessage = meetingError.message || '';
+      const graphQLErrors = (meetingError as any).graphQLErrors || [];
+      
+      if (
+        errorMessage.includes('UNAUTHENTICATED') ||
+        errorMessage.includes('No authentication token') ||
+        errorMessage.includes('Invalid authentication token') ||
+        errorMessage.includes('User not found') ||
+        errorMessage.includes('Forbidden') ||
+        graphQLErrors.some((err: any) => 
+          err.extensions?.code === 'UNAUTHENTICATED' ||
+          err.message?.includes('UNAUTHENTICATED')
+        )
+      ) {
+        window.location.href = REDIRECT_URL;
+        return;
+      }
+      
       // If there's a GraphQL error, it might be because the meeting ended
       // Check if the error is related to null title field
       if (meetingError.message.includes('Cannot return null for non-nullable field MeetingWithHost.title')) {
@@ -3567,24 +3626,25 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           {/* Main Video Area - Responsive sizing based on thumbnail panel */}
           <div style={{
-            flex: thumbnailPanelOpen ? 1 : 1.2, // Bigger when thumbnails closed
-            backgroundColor: queueState.screenShareMode ? '#000000' : '#f3f4f6',
+            flex: viewMode === 'grid' ? 1 : (thumbnailPanelOpen ? 1 : 1.2), // Full flex for grid mode
+            backgroundColor: queueState.screenShareMode ? '#000000' : (viewMode === 'grid' ? '#f3f4f6' : '#f3f4f6'),
             display: 'flex',
             flexDirection: 'column',
-            minHeight: '60vh', // Responsive minimum height
-            maxHeight: '85vh', // Responsive maximum height
-            alignItems: queueState.screenShareMode ? 'stretch' : 'center', // Stretch for screen share
-            justifyContent: queueState.screenShareMode ? 'stretch' : 'center', // Stretch for screen share
+            minHeight: viewMode === 'grid' ? '0' : '60vh', // No min height for grid - let flex handle it
+            maxHeight: viewMode === 'grid' ? 'none' : '85vh', // No max height for grid mode
+            height: viewMode === 'grid' ? '100%' : 'auto', // Full height for grid mode
+            alignItems: queueState.screenShareMode ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
+            justifyContent: queueState.screenShareMode ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
             position: 'relative',
-            padding: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
-            paddingTop: queueState.screenShareMode ? '0' : (isMobile ? '2vh' : '4vh'),
-            margin: queueState.screenShareMode ? '0' : '0', // Remove margins during screen share
+            padding: queueState.screenShareMode ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
+            paddingTop: queueState.screenShareMode ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
+            margin: queueState.screenShareMode ? '0' : '0',
             marginTop: '0',
-            border: queueState.screenShareMode ? 'none' : 'none', // Remove borders during screen share
-            borderRadius: queueState.screenShareMode ? '0' : '0', // Remove border radius during screen share
-            boxShadow: queueState.screenShareMode ? 'none' : 'none', // Remove shadows during screen share
-            overflow: 'hidden',
-            transition: 'flex 0.3s ease' // Smooth transition when toggling
+            border: queueState.screenShareMode ? 'none' : 'none',
+            borderRadius: queueState.screenShareMode ? '0' : '0',
+            boxShadow: queueState.screenShareMode ? 'none' : 'none',
+            overflow: viewMode === 'grid' ? 'hidden' : 'hidden',
+            transition: 'flex 0.3s ease'
           }}>
             {/* Toggle Thumbnail Panel Button - Desktop Only */}
             {!isMobile && viewMode === 'speaker' && (
@@ -3732,6 +3792,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         <button
                           onClick={() => {
                             setViewMode('grid');
+                            setThumbnailPanelOpen(false); // Close thumbnail panel when switching to grid
                             setViewControlsOpen(false);
                           }}
                           style={{
@@ -3807,7 +3868,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 )}
               </div>
             )}
-
+            
             {/* Debug Info */}
 
             {/* Hand Raise Indicator - Host Notifications (handled by component) */}
@@ -3847,7 +3908,126 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   return null;
                 }
               
-              // Get the participant for main stage (selected or active speaker or first available)
+              // Grid mode: Show all participants in grid layout
+              if (viewMode === 'grid') {
+                const participantsToShow = memoizedParticipants.slice(0, gridSize === '2x2' ? 4 : gridSize === '3x3' ? 9 : 16);
+                
+                return (
+                  <div className="grid-mode" style={{
+                    width: '100%',
+                    height: '100%',
+                    minHeight: '0',
+                    display: 'grid',
+                    gridTemplateColumns: gridSize === '2x2' ? '1fr 1fr' :
+                                       gridSize === '3x3' ? '1fr 1fr 1fr' :
+                                       '1fr 1fr 1fr 1fr',
+                    gridTemplateRows: gridSize === '2x2' ? '1fr 1fr' :
+                                     gridSize === '3x3' ? '1fr 1fr 1fr' :
+                                     '1fr 1fr 1fr 1fr',
+                    gap: '8px',
+                    padding: '8px',
+                    backgroundColor: 'transparent',
+                    borderRadius: '0',
+                    boxShadow: 'none',
+                    alignContent: 'stretch',
+                    justifyItems: 'stretch',
+                    overflow: 'hidden'
+                  }}>
+                    {participantsToShow.map((participant, index) => {
+                      // Get video and audio tracks for this participant
+                      let videoTrack = null;
+                      let audioTrack = null;
+                      let hasScreenShare = false;
+                      
+                      const participantIdentity = participant.identity || participant.user?._id || participant.userId || participant._id;
+                      const isLocalParticipant = liveKitService?.room ? (
+                        participantIdentity === liveKitService.room.localParticipant?.identity
+                      ) : false;
+                      
+                      if (liveKitService?.room && participant._id) {
+                        if (isLocalParticipant) {
+                          const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                            .find(pub => {
+                              const track = pub.track;
+                              const source = pub.source || track?.source;
+                              return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                            });
+                          videoTrack = cameraTrackPub?.track;
+                          const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
+                          audioTrack = audioTrackPub?.track;
+                        } else {
+                          let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
+                          if (!liveKitRoomParticipant && liveKitService.room.remoteParticipants.size > 0) {
+                            for (const [identity, p] of liveKitService.room.remoteParticipants.entries()) {
+                              if (identity === participantIdentity || 
+                                  p.identity === participantIdentity ||
+                                  p.name === participant.displayName ||
+                                  identity === participant.user?._id ||
+                                  identity === participant._id) {
+                                liveKitRoomParticipant = p;
+                                break;
+                              }
+                            }
+                          }
+                          
+                          if (liveKitRoomParticipant) {
+                            const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
+                              .find(pub => {
+                                const track = pub.track;
+                                const source = pub.source || track?.source;
+                                return source === 'camera' || (!source && !track?.source?.includes('screen'));
+                              });
+                            videoTrack = cameraTrackPub?.track;
+                            const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
+                            audioTrack = audioTrackPub?.track;
+                          }
+                        }
+                      }
+                      
+                      const isHandRaised = Boolean(participant.isHandRaised || participant.hasHandRaised);
+                      
+                      return (
+                        <div key={participant._id} className="grid-mode-item" style={{
+                          width: '100%',
+                          height: '100%',
+                          minHeight: '0',
+                          minWidth: '0',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                          backgroundColor: '#1f2937',
+                          display: 'flex',
+                          alignItems: 'stretch',
+                          justifyContent: 'stretch',
+                          position: 'relative'
+                        }}>
+                          <MainStageView
+                            participantId={participant._id}
+                            name={participant.displayName || '참가자'}
+                            videoTrack={videoTrack}
+                            audioTrack={audioTrack}
+                            isSpeaking={(participant.audioLevel || 0) > 0.1}
+                            isHandRaised={isHandRaised}
+                            isMuted={participant.micState === 'OFF' || false}
+                            isVideoOff={!videoTrack || videoTrack?.isMuted || (isLocalParticipant && !cameraEnabled)}
+                            isHost={participant.role === 'HOST' || false}
+                            isScreenSharing={false}
+                            screenShareTrack={null}
+                            connectionQuality={5}
+                            isLocalParticipant={isLocalParticipant}
+                            isRecording={isRecording}
+                            onParticipantClick={(participantId) => {
+                              setSelectedParticipantId(participantId);
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              
+              // Speaker mode: Get the participant for main stage (selected or active speaker or first available)
               const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
               if (!mainParticipant) {
                 return null;
@@ -3997,7 +4177,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   />
                 );
               })()}
-            {!isLiveKitConnected || liveKitParticipants.size === 0 ? (
+            {(!isLiveKitConnected || liveKitParticipants.size === 0) && queueState.participants.length > 0 ? (
               <ParticipantQueue
                 participants={queueState.participants}
                 activeSpeaker={queueState.activeSpeaker}

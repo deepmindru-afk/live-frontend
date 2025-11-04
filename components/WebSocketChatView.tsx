@@ -16,9 +16,11 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
 }) => {
   
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  // DISABLED: Typing indicators removed to reduce server requests
+  // const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // DISABLED: Typing timeout removed
+  // const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     isConnected,
@@ -27,7 +29,8 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
     error,
     sendMessage,
     deleteMessage,
-    ping,
+    // DISABLED: ping removed - heartbeat handles connection keepalive
+    // ping,
   } = useWebSocketChat({
     meetingId,
     token,
@@ -50,16 +53,16 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Ping server every 30 seconds to keep connection alive
-  useEffect(() => {
-    if (isConnected) {
-      const pingInterval = setInterval(() => {
-        ping();
-      }, 30000);
-
-      return () => clearInterval(pingInterval);
-    }
-  }, [isConnected, ping]);
+  // DISABLED: Ping mechanism removed - heartbeat (every 10s) handles connection keepalive
+  // No need for duplicate ping - WebSocket connection stays alive with heartbeat
+  // useEffect(() => {
+  //   if (isConnected) {
+  //     const pingInterval = setInterval(() => {
+  //       ping();
+  //     }, 30000);
+  //     return () => clearInterval(pingInterval);
+  //   }
+  // }, [isConnected, ping]);
 
   const handleSendMessage = useCallback(() => {
     if (!newMessage.trim() || !isConnected) return;
@@ -78,21 +81,10 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
     }
   };
 
+  // DISABLED: Typing indicator removed to reduce server requests
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
-    
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    // Set typing indicator
-    setIsTyping(true);
-    
-    // Clear typing indicator after 2 seconds of no typing
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-    }, 2000);
+    // Typing indicator functionality removed
   };
 
   const handleDeleteMessage = useCallback((messageId: string) => {
@@ -405,8 +397,8 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
           </button>
         </div>
 
-        {/* Typing Indicator */}
-        {isTyping && (
+        {/* DISABLED: Typing indicator removed */}
+        {/* {isTyping && (
           <div style={{
             fontSize: '11px',
             color: '#666',
@@ -415,7 +407,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
           }}>
             Typing...
           </div>
-        )}
+        )} */}
       </div>
 
       <style jsx>{`
