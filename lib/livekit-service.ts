@@ -87,6 +87,10 @@ export class LiveKitService {
         adaptiveStream: true,
         dynacast: true,
         
+        // CRITICAL FIX: Enable automatic track subscription for faster screen share display
+        // This reduces the 10-second delay by auto-subscribing to published tracks
+        defaultSubscribeToTracks: true,
+        
         // Explicit video capture settings for 360p quality
         videoCaptureDefaults: {
           resolution: {
@@ -300,7 +304,21 @@ export class LiveKitService {
       this.handleParticipantMetadataChanged(metadata || '', participant as RemoteParticipant | LocalParticipant);
     });
 
-    this._room.on(RoomEvent.TrackPublished, (publication, participant) => {
+    this._room.on(RoomEvent.TrackPublished, async (publication, participant) => {
+      // CRITICAL FIX: Auto-subscribe to screen share tracks immediately when published
+      // This reduces the 10-second delay by subscribing as soon as track is available
+      if (publication.kind === 'video' && publication.source === Track.Source.ScreenShare) {
+        try {
+          // For remote participants, explicitly subscribe to the track
+          if (participant instanceof RemoteParticipant && !publication.isSubscribed) {
+            await publication.setSubscribed(true);
+            console.log('[LiveKitService] Auto-subscribed to screen share track from:', participant.identity);
+          }
+        } catch (err) {
+          console.warn('[LiveKitService] Failed to auto-subscribe to screen share track:', err);
+        }
+      }
+      
       this.emit('trackPublished', { publication, participant });
     });
 

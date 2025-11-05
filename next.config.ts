@@ -26,6 +26,57 @@ const nextConfig: NextConfig = {
   },
   // Webpack configuration for production
   webpack: (config, { dev, isServer }) => {
+    // Fix Excalidraw module resolution issue with roughjs
+    const path = require('path');
+    const webpack = require('webpack');
+    
+    // Resolve roughjs paths (both in root and nested in Excalidraw)
+    const rootRoughjsPath = path.resolve(__dirname, 'node_modules/roughjs/bin/rough.js');
+    const excalidrawRoughjsPath = path.resolve(__dirname, 'node_modules/@excalidraw/excalidraw/node_modules/roughjs/bin/rough.js');
+    
+    // Try to find the actual roughjs path
+    const fs = require('fs');
+    let roughjsPath = rootRoughjsPath;
+    if (fs.existsSync(excalidrawRoughjsPath)) {
+      roughjsPath = excalidrawRoughjsPath;
+    } else if (!fs.existsSync(rootRoughjsPath)) {
+      // Fallback: try to find any roughjs
+      try {
+        roughjsPath = require.resolve('roughjs/bin/rough.js');
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'roughjs/bin/rough': roughjsPath,
+    };
+
+    // Use NormalModuleReplacementPlugin to replace the import
+    config.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(
+        /roughjs\/bin\/rough$/,
+        (resource) => {
+          resource.request = resource.request.replace(/roughjs\/bin\/rough$/, 'roughjs/bin/rough.js');
+        }
+      )
+    );
+
+    // Fix for Excalidraw's dynamic imports
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      '.js': ['.js', '.ts', '.tsx'],
+    };
+
+    // Handle Excalidraw and related packages
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
+
     // Production optimizations
     if (!dev && !isServer) {
       config.optimization.splitChunks = {

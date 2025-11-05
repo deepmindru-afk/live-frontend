@@ -13,6 +13,7 @@ interface ParticipantThumbnailProps {
   avatarUrl?: string;
   isHost?: boolean;
   isScreenSharing?: boolean;
+  isWhiteboarding?: boolean; // ✅ Whiteboard indicator
   isLocalParticipant?: boolean;
   isSelected?: boolean;
   currentUserIsHost?: boolean; // ✅ Check if current user is host
@@ -34,6 +35,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
   avatarUrl,
   isHost = false,
   isScreenSharing = false,
+  isWhiteboarding = false, // ✅ Whiteboard indicator
   isLocalParticipant = false,
   isSelected = false,
   currentUserIsHost = false, // ✅ Whether current user is host
@@ -267,6 +269,31 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
             <div className={`${styles['indicator']} ${styles['screen-sharing']}`} title="Sharing screen">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+              </svg>
+            </div>
+          )}
+          
+          {isWhiteboarding && (
+            <div 
+              className={`${styles['indicator']} ${styles['whiteboard']}`} 
+              title="Using whiteboard" 
+              style={{
+                backgroundColor: '#8b5cf6',
+                color: 'white',
+                borderRadius: '4px',
+                padding: '4px 6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                zIndex: 20,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
               </svg>
             </div>
           )}

@@ -1,6 +1,8 @@
 import '../styles/auth.scss';
 import '../styles/dashboard.scss';
 import '../pages/app/globals.css';
+// Import Excalidraw styles
+import '@excalidraw/excalidraw/index.css';
 import ApolloProviderWrapper from '../lib/apollo-provider';
 import { useEffect } from 'react';
 import { handleSSOLogin } from '../lib/simple-auth-handlers';

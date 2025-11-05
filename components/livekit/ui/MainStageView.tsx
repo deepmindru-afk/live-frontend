@@ -79,26 +79,70 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   useEffect(() => {
     const el = screenShareRef.current;
     if (!el || !screenShareTrack || !isScreenSharing) {
+      // Cleanup if track is removed
+      if (el && screenShareRef.current) {
+        try {
+          screenShareTrack?.detach(el);
+        } catch (err) {
+          // Ignore detach errors
+        }
+      }
       return;
     }
 
-
-    if (el.offsetWidth === 0) {
-      const timer = setTimeout(() => {
-        if (el && el.offsetWidth > 0) {
-          screenShareTrack.detach(el);
-          screenShareTrack.attach(el);
+    // CRITICAL FIX: Ensure track is subscribed and ready before attaching
+    // For remote tracks, check if they're subscribed
+    const isTrackReady = screenShareTrack.isSubscribed !== false && screenShareTrack.isMuted !== true;
+    
+    if (!isTrackReady) {
+      // Wait a bit for track to be ready
+      const waitTimer = setTimeout(() => {
+        if (el && screenShareRef.current && screenShareTrack && isScreenSharing) {
+          try {
+            screenShareTrack.detach(el);
+            screenShareTrack.attach(el);
+            console.log('[MainStageView] Screen share track attached after wait');
+          } catch (err) {
+            console.error('[MainStageView] Error attaching screen share track:', err);
+          }
         }
-      }, 800);
+      }, 100);
+      return () => clearTimeout(waitTimer);
+    }
+
+    // Wait for element to be visible
+    if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+      const timer = setTimeout(() => {
+        if (el && el.offsetWidth > 0 && el.offsetHeight > 0 && screenShareTrack && isScreenSharing) {
+          try {
+            screenShareTrack.detach(el);
+            screenShareTrack.attach(el);
+            console.log('[MainStageView] Screen share track attached to video element');
+          } catch (err) {
+            console.error('[MainStageView] Error attaching screen share track:', err);
+          }
+        }
+      }, 200);
       return () => clearTimeout(timer);
     }
 
     // Always detach before attaching to prevent race conditions
-    screenShareTrack.detach(el);
-    screenShareTrack.attach(el);
+    try {
+      screenShareTrack.detach(el);
+      screenShareTrack.attach(el);
+      console.log('[MainStageView] Screen share track attached successfully');
+    } catch (err) {
+      console.error('[MainStageView] Error attaching screen share track:', err);
+    }
 
     return () => {
-      screenShareTrack.detach(el);
+      try {
+        if (el && screenShareRef.current && screenShareTrack) {
+          screenShareTrack.detach(el);
+        }
+      } catch (err) {
+        // Ignore cleanup errors
+      }
     };
   }, [screenShareTrack, isScreenSharing]);
 
@@ -154,7 +198,20 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
               ref={screenShareRef}
               autoPlay
               playsInline
+              muted={false}
               className={`${styles['main-stage-video']} ${styles['screen-share-video']}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                backgroundColor: '#000000'
+              }}
+              onLoadedMetadata={() => {
+                console.log('[MainStageView] Screen share video metadata loaded');
+              }}
+              onCanPlay={() => {
+                console.log('[MainStageView] Screen share video can play');
+              }}
             />
           </>
         ) : (

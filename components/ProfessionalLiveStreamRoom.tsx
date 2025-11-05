@@ -42,9 +42,12 @@ import { usePictureInPicture } from '../hooks/usePictureInPicture';
 import ParticipantQueue from './ParticipantQueue';
 // import LiveKitParticipantQueue from './LiveKitParticipantQueue'; // TODO: Re-implement this component
 import { ParticipantThumbnail, MainStageView, HandRaiseIndicator, useParticipantsWithHandRaise } from './livekit';
+import { Track } from 'livekit-client';
 import { useParticipantQueue, Participant } from '../hooks/useParticipantQueue';
 import { useAudioLevelDetection } from '../hooks/useAudioLevelDetection';
 import { useLiveKit } from '../hooks/useLiveKit';
+import { WhiteboardComponent } from './whiteboard';
+import { useWhiteboard } from '../hooks/whiteboard';
 
 // Additional mutations for leave functionality
 const FORCE_LEAVE_MEETING = gql`
@@ -408,6 +411,37 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onParticipantDisconnected: (participantId) => {
     },
     onTrackSubscribed: (track, publication, participant) => {
+      // Debug: Log when screen share tracks are subscribed
+      const source = publication.source || track?.source;
+      const isScreenShare = source === Track.Source.ScreenShare;
+      
+      if (isScreenShare) {
+        console.log('[ProfessionalLiveStreamRoom] Screen share track subscribed:', {
+          participant: participant?.identity || participant?.name,
+          trackId: track?.sid,
+          source: source,
+          publicationSource: publication.source,
+          trackSource: track?.source,
+          kind: track?.kind
+        });
+        
+        // CRITICAL FIX: Force immediate screen share mode when track is subscribed
+        // This reduces the 10-second delay by immediately updating state
+        const participantIdentity = participant?.identity || participant?.name;
+        const sharingParticipant = memoizedParticipants.find(p => 
+          p.identity === participantIdentity ||
+          p._id === participantIdentity ||
+          p.user?._id === participantIdentity
+        );
+        
+        if (sharingParticipant && !queueState.screenShareMode) {
+          console.log('[ProfessionalLiveStreamRoom] Auto-starting screen share mode for:', sharingParticipant.displayName);
+          const whiteboardHostId = sharingParticipant.identity || sharingParticipant._id || sharingParticipant.user?._id;
+          if (whiteboardHostId) {
+            startQueueScreenShare(whiteboardHostId);
+          }
+        }
+      }
     },
     onError: (error: Error) => {
       // Handle banned user errors or authentication errors - redirect to hrdeedu.co.kr
@@ -2489,6 +2523,68 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // For recording, ONLY allow the actual meeting host (not system admins)
   const isMeetingHost = currentParticipant?.role === 'HOST';
 
+  // Whiteboard state and hook
+  const [isWhiteboardMode, setIsWhiteboardMode] = useState(false);
+  const {
+    isWhiteboardActive,
+    isStreaming: isWhiteboardStreaming,
+    startWhiteboard,
+    stopWhiteboard,
+    error: whiteboardError,
+  } = useWhiteboard({
+    meetingId: actualMeetingId,
+    isHost: isHost || currentParticipant?.role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN',
+    liveKitService,
+    onStreamReady: (stream) => {
+      // Start queue screen share mode when whiteboard stream is ready
+      // CRITICAL FIX: Use currentUser._id (LiveKit identity) instead of participant._id
+      const whiteboardHostId = currentUser?._id || currentParticipant?.user?._id || currentParticipant?._id;
+      if (whiteboardHostId) {
+        console.log('[Whiteboard] Starting screen share for participant:', whiteboardHostId, 'currentParticipant:', currentParticipant?._id, 'currentUser:', currentUser?._id);
+        startQueueScreenShare(whiteboardHostId);
+        setIsWhiteboardMode(true);
+      } else {
+        console.error('[Whiteboard] Cannot start screen share - no valid participant ID found');
+      }
+    },
+    onStreamStopped: () => {
+      stopQueueScreenShare();
+      setIsWhiteboardMode(false);
+    },
+    onWhiteboardStateChange: (active) => {
+      setIsWhiteboardMode(active);
+    },
+  });
+
+  // Memoize whiteboard callbacks to prevent re-initialization loops
+  const handleWhiteboardStreamReady = useCallback((stream: MediaStream) => {
+    console.log('[ProfessionalLiveStreamRoom] Whiteboard stream ready:', stream);
+    startWhiteboard(stream);
+  }, [startWhiteboard]);
+
+  const handleWhiteboardStreamStopped = useCallback(() => {
+    console.log('[ProfessionalLiveStreamRoom] Whiteboard stream stopped');
+    stopWhiteboard();
+  }, [stopWhiteboard]);
+
+  // Whiteboard toggle handler - optimized for instant response
+  const handleWhiteboardToggle = useCallback(() => {
+    if (isWhiteboardActive) {
+      // Stop whiteboard - don't await, do it async in background
+      stopWhiteboard().then(() => {
+        setIsWhiteboardMode(false);
+      }).catch(err => {
+        console.error('[WhiteboardToggle] Error stopping whiteboard:', err);
+        setIsWhiteboardMode(false); // Still update UI even if stop fails
+      });
+    } else {
+      // Start whiteboard - instant UI update
+      setIsWhiteboardMode(true);
+      // The WhiteboardComponent will handle stream creation and call onStreamReady
+      // which will then call startWhiteboard(stream)
+    }
+  }, [isWhiteboardActive, stopWhiteboard]);
+
   // Ensure non-hosts default to chat tab and cannot access participants tab
   useEffect(() => {
     // Strict check - must be actual host with participant role confirmed
@@ -3567,9 +3663,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         });
                       videoTrack = cameraTrackPub?.track;
                       
-                      // Check if this participant has screen share active
+                      // Check if this participant has screen share active (whiteboard or regular screen share)
                       const screenSharePub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
-                        .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                        .find(pub => {
+                          const source = pub.source || pub.track?.source;
+                          // Check enum value - Track.Source.ScreenShare
+                          return source === Track.Source.ScreenShare;
+                        });
                       hasScreenShare = !!screenSharePub?.track;
                       
                       // Get first audio track publication  
@@ -3593,6 +3693,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // Check if this participant is currently selected
                 const isSelected = selectedParticipantId === participant._id;
                 
+                // Check if this participant (host) is using whiteboard
+                const participantIsHost = participant.role === 'HOST' || 
+                                         (isLocalParticipant && (isHost || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN'));
+                
+                // For local participant (host), check if whiteboard is active
+                // For remote participants, check if they have screen share active (which could be whiteboard)
+                const isParticipantWhiteboarding = participantIsHost && (
+                  isLocalParticipant 
+                    ? (isWhiteboardActive || isWhiteboardMode) 
+                    : (hasScreenShare && queueState.screenShareMode && queueState.screenShareParticipant?._id === participant._id)
+                );
+                
                 return (
                   <ParticipantThumbnail
                     key={`${participant._id}-${index}`}
@@ -3606,6 +3718,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isVideoOff={!videoTrack || videoTrack?.isMuted || (isLocalParticipant && !cameraEnabled)} // ✅ Use actual LiveKit track state
                     isHost={participant.role === 'HOST'}
                     isScreenSharing={hasScreenShare}
+                    isWhiteboarding={isParticipantWhiteboarding}
                     isLocalParticipant={isLocalParticipant}
                     isSelected={isSelected} // Add selection indicator
                     currentUserIsHost={isHostState} // ✅ Check if current user is host
@@ -3895,12 +4008,66 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               width: '100%',
               height: '100%'
             }}>
+              {/* Whiteboard - Show ONLY to host when active */}
+              {/* Participants will see the streamed version via LiveKit screen share */}
+              {(() => {
+                // Only show whiteboard editor to host
+                const userIsHost = 
+                  isHost || 
+                  currentParticipant?.role === 'HOST' ||
+                  currentUser?.systemRole === 'TUTOR' ||
+                  currentUser?.systemRole === 'ADMIN';
+                
+                if (!isWhiteboardMode || !userIsHost) {
+                  return null;
+                }
+                
+                return (
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 100,
+                    backgroundColor: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minWidth: '800px',
+                    minHeight: '600px'
+                  }}>
+                    <WhiteboardComponent
+                      isActive={isWhiteboardMode}
+                      onStreamReady={handleWhiteboardStreamReady}
+                      onStreamStopped={handleWhiteboardStreamStopped}
+                    />
+                  </div>
+                );
+              })()}
+
               {/* Participant Queue Display with LiveKit */}
               {(() => {
                 
                 return null;
               })()}
               {(() => {
+                // Don't show participants when whiteboard is active (host sees whiteboard editor, participants see stream)
+                const userIsHost = 
+                  isHost || 
+                  currentParticipant?.role === 'HOST' ||
+                  currentUser?.systemRole === 'TUTOR' ||
+                  currentUser?.systemRole === 'ADMIN';
+                
+                if (isWhiteboardMode && userIsHost) {
+                  // Host sees whiteboard editor, so hide participant view
+                  return null;
+                }
+                
+                // Participants see the streamed whiteboard via LiveKit screen share in main screen
+                // The main screen will automatically show screen share when whiteboard is active
+
                 // Always render main stage if we have participants (either from LiveKit or memoized)
                 const hasParticipants = (isLiveKitConnected && liveKitParticipants.size > 0) || memoizedParticipants.length > 0;
                 
@@ -4027,8 +4194,102 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 );
               }
               
-              // Speaker mode: Get the participant for main stage (selected or active speaker or first available)
-              const mainParticipant = selectedParticipant || memoizedActiveSpeaker || memoizedParticipants[0];
+              // Speaker mode: Get the participant for main stage
+              // CRITICAL FIX: If screen share is active, prioritize screen share participant FIRST
+              // This prevents the whiteboard from disappearing when other participants speak
+              let mainParticipant = null;
+              
+              // Priority 1: Screen share participant (whiteboard takes highest priority)
+              if (queueState.screenShareMode && queueState.screenShareParticipant) {
+                const screenShareParticipant = memoizedParticipants.find(p => 
+                  p._id === queueState.screenShareParticipant?._id ||
+                  p.identity === queueState.screenShareParticipant?._id ||
+                  p.backendId === queueState.screenShareParticipant?._id ||
+                  p.user?._id === queueState.screenShareParticipant?.userId ||
+                  p.userId === queueState.screenShareParticipant?.userId
+                );
+                if (screenShareParticipant) {
+                  mainParticipant = screenShareParticipant;
+                  console.log('[MainStage] Using queueState screen share participant (Priority 1):', screenShareParticipant.displayName);
+                }
+              }
+              
+              // Priority 2: Check if any participant has active screen share (whiteboard)
+              // First check LOCAL participant (host) for screen share
+              if (liveKitService?.room?.localParticipant) {
+                const localHasScreenShare = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+                  .some(pub => {
+                    const source = pub.source || pub.track?.source;
+                    return source === Track.Source.ScreenShare;
+                  });
+                
+                if (localHasScreenShare) {
+                  // Find local participant in our list - match by identity
+                  const localIdentity = liveKitService.room.localParticipant.identity;
+                  const localParticipant = memoizedParticipants.find(p => 
+                    p.identity === localIdentity ||
+                    p._id === localIdentity ||
+                    p.user?._id === localIdentity ||
+                    p.userId === localIdentity
+                  );
+                  
+                  if (localParticipant) {
+                    console.log('[MainStage] Found LOCAL participant with screen share:', localParticipant.displayName, 'Identity:', localIdentity);
+                    mainParticipant = localParticipant;
+                  }
+                }
+              }
+              
+              // Priority 3: Check REMOTE participants for screen share (if not already found)
+              if (!mainParticipant && liveKitService?.room) {
+                for (const [identity, remoteParticipant] of liveKitService.room.remoteParticipants.entries()) {
+                  const hasScreenShare = Array.from(remoteParticipant.videoTrackPublications.values())
+                    .some(pub => {
+                      const source = pub.source || pub.track?.source;
+                      return source === Track.Source.ScreenShare;
+                    });
+                  
+                  if (hasScreenShare) {
+                    // Find matching participant in our list - try all possible ID formats
+                    const matchingParticipant = memoizedParticipants.find(p => 
+                      p.identity === identity ||
+                      p._id === identity || 
+                      p.user?._id === identity ||
+                      p.userId === identity ||
+                      (p as any).backendId === identity
+                    );
+                    
+                    if (matchingParticipant) {
+                      console.log('[MainStage] Found REMOTE participant with screen share:', matchingParticipant.displayName, 'Identity:', identity);
+                      mainParticipant = matchingParticipant;
+                      break;
+                    } else {
+                      console.warn('[MainStage] Screen share found but participant not matched. LiveKit identity:', identity, 'Available participants:', memoizedParticipants.map(p => ({
+                        identity: p.identity,
+                        _id: p._id,
+                        user_id: p.user?._id,
+                        userId: p.userId
+                      })));
+                    }
+                  }
+                }
+              }
+              
+              // Priority 4: Selected participant
+              if (!mainParticipant && selectedParticipant) {
+                mainParticipant = selectedParticipant;
+              }
+              
+              // Priority 5: Active speaker
+              if (!mainParticipant && memoizedActiveSpeaker) {
+                mainParticipant = memoizedActiveSpeaker;
+              }
+              
+              // Priority 6: First participant
+              if (!mainParticipant && memoizedParticipants.length > 0) {
+                mainParticipant = memoizedParticipants[0];
+              }
+              
               if (!mainParticipant) {
                 return null;
               }
@@ -4041,16 +4302,33 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let isParticipantScreenSharing = false;
 
                 // ✅ CRITICAL FIX: Use consistent identity mapping - MUST match LiveKit identity format
-                // LiveKit identity is set to currentUser._id || currentUser.id || userId (line 926)
-                // So we must use the same format here
-                // Use participant.identity FIRST (set in line 217) since it's the correct LiveKit identity
+                // LiveKit identity is set to currentUser._id || currentUser.id || userId
+                // Use participant.identity FIRST (set in memoizedParticipants) since it's the correct LiveKit identity
                 const participantIdentity = mainParticipant.identity || mainParticipant.user?._id || mainParticipant.userId || mainParticipant._id;
                 
                 // ✅ CRITICAL FIX: Check if this is the local participant FIRST
-                // Compare with multiple possible identity formats (same as thumbnails)
-                const isLocalParticipant = liveKitService?.room ? (
-                  participantIdentity === liveKitService.room.localParticipant?.identity
+                // Compare with multiple possible identity formats to ensure we catch all cases
+                const localIdentity = liveKitService?.room?.localParticipant?.identity;
+                const isLocalParticipant = liveKitService?.room && localIdentity ? (
+                  participantIdentity === localIdentity ||
+                  mainParticipant._id === localIdentity ||
+                  mainParticipant.user?._id === localIdentity ||
+                  mainParticipant.userId === localIdentity ||
+                  mainParticipant.identity === localIdentity
                 ) : false;
+                
+                // Debug identity matching when screen sharing
+                if (isParticipantScreenSharing || queueState.screenShareMode) {
+                  console.log('[MainStage] Identity check for screen share:', {
+                    participantIdentity,
+                    localIdentity,
+                    isLocalParticipant,
+                    mainParticipant_identity: mainParticipant.identity,
+                    mainParticipant_id: mainParticipant._id,
+                    mainParticipant_user_id: mainParticipant.user?._id,
+                    queueState_screenShareParticipant_id: queueState.screenShareParticipant?._id
+                  });
+                }
                 
                 if (liveKitService?.room && mainParticipant._id) {
                   
@@ -4069,11 +4347,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     mainAudioTrack = audioTrackPub?.track;
                     
-                    // Check for screen share
+                    // Check for screen share (whiteboard or regular screen share)
                     const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
-                      .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                      .find(pub => {
+                        const source = pub.source || pub.track?.source;
+                        // Check enum value - Track.Source.ScreenShare
+                        return source === Track.Source.ScreenShare;
+                      });
                     mainScreenShareTrack = screenShareTrackPub?.track;
                     isParticipantScreenSharing = !!mainScreenShareTrack;
+                    
+                    // Debug log for screen share detection
+                    if (mainScreenShareTrack) {
+                      console.log('[MainStage] Found local screen share track, Track:', mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
+                    }
                   } else {
                     // Remote participant - get tracks from remoteParticipants
                     let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
@@ -4109,11 +4396,22 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
                       
-                      // Check for screen share
+                      // Check for screen share (whiteboard or regular screen share)
                       const screenShareTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
-                        .find(pub => pub.track?.source === 'screen_share' || pub.source === 'screen_share');
+                        .find(pub => {
+                          const source = pub.source || pub.track?.source;
+                          // Check enum value - Track.Source.ScreenShare
+                          return source === Track.Source.ScreenShare;
+                        });
                       mainScreenShareTrack = screenShareTrackPub?.track;
                       isParticipantScreenSharing = !!mainScreenShareTrack;
+                      
+                      // Debug log for screen share detection (only log once, not on every render)
+                      if (mainScreenShareTrack) {
+                        console.log('[MainStage] Found screen share track for participant:', mainParticipant.displayName, 'Track:', mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
+                      }
+                      // CRITICAL FIX: Remove continuous logging - only log when tracks change
+                      // The previous "No screen share found" log was causing console spam
                     }
                     
                     // ✅ Guard: If no valid remote track found, enforce placeholder
@@ -4150,6 +4448,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
                 // ✅ COMPREHENSIVE DEBUG: Log all main video assignments
 
+
+                // CRITICAL FIX: Removed continuous logging - only log when track actually changes
+                // The previous logging was causing console spam and performance issues
 
                 return (
                   <MainStageView
@@ -4348,6 +4649,56 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/>
                 </svg>
               </button>
+
+              {/* Whiteboard Control - Host Only */}
+              {(() => {
+                // Check if user is host - use multiple checks for reliability
+                // Priority: 1) isHost prop, 2) participant role, 3) system role
+                const userIsHost = 
+                  isHost || 
+                  currentParticipant?.role === 'HOST' ||
+                  currentUser?.systemRole === 'TUTOR' ||
+                  currentUser?.systemRole === 'ADMIN' ||
+                  // Additional check: if thumbnail shows "HOST" label, user is likely host
+                  (memoizedParticipants.find(p => p._id === currentParticipant?._id)?.role === 'HOST');
+                
+                if (!userIsHost) {
+                  return null;
+                }
+                
+                return (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[WhiteboardButton] Clicked, toggling whiteboard');
+                      handleWhiteboardToggle();
+                    }}
+                    style={{
+                      width: isMobile ? '40px' : '48px',
+                      height: isMobile ? '40px' : '48px',
+                      borderRadius: '50%',
+                      backgroundColor: isWhiteboardActive ? '#8b5cf6' : '#f3f4f6',
+                      border: '2px solid ' + (isWhiteboardActive ? '#7c3aed' : '#d1d5db'),
+                      cursor: 'pointer',
+                      color: isWhiteboardActive ? 'white' : '#6b7280',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      flexShrink: 0,
+                      zIndex: 1000,
+                      position: 'relative'
+                    }}
+                    title={isWhiteboardActive ? 'Close whiteboard' : 'Open whiteboard'}
+                  >
+                    <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                    </svg>
+                  </button>
+                );
+              })()}
 
               {/* Chat Control */}
               <button 

@@ -170,7 +170,32 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
   // Start screen share
   const startScreenShare = useCallback((participantId: string) => {
     setQueueState(prev => {
-      const screenShareParticipant = prev.participants.find(p => p._id === participantId);
+      // CRITICAL FIX: Try multiple ID formats to find the participant
+      // participantId could be: user._id, participant._id, identity, or userId
+      const screenShareParticipant = prev.participants.find(p => 
+        p._id === participantId ||
+        p.identity === participantId ||
+        p.user?._id === participantId ||
+        p.userId === participantId ||
+        (p as any).backendId === participantId
+      );
+      
+      if (screenShareParticipant) {
+        console.log('[useParticipantQueue] Starting screen share for:', {
+          participantId,
+          found: screenShareParticipant.displayName,
+          matched_id: screenShareParticipant._id,
+          matched_identity: screenShareParticipant.identity
+        });
+      } else {
+        console.warn('[useParticipantQueue] Screen share participant not found. ID:', participantId, 'Available participants:', prev.participants.map(p => ({
+          _id: p._id,
+          identity: p.identity,
+          user_id: p.user?._id,
+          userId: p.userId
+        })));
+      }
+      
       return {
         ...prev,
         screenShareMode: true,
