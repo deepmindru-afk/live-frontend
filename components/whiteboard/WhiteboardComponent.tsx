@@ -350,8 +350,16 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
         // ✅ MOBILE FIX: Remove fixed min dimensions on mobile for proper responsiveness
         minWidth: isMobile ? '0' : '800px',
         minHeight: isMobile ? '0' : '600px',
+        // ✅ MOBILE FIX: Ensure proper viewport sizing on mobile
+        maxWidth: isMobile ? '100vw' : '100%',
+        maxHeight: isMobile ? '100vh' : '100%',
         // Ensure coordinate system is always correct
         transform: 'translateZ(0)', // Force GPU acceleration for better coordinate accuracy
+        // ✅ MOBILE FIX: Prevent text selection but allow Excalidraw touch interactions
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        // ✅ MOBILE FIX: Allow pan and pinch for Excalidraw, but prevent text selection
+        touchAction: 'pan-x pan-y pinch-zoom', // Allow Excalidraw's touch gestures
         ...style,
       }}
     >
@@ -363,7 +371,11 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
         flexDirection: 'column',
         // ✅ MOBILE FIX: Remove fixed min dimensions on mobile
         minHeight: isMobile ? '0' : '600px',
-        minWidth: isMobile ? '0' : '800px'
+        minWidth: isMobile ? '0' : '800px',
+        // ✅ MOBILE FIX: Ensure proper sizing on mobile
+        maxWidth: isMobile ? '100vw' : '100%',
+        maxHeight: isMobile ? '100vh' : '100%',
+        overflow: 'hidden'
       }}>
         <div style={{
           width: '100%',
@@ -371,7 +383,11 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
-          flex: 1
+          flex: 1,
+          // ✅ MOBILE FIX: Ensure Excalidraw container fills available space
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'hidden'
         }}>
           <Excalidraw
             ref={(api) => {
@@ -406,23 +422,33 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
             }}
             // 호스트가 그릴 수 있도록 보기 모드 비활성화
             viewModeEnabled={false}
-            // 모든 도구를 표시하기 위해 zen 모드 끄기
-            zenModeEnabled={false}
+            // ✅ MOBILE FIX: Enable zen mode on mobile for better space utilization
+            zenModeEnabled={isMobile}
             // 그리드 모드 비활성화
             gridModeEnabled={false}
-            // 모든 UI 요소와 도구 활성화
+            // ✅ MOBILE FIX: Mobile-optimized UI options
             UIOptions={{
               canvasActions: {
                 saveToActiveFile: false,
                 loadScene: false,
                 export: false,
+                // ✅ MOBILE FIX: Hide some actions on mobile to save space
+                clearCanvas: !isMobile,
+              },
+              // ✅ MOBILE FIX: Adjust UI for mobile
+              tools: {
+                // Keep all tools visible but optimize for mobile
+                image: true,
+                lock: true,
               },
             }}
-            // 모든 도구가 보이도록 보장
-            renderTopRightUI={() => null}
+            // ✅ MOBILE FIX: Hide custom UI on mobile to maximize drawing space
+            renderTopRightUI={isMobile ? () => null : () => null}
             renderCustomStats={() => null}
             // 더 나은 가시성을 위해 테마를 밝게 설정
             theme="light"
+            // ✅ MOBILE FIX: Enable mobile-optimized rendering
+            detectScroll={!isMobile} // Disable scroll detection on mobile for better touch handling
           />
         </div>
       </div>

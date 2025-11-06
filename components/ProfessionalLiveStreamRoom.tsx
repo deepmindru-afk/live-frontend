@@ -4207,8 +4207,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     backgroundColor: '#ffffff',
                     display: 'flex',
                     flexDirection: 'column',
-                    minWidth: '800px',
-                    minHeight: '600px'
+                    // ✅ MOBILE FIX: Remove fixed min dimensions on mobile for proper responsiveness
+                    minWidth: isMobile ? '0' : '800px',
+                    minHeight: isMobile ? '0' : '600px',
+                    // ✅ MOBILE FIX: Ensure full viewport on mobile
+                    maxWidth: isMobile ? '100vw' : '100%',
+                    maxHeight: isMobile ? '100vh' : '100%',
+                    overflow: 'hidden'
                   }}>
                     <WhiteboardComponent
                       isActive={isWhiteboardMode}
