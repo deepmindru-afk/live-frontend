@@ -14,6 +14,15 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
+  /* ✅ FIX: Ensure full page height for flexbox layouts */
+  height: 100%;
+  width: 100%;
+}
+
+html {
+  /* ✅ FIX: Ensure proper viewport height */
+  width: 100%;
+  height: 100%;
 }
 
 body {
@@ -22,6 +31,51 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* ✅ FIX: Ensure full page height */
+  height: 100%;
+  width: 100%;
+  position: relative;
+  /* ✅ FIX: Allow scrolling but prevent on video containers */
+  overflow: auto;
+}
+
+/* ✅ FIX: Ensure consistent video rendering across browsers */
+video {
+  /* ✅ FIX: Consistent rendering across Chrome, Safari, Firefox */
+  -webkit-transform: translateZ(0);
+  -moz-transform: translateZ(0);
+  -ms-transform: translateZ(0);
+  transform: translateZ(0);
+  /* ✅ FIX: Hardware acceleration for smooth rendering */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  /* ✅ FIX: Prevent iOS Safari video controls from overlapping */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* ✅ FIX: Ensure videos render properly on all devices */
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* ✅ FIX: Prevent controls from overlapping videos on mobile */
+@media (max-width: 768px) {
+  /* ✅ FIX: Ensure video containers don't overlap with fixed controls */
+  .main-stage-view,
+  .main-stage-container {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  
+  /* ✅ FIX: Prevent iOS Safari address bar from affecting layout */
+  @supports (-webkit-touch-callout: none) {
+    html {
+      height: -webkit-fill-available;
+    }
+    body {
+      min-height: -webkit-fill-available;
+    }
+  }
 }
 
 * {

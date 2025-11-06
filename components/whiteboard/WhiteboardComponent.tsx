@@ -332,6 +332,9 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
     return null;
   }
 
+  // Detect mobile device
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+
   return (
     <div
       ref={containerRef}
@@ -344,8 +347,9 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        minWidth: '800px',
-        minHeight: '600px',
+        // ✅ MOBILE FIX: Remove fixed min dimensions on mobile for proper responsiveness
+        minWidth: isMobile ? '0' : '800px',
+        minHeight: isMobile ? '0' : '600px',
         // Ensure coordinate system is always correct
         transform: 'translateZ(0)', // Force GPU acceleration for better coordinate accuracy
         ...style,
@@ -357,8 +361,9 @@ const WhiteboardComponent: React.FC<WhiteboardComponentProps> = ({
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '600px',
-        minWidth: '800px'
+        // ✅ MOBILE FIX: Remove fixed min dimensions on mobile
+        minHeight: isMobile ? '0' : '600px',
+        minWidth: isMobile ? '0' : '800px'
       }}>
         <div style={{
           width: '100%',

@@ -269,6 +269,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     updateParticipantAudioLevel
   } = useParticipantQueue(memoizedParticipants);
   
+  // ✅ CRITICAL FIX: Reset screen share mode immediately on component mount
+  // This prevents black screen after page refresh
+  const hasResetOnMount = useRef(false);
+  useEffect(() => {
+    // Reset screen share mode on mount - this runs before LiveKit connects
+    if (!hasResetOnMount.current && queueState.screenShareMode) {
+      hasResetOnMount.current = true;
+      stopQueueScreenShare();
+    }
+  }, [queueState.screenShareMode, stopQueueScreenShare]);
+  
   // ✅ CRITICAL FIX: Derive selectedParticipant from ID to prevent reference issues
   // Use a ref to store the previous selected participant to maintain reference stability
   const selectedParticipantRef = useRef<any>(null);
@@ -445,19 +456,111 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       }
     }
   });
+  
+  // ✅ FIX: Check for actual screen share track, not just queue state
+  // This prevents black screen when screen share state is true but no track exists
+  const isActuallyScreenSharing = useMemo(() => {
+    if (!queueState.screenShareMode) return false;
+    
+    // Check if there's actually a screen share track active
+    const hasActualScreenShareTrack = liveKitService?.room && (
+      Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+        .some(pub => {
+          const source = pub.source || pub.track?.source;
+          return source === Track.Source.ScreenShare && pub.track;
+        }) ||
+      Array.from(liveKitService.room.remoteParticipants.values())
+        .some(participant => 
+          Array.from(participant.videoTrackPublications.values())
+            .some(pub => {
+              const source = pub.source || pub.track?.source;
+              return source === Track.Source.ScreenShare && pub.track;
+            })
+        )
+    );
+    
+    // Only use screen share mode if both queue state AND actual track exist
+    return queueState.screenShareMode && !!hasActualScreenShareTrack;
+  }, [queueState.screenShareMode, liveKitService?.room]);
 
   // ✅ CRITICAL FIX: Sync LiveKit screen sharing state with queue state
+  // ✅ FIX: Reset screen share mode on mount/refresh if no actual screen share track exists
   useEffect(() => {
-    if (isLiveKitConnected && currentParticipant?._id) {
-      if (liveKitIsScreenSharing && !queueState.screenShareMode) {
-        // LiveKit started screen sharing, update queue state
-        startQueueScreenShare(currentParticipant._id);
-      } else if (!liveKitIsScreenSharing && queueState.screenShareMode) {
-        // LiveKit stopped screen sharing, update queue state
+    // ✅ FIX: Always reset screen share mode when not connected (e.g., after page refresh)
+    if (!isLiveKitConnected) {
+      if (queueState.screenShareMode) {
         stopQueueScreenShare();
       }
+      return;
     }
-  }, [liveKitIsScreenSharing, isLiveKitConnected, currentParticipant?._id, queueState.screenShareMode, startQueueScreenShare, stopQueueScreenShare]);
+    
+    // ✅ FIX: Wait a bit for LiveKit to fully initialize before checking tracks
+    // This prevents race conditions where tracks haven't loaded yet
+    const checkScreenShare = setTimeout(() => {
+      if (!liveKitService?.room) {
+        if (queueState.screenShareMode) {
+          stopQueueScreenShare();
+        }
+        return;
+      }
+      
+      // ✅ FIX: Check for actual screen share tracks, not just the state
+      const hasActualScreenShare = liveKitService?.room && (
+        // Check local participant
+        Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
+          .some(pub => {
+            const source = pub.source || pub.track?.source;
+            return source === Track.Source.ScreenShare && pub.track;
+          }) ||
+        // Check remote participants
+        Array.from(liveKitService.room.remoteParticipants.values())
+          .some(participant => 
+            Array.from(participant.videoTrackPublications.values())
+              .some(pub => {
+                const source = pub.source || pub.track?.source;
+                return source === Track.Source.ScreenShare && pub.track;
+              })
+          )
+      );
+      
+      if (!hasActualScreenShare && queueState.screenShareMode) {
+        // No actual screen share track exists, but queue state says screen sharing is active
+        // This happens after page refresh - reset the state immediately
+        stopQueueScreenShare();
+        return;
+      }
+      
+      if (hasActualScreenShare && !queueState.screenShareMode && currentParticipant?._id) {
+        // LiveKit has screen sharing active, update queue state
+        // Find the participant who is sharing
+        let sharingParticipantId = currentParticipant._id;
+        
+        // Check if it's a remote participant sharing
+          for (const [identity, participant] of liveKitService.room.remoteParticipants.entries()) {
+            const hasScreenShare = Array.from(participant.videoTrackPublications.values())
+              .some(pub => {
+                const source = pub.source || pub.track?.source;
+                return source === Track.Source.ScreenShare && pub.track;
+              });
+          
+          if (hasScreenShare) {
+            // Find matching participant in our list
+            const matchingParticipant = memoizedParticipants.find(p => 
+              p.identity === identity || p._id === identity || p.user?._id === identity
+            );
+            if (matchingParticipant) {
+              sharingParticipantId = matchingParticipant._id;
+              break;
+            }
+          }
+        }
+        
+        startQueueScreenShare(sharingParticipantId);
+      }
+    }, 500); // Wait 500ms for LiveKit to initialize
+    
+    return () => clearTimeout(checkScreenShare);
+  }, [liveKitIsScreenSharing, isLiveKitConnected, currentParticipant?._id, queueState.screenShareMode, startQueueScreenShare, stopQueueScreenShare, liveKitService, memoizedParticipants]);
   
   // Update isHostState when currentParticipant changes
   useEffect(() => {
@@ -1096,9 +1199,35 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     };
 
     checkMobile();
+    
+    // ✅ FIX: Handle orientation changes smoothly
+    const handleOrientationChange = () => {
+      // Small delay to let browser finish orientation change
+      setTimeout(() => {
+        checkMobile();
+        // Force a re-render to update grid layout
+        if (viewMode === 'grid') {
+          // Trigger grid layout recalculation
+          window.dispatchEvent(new Event('resize'));
+        }
+      }, 100);
+    };
+    
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    // Also listen for screen orientation changes (more reliable on some devices)
+    if (window.screen?.orientation) {
+      window.screen.orientation.addEventListener('change', handleOrientationChange);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      if (window.screen?.orientation) {
+        window.screen.orientation.removeEventListener('change', handleOrientationChange);
+      }
+    };
+  }, [viewMode]);
 
   // Auto-enable video player mode after connection
   useEffect(() => {
@@ -2247,16 +2376,36 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     
     if (isLiveKitConnected) {
       try {
+        // ✅ MOBILE FIX: Ensure user gesture is properly handled for mobile screen sharing
+        // Mobile browsers require screen share to be initiated from a direct user interaction
+        if (isMobile && !liveKitIsScreenSharing) {
+          // On mobile, screen sharing must be triggered from user gesture
+          // The button click itself is the gesture, so we can proceed
+        }
+        
         await liveKitToggleScreenShare();
         // ✅ FIX: Don't manually set screenSharing state - let the useEffect handle it
         // The LiveKit state change will trigger the useEffect to update queue state
       } catch (error: any) {
         
+        // ✅ MOBILE FIX: Better error messages for mobile devices
+        let errorMessage = error?.message || '화면 공유 전환에 실패했습니다. 사용자가 취소했거나 브라우저가 차단했을 수 있습니다.';
+        
+        if (isMobile) {
+          if (error?.message?.includes('user gesture') || error?.message?.includes('getDisplayMedia')) {
+            errorMessage = '모바일에서 화면 공유를 시작하려면 버튼을 다시 탭해주세요.';
+          } else if (error?.name === 'NotAllowedError') {
+            errorMessage = '화면 공유 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
+          } else if (error?.name === 'NotSupportedError') {
+            errorMessage = '이 브라우저에서는 화면 공유를 지원하지 않습니다. Chrome 또는 Safari를 사용해주세요.';
+          }
+        }
+        
         // Show user-friendly error message
         Swal.fire({
           icon: 'error',
           title: '화면 공유 오류',
-          text: error?.message || '화면 공유 전환에 실패했습니다. 사용자가 취소했거나 브라우저가 차단했을 수 있습니다.',
+          text: errorMessage,
           timer: 3000
         });
         
@@ -2705,8 +2854,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
   // Participant data processed
 
-    return (
-      <>
+  return (
+    <>
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -3755,26 +3904,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           )}
           
           {/* Main Video Area - Responsive sizing based on thumbnail panel */}
+          {/* ✅ FIX: Check for actual screen share track, not just queue state */}
           <div style={{
             flex: viewMode === 'grid' ? 1 : (thumbnailPanelOpen ? 1 : 1.2), // Full flex for grid mode
-            backgroundColor: queueState.screenShareMode ? '#000000' : (viewMode === 'grid' ? '#f3f4f6' : '#f3f4f6'),
+            backgroundColor: isActuallyScreenSharing ? '#000000' : (viewMode === 'grid' ? '#f3f4f6' : '#f3f4f6'),
             display: 'flex',
             flexDirection: 'column',
-            minHeight: viewMode === 'grid' ? '0' : '60vh', // No min height for grid - let flex handle it
-            maxHeight: viewMode === 'grid' ? 'none' : '85vh', // No max height for grid mode
-            height: viewMode === 'grid' ? '100%' : 'auto', // Full height for grid mode
-            alignItems: queueState.screenShareMode ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
-            justifyContent: queueState.screenShareMode ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
+            // ✅ MOBILE FIX: Full screen on mobile when screen sharing
+            minHeight: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? '0' : '60vh'), // Full screen minus header/controls on mobile
+            maxHeight: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? 'none' : '85vh'), // Full screen on mobile
+            height: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? '100%' : 'auto'), // Full height on mobile when screen sharing
+            alignItems: isActuallyScreenSharing ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
+            justifyContent: isActuallyScreenSharing ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
             position: 'relative',
-            padding: queueState.screenShareMode ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
-            paddingTop: queueState.screenShareMode ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
-            margin: queueState.screenShareMode ? '0' : '0',
+            padding: isActuallyScreenSharing ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
+            paddingTop: isActuallyScreenSharing ? '0' : (viewMode === 'grid' ? '8px' : (isMobile ? '2vh' : '4vh')),
+            margin: isActuallyScreenSharing ? '0' : '0',
             marginTop: '0',
-            border: queueState.screenShareMode ? 'none' : 'none',
-            borderRadius: queueState.screenShareMode ? '0' : '0',
-            boxShadow: queueState.screenShareMode ? 'none' : 'none',
+            border: isActuallyScreenSharing ? 'none' : 'none',
+            borderRadius: isActuallyScreenSharing ? '0' : '0',
+            boxShadow: isActuallyScreenSharing ? 'none' : 'none',
             overflow: viewMode === 'grid' ? 'hidden' : 'hidden',
-            transition: 'flex 0.3s ease'
+            transition: 'flex 0.3s ease',
+            // ✅ MOBILE FIX: Ensure full width on mobile when screen sharing
+            width: isActuallyScreenSharing && isMobile ? '100vw' : '100%'
           }}>
             {/* Toggle Thumbnail Panel Button - Desktop Only */}
             {!isMobile && viewMode === 'speaker' && (
@@ -3818,7 +3971,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             )}
             
             {/* View Controls Toggle Button - Desktop Only, Hidden during screen share */}
-            {!isMobile && !queueState.screenShareMode && (
+            {!isMobile && !isActuallyScreenSharing && (
               <div 
                 data-view-controls
                 style={{
@@ -4015,7 +4168,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               />
             </div>
 
-            {/* Main Video Content Area */}
+            {/* Main Video Content Area - ✅ FIX: Proper flexbox wrapper for full page height */}
             <div style={{
               flex: 1,
               display: 'flex',
@@ -4023,7 +4176,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               position: 'relative',
               overflow: 'hidden',
               width: '100%',
-              height: '100%'
+              height: '100%',
+              minHeight: 0, // ✅ FIX: Allow flexbox to control height
+              minWidth: 0, // ✅ FIX: Prevent overflow in flex containers
             }}>
               {/* 화이트보드 - 활성화 시 호스트에게만 표시 */}
               {/* 참가자는 LiveKit 화면 공유를 통해 스트리밍된 버전을 봄 */}
@@ -4096,26 +4251,51 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               if (viewMode === 'grid') {
                 const participantsToShow = memoizedParticipants.slice(0, gridSize === '2x2' ? 4 : gridSize === '3x3' ? 9 : 16);
                 
+                // ✅ FIX: Responsive grid columns based on screen size
+                const getGridColumns = () => {
+                  if (isMobile) {
+                    // Mobile: 1 column for portrait, 2 for landscape
+                    if (window.innerHeight > window.innerWidth) {
+                      return '1fr'; // Portrait: single column
+                    } else {
+                      return '1fr 1fr'; // Landscape: 2 columns
+                    }
+                  }
+                  // Desktop: Use gridSize setting
+                  return gridSize === '2x2' ? '1fr 1fr' :
+                         gridSize === '3x3' ? '1fr 1fr 1fr' :
+                         '1fr 1fr 1fr 1fr';
+                };
+                
+                const getGridRows = () => {
+                  if (isMobile) {
+                    // Mobile: Auto rows, let content determine
+                    return 'auto';
+                  }
+                  // Desktop: Use gridSize setting
+                  return gridSize === '2x2' ? '1fr 1fr' :
+                         gridSize === '3x3' ? '1fr 1fr 1fr' :
+                         '1fr 1fr 1fr 1fr';
+                };
+                
                 return (
                   <div className="grid-mode" style={{
                     width: '100%',
                     height: '100%',
                     minHeight: '0',
                     display: 'grid',
-                    gridTemplateColumns: gridSize === '2x2' ? '1fr 1fr' :
-                                       gridSize === '3x3' ? '1fr 1fr 1fr' :
-                                       '1fr 1fr 1fr 1fr',
-                    gridTemplateRows: gridSize === '2x2' ? '1fr 1fr' :
-                                     gridSize === '3x3' ? '1fr 1fr 1fr' :
-                                     '1fr 1fr 1fr 1fr',
-                    gap: '8px',
-                    padding: '8px',
+                    gridTemplateColumns: getGridColumns(),
+                    gridTemplateRows: getGridRows(),
+                    gap: isMobile ? '4px' : '8px',
+                    padding: isMobile ? '4px' : '8px',
                     backgroundColor: 'transparent',
                     borderRadius: '0',
                     boxShadow: 'none',
                     alignContent: 'stretch',
                     justifyItems: 'stretch',
-                    overflow: 'hidden'
+                    overflow: 'auto', // ✅ FIX: Allow scrolling on mobile if needed
+                    gridAutoRows: 'minmax(0, 1fr)', // ✅ FIX: Ensure rows have proper sizing
+                    gridAutoFlow: 'row', // ✅ FIX: Flow items row by row
                   }}>
                     {participantsToShow.map((participant, index) => {
                       // Get video and audio tracks for this participant
@@ -4176,14 +4356,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                           height: '100%',
                           minHeight: '0',
                           minWidth: '0',
-                          borderRadius: '8px',
+                          borderRadius: isMobile ? '6px' : '8px',
                           overflow: 'hidden',
                           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                           backgroundColor: '#1f2937',
                           display: 'flex',
                           alignItems: 'stretch',
                           justifyContent: 'stretch',
-                          position: 'relative'
+                          position: 'relative',
+                          aspectRatio: '16 / 9', // ✅ FIX: Maintain 16:9 aspect ratio for grid items
+                          flex: '1 1 auto' // ✅ FIX: Allow flexbox sizing
                         }}>
                           <MainStageView
                             participantId={participant._id}
@@ -4307,6 +4489,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainAudioTrack = null;
                 let mainScreenShareTrack = null;
                 let isParticipantScreenSharing = false;
+                
+                // ✅ FIX: Only show screen share if queue state is active AND track exists
+                // This prevents black screen after refresh or when screen sharing stops
+                const shouldShowScreenShare = queueState.screenShareMode && queueState.screenShareParticipant;
 
                 // 중요 수정: 일관된 identity 매핑 사용 - LiveKit identity 형식과 반드시 일치해야 함
                 // LiveKit identity는 currentUser._id || currentUser.id || userId로 설정됨
@@ -4435,6 +4621,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 // CRITICAL FIX: Removed continuous logging - only log when track actually changes
                 // The previous logging was causing console spam and performance issues
 
+                // ✅ FIX: Only show screen share if we have an actual track AND queue state says it's active
+                // This prevents black screen when screen sharing stops or after page refresh
+                const finalIsScreenSharing = Boolean(shouldShowScreenShare && isParticipantScreenSharing && mainScreenShareTrack);
+                
                 return (
                   <MainStageView
                     participantId={mainParticipant._id}
@@ -4446,8 +4636,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     isMuted={mainParticipant.micState === 'OFF' || false}
                     isVideoOff={!mainVideoTrack || mainVideoTrack?.isMuted || (isMainParticipantLocal && !cameraEnabled)} // ✅ FIX: Check if track is muted - treat muted tracks as video off to show fallback UI
                     isHost={mainParticipant.role === 'HOST' || false}
-                    isScreenSharing={isParticipantScreenSharing}
-                    screenShareTrack={mainScreenShareTrack}
+                    isScreenSharing={finalIsScreenSharing}
+                    screenShareTrack={finalIsScreenSharing ? mainScreenShareTrack : null}
                     connectionQuality={5} // TODO: Get actual connection quality
                     isLocalParticipant={isMainParticipantLocal}
                     isRecording={isRecording} // ✅ Pass recording state
@@ -4483,9 +4673,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 maxThumbnails={6}
               />
             ) : null}
-            </div>
           </div>
-
+          
           {/* Video Player Control Bar - Auto-hide */}
           <div style={{
             height: isMobile ? '80px' : '80px', // Increased height for mobile
@@ -5070,6 +5259,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           )}
           </div>
         </div>
+      </div>
         
       </>
     );

@@ -380,8 +380,8 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 50vh; // Responsive minimum height - bigger for main content
-  max-height: 100vh;
+  min-height: 0; // ✅ FIX: Remove fixed min-height for proper flexbox behavior
+  max-height: 100%;
   background: linear-gradient(135deg, $dark-bg 0%, rgba($primary-blue, 0.1) 100%);
   border-radius: 16px;
   overflow: hidden;
@@ -389,6 +389,8 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto; // ✅ FIX: Allow flexbox to control sizing
+  min-width: 0; // ✅ FIX: Prevent overflow in flex containers
 
   &.speaking {
     box-shadow: 0 0 0 4px rgba($success-green, 0.4), 
@@ -437,17 +439,37 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   justify-content: center;
   background: $dark-bg;
   min-height: 0;
+  flex: 1 1 auto; // ✅ FIX: Allow flexbox to control sizing
   
-  // Grid mode: fill container properly
+  // ✅ FIX: Aspect ratio container for proper video scaling
+  // Single video mode: center and fill proportionally
+  &:not(.grid-mode-item):not(.screen-sharing) {
+    aspect-ratio: 16 / 9; // ✅ Default to 16:9 for camera feeds
+    max-width: 100%;
+    max-height: 100%;
+    
+    // Auto-adjust if container is taller than wide
+    @media (orientation: portrait) {
+      @media (max-height: 600px) {
+        aspect-ratio: auto;
+        height: 100%;
+      }
+    }
+  }
+  
+  // Grid mode: fill container properly with aspect ratio
   .grid-mode &,
   .grid-mode-item & {
     min-height: 0;
     align-items: stretch;
     justify-content: stretch;
     background: #1f2937;
+    aspect-ratio: 16 / 9; // ✅ Maintain 16:9 in grid
+    width: 100%;
+    height: 100%;
     
     .main-stage-video {
-      object-fit: contain !important;
+      object-fit: cover !important; // ✅ FIX: Use cover for grid to fill space without black bars
       border-radius: 8px;
       width: 100%;
       height: 100%;
@@ -463,6 +485,9 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     padding: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    aspect-ratio: auto; // ✅ Screen share can be any aspect ratio
+    height: 100%;
+    width: 100%;
   }
 
   // Avatar placeholder for main stage (when video is off)
@@ -517,15 +542,34 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 .main-stage-video {
   width: 100%;
   height: 100%;
-  object-fit: contain; // ✅ FIX: Changed from 'cover' to 'contain' to match thumbnail framing - show whole body
-  object-position: center; // ✅ Center the video content
-  background: #000000; // ✅ Black background for letterboxing
+  // ✅ FIX: Use 'cover' for single video to fill space and avoid large black bars
+  // Only use 'contain' when we want to show entire video without cropping
+  object-fit: cover; // ✅ FIX: Changed to cover for better face visibility, no black bars
+  object-position: center center; // ✅ Center the video content, focus on faces
+  background: #000000; // ✅ Black background for any small letterboxing
   border-radius: 8px;
   max-width: 100%;
   max-height: 100%;
+  display: block; // ✅ Ensure proper rendering
+  flex-shrink: 0; // ✅ Prevent shrinking
+
+  // ✅ FIX: For single video in speaker mode, use smart object-fit
+  // Detect if video is portrait or landscape and adjust
+  &:not(.screen-share-video) {
+    // Try to fill container while maintaining aspect ratio
+    // If container is much taller than video, use contain to avoid excessive cropping
+    @container (min-height: 600px) {
+      object-fit: contain;
+    }
+    
+    // For smaller containers, use cover to fill space
+    @container (max-height: 400px) {
+      object-fit: cover;
+    }
+  }
 
   &.screen-share-video {
-    object-fit: contain !important; // Show full content without cropping
+    object-fit: contain !important; // ✅ Screen share: always contain to show full content
     object-position: center !important;
     background: #000000 !important;
     max-width: 100% !important;
@@ -961,22 +1005,41 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 768px) {
   .main-stage-view {
-    min-height: 45vh; // Responsive minimum height for mobile - bigger
-    max-height: 80vh; // Responsive maximum height for mobile
+    min-height: 0 !important; // ✅ FIX: Let flexbox control height
+    max-height: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important; // ✅ FIX: Allow flexbox sizing
   }
   
-  // ✅ MOBILE VIDEO FIXES
+  // ✅ MOBILE VIDEO FIXES - Smart object-fit based on orientation
   .main-stage-video {
     width: 100% !important;
     height: 100% !important;
-    object-fit: contain !important; // ✅ FIX: Changed from 'cover' to 'contain' to match thumbnail framing
-    object-position: center !important; // ✅ Center the video content
+    // ✅ FIX: Use cover for mobile to fill screen and avoid large black bars
+    // Mobile cameras are typically portrait, so cover works better
+    object-fit: cover !important;
+    object-position: center center !important; // ✅ Center and focus on faces
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
     z-index: 1 !important;
     position: relative !important;
     background: #000000 !important;
+    flex-shrink: 0 !important;
+  }
+  
+  // ✅ MOBILE LANDSCAPE: Use contain when in landscape to avoid excessive cropping
+  @media (orientation: landscape) and (max-width: 768px) {
+    .main-stage-video:not(.screen-share-video) {
+      object-fit: contain !important; // ✅ Landscape: show more of the video
+    }
+  }
+  
+  // ✅ MOBILE PORTRAIT: Use cover to fill screen
+  @media (orientation: portrait) and (max-width: 768px) {
+    .main-stage-video:not(.screen-share-video) {
+      object-fit: cover !important; // ✅ Portrait: fill screen
+    }
   }
   
   // ✅ MOBILE SCREEN SHARE FIXES
@@ -993,12 +1056,24 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     opacity: 1 !important;
     z-index: 1 !important;
     position: relative !important;
-    border: none !important; // Remove any borders
-    margin: 0 !important; // Remove margins
-    padding: 0 !important; // Remove padding
-    border-radius: 0 !important; // Remove border radius for full screen effect
-    box-shadow: none !important; // Remove any shadows
-    outline: none !important; // Remove outline
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    // ✅ MOBILE FIX: Ensure proper aspect ratio preservation on mobile
+    min-width: 0 !important;
+    min-height: 0 !important;
+    // ✅ MOBILE FIX: Full screen on mobile - take available space
+    @media (orientation: portrait) {
+      width: 100vw !important;
+      height: calc(100vh - 180px) !important; // Full height minus header/controls
+    }
+    @media (orientation: landscape) {
+      width: 100vw !important;
+      height: calc(100vh - 100px) !important; // Full height minus controls
+    }
   }
   
   .main-stage-container {
@@ -1007,9 +1082,32 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     justify-content: center !important;
     width: 100% !important;
     height: 100% !important;
-    min-height: 45vh !important; // Responsive minimum height - bigger
+    min-height: 0 !important; // ✅ FIX: Let flexbox control
     position: relative !important;
     overflow: hidden !important;
+    flex: 1 1 auto !important; // ✅ FIX: Allow flexbox sizing
+    // ✅ FIX: Remove fixed aspect ratio on mobile for better flexibility
+    aspect-ratio: auto !important;
+    
+    // ✅ FIX: Adjust aspect ratio based on orientation
+    @media (orientation: landscape) {
+      aspect-ratio: 16 / 9 !important;
+    }
+    
+    @media (orientation: portrait) {
+      aspect-ratio: auto !important;
+      height: 100% !important;
+    }
+    
+    // ✅ MOBILE FIX: Full screen container for screen sharing
+    &.screen-sharing {
+      width: 100vw !important;
+      height: calc(100vh - 180px) !important; // Full height minus header/controls
+      aspect-ratio: auto !important;
+      @media (orientation: landscape) {
+        height: calc(100vh - 100px) !important; // Less space needed in landscape
+      }
+    }
   }
   
   // Ensure main stage view has proper dimensions
@@ -1018,8 +1116,9 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     flex-direction: column !important;
     width: 100% !important;
     height: 100% !important;
-    min-height: 45vh !important; // Responsive minimum height - bigger
+    min-height: 0 !important; // ✅ FIX: Let flexbox control
     position: relative !important;
+    flex: 1 1 auto !important; // ✅ FIX: Allow flexbox sizing
   }
 
   .main-stage-top-bar {
@@ -1075,8 +1174,19 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 
 @media (max-width: 480px) {
   .main-stage-view {
-    min-height: 40vh; // Responsive minimum height for small mobile - bigger
-    max-height: 75vh; // Responsive maximum height for small mobile
+    min-height: 0 !important; // ✅ FIX: Let flexbox control height
+    max-height: 100% !important;
+    height: 100% !important;
+    flex: 1 1 auto !important; // ✅ FIX: Allow flexbox sizing
+  }
+  
+  .main-stage-container {
+    aspect-ratio: auto !important; // ✅ FIX: Remove fixed aspect ratio on small mobile
+    height: 100% !important;
+    
+    @media (orientation: landscape) {
+      aspect-ratio: 16 / 9 !important;
+    }
   }
 
   .main-stage-top-bar {

@@ -706,8 +706,21 @@ export class LiveKitService {
         throw new Error('Screen sharing is not supported in this browser');
       }
       
-      await this._room.localParticipant.setScreenShareEnabled(true);
-      this.updateRoomState({ isScreenSharing: true });
+      // ✅ MOBILE FIX: Check for mobile devices and provide better error handling
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // ✅ MOBILE FIX: On mobile, screen sharing might have limitations
+      // Use LiveKit's built-in screen share which handles mobile better
+      try {
+        await this._room.localParticipant.setScreenShareEnabled(true);
+        this.updateRoomState({ isScreenSharing: true });
+      } catch (screenShareError: any) {
+        // ✅ MOBILE FIX: Better error handling for mobile devices
+        if (isMobile && screenShareError.message?.includes('getDisplayMedia')) {
+          throw new Error('Screen sharing on mobile requires a user gesture. Please tap the screen share button again.');
+        }
+        throw screenShareError;
+      }
     } catch (error: any) {
       
       // Provide more specific error messages
@@ -728,19 +741,45 @@ export class LiveKitService {
     
     try {
       
-      // Gracefully stop screen share without stopping the entire stream
+      // ✅ FIX: Properly stop screen share by unpublishing all screen share tracks first
+      // This prevents the RTCPeerConnection.removeTrack error
+      const screenSharePublications = Array.from(this._room.localParticipant.videoTrackPublications.values())
+        .filter(pub => {
+          const source = pub.source || pub.track?.source;
+          return source === Track.Source.ScreenShare;
+        });
+      
+      // ✅ FIX: Unpublish all screen share tracks before disabling
+      // This ensures proper cleanup and prevents WebRTC errors
+      for (const pub of screenSharePublications) {
+        if (pub.track) {
+          try {
+            // Use unpublishTrack instead of manual removeTrack to avoid WebRTC errors
+            await this._room.localParticipant.unpublishTrack(pub.track);
+          } catch (unpublishError: any) {
+            // Log but continue - track might already be unpublished
+            console.warn('[LiveKitService] Error unpublishing screen share track:', unpublishError);
+          }
+        }
+      }
+      
+      // Wait a bit for tracks to be properly cleaned up
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Now disable screen share using LiveKit's method
       await this._room.localParticipant.setScreenShareEnabled(false);
       
       // Update state after successful stop
       this.updateRoomState({ isScreenSharing: false });
       
-    } catch (error) {
+    } catch (error: any) {
       
       // Even if stop fails, don't stop the entire stream
       // Just update the state to reflect the intended state
       this.updateRoomState({ isScreenSharing: false });
       
-      // Don't rethrow the error to prevent stream interruption
+      // ✅ FIX: Don't rethrow the error to prevent stream interruption
+      // The state is already updated, so UI will reflect the change
     }
   }
 

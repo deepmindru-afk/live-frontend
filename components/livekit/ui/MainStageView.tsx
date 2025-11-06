@@ -187,7 +187,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
       <audio ref={audioRef} autoPlay playsInline muted={(isLocalParticipant || participantId === 'local') && !isRecording} style={{ display: 'none' }} />
       
       {/* 메인 비디오 컨테이너 */}
-      <div className={styles['main-stage-container']} onClick={handleClick}>
+      <div className={`${styles['main-stage-container']} ${isScreenSharing ? styles['screen-sharing'] : ''}`} onClick={handleClick}>
         {/* 화면 공유 비디오 - 화면 공유 시 렌더링 */}
         {isScreenSharing && screenShareTrack ? (
           <>
