@@ -1496,8 +1496,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         return;
       }
       
+      // Check if host is recording and add warning
+      const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+      const recordingWarning = (isHost && isRecording) ? '\n\n⚠️ 녹화 중입니다. 호스트가 나가면 녹화가 중지됩니다.' : '';
+      
       // Show custom confirmation dialog
-      const confirmed = window.confirm('회의를 나가시겠습니까?');
+      const confirmed = window.confirm(`회의를 나가시겠습니까?${recordingWarning}`);
       
       if (!confirmed) {
         // Prevent navigation
@@ -1917,7 +1921,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
-  const handleEndMeeting = async () => {
+  const handleEndMeeting = useCallback(async () => {
     try {
       await endMeeting({
         variables: { meetingId: actualMeetingId }
@@ -1937,7 +1941,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         text: '회의 종료에 실패했습니다. 다시 시도해주세요.'
       });
     }
-  };
+  }, [endMeeting, actualMeetingId, redirectToDashboard]);
+
+  // ✅ Backend handles auto-end when participantCount reaches 0
+  // Frontend just monitors and redirects when meeting status changes to ENDED
+  // This ensures meeting ends even if host leaves first (backend doesn't require host permission for auto-end)
 
   const handleLeaveMeeting = async () => {
     // Only show host options if user is actually a host based on participant data
@@ -2097,10 +2105,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const handleForceExit = async () => {
     try {
       if (isHost && participants.length > 1) {
+        // Check if recording is active and add warning
+        const recordingWarning = isRecording 
+          ? '\n\n⚠️ 녹화 중입니다. 호스트가 나가면 녹화가 중지됩니다.' 
+          : '';
+        
         // Show options for host
         const result = await Swal.fire({
           title: '회의 나가기',
-          text: '호스트로서 모든 참가자를 위해 회의를 종료하거나 호스트 권한을 이전할 수 있습니다:',
+          text: `호스트로서 모든 참가자를 위해 회의를 종료하거나 호스트 권한을 이전할 수 있습니다:${recordingWarning}`,
           icon: 'question',
           showCancelButton: true,
           showDenyButton: true,
@@ -2118,8 +2131,26 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           await handleTransferHost();
         }
       } else if (isHost) {
-        // Host with no other participants - just end meeting
-        await handleEndMeeting();
+        // Host with no other participants - show warning if recording
+        if (isRecording) {
+          const result = await Swal.fire({
+            title: '회의 종료',
+            text: '⚠️ 녹화 중입니다. 호스트가 나가면 녹화가 중지됩니다. 회의를 종료하시겠습니까?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '종료',
+            cancelButtonText: '취소',
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d'
+          });
+          
+          if (result.isConfirmed) {
+            await handleEndMeeting();
+          }
+        } else {
+          // No recording - just end meeting
+          await handleEndMeeting();
+        }
       }
     } catch (error) {
       Swal.fire({
