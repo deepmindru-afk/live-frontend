@@ -350,6 +350,84 @@ const AttendancePage: React.FC = () => {
     }
   };
 
+  // ✅ Calculate actual attendance duration from joinedAt and leftAt times
+  // PRIORITY: Always calculate from participant's joinedAt/leftAt first (most accurate)
+  const calculateParticipantDuration = (participant: ParticipantAttendance): number => {
+    // PRIORITY 1: Calculate directly from participant's joinedAt and leftAt (most reliable)
+    if (participant.joinedAt) {
+      try {
+        const joinTime = new Date(participant.joinedAt).getTime();
+        // Check if joinTime is valid
+        if (!isNaN(joinTime) && joinTime > 0) {
+          // Use leftAt if available, otherwise use current time (for ongoing participants)
+          const leftTimeRaw = participant.leftAt || (meeting?.status === 'ENDED' || meeting?.status === 'END' ? meeting?.endedAt : null);
+          const leftTime = leftTimeRaw ? new Date(leftTimeRaw).getTime() : Date.now();
+          
+          // Check if leftTime is valid
+          if (!isNaN(leftTime) && leftTime > 0 && leftTime >= joinTime) {
+            const duration = Math.floor((leftTime - joinTime) / 1000);
+            // Only return if duration is positive and reasonable (not negative)
+            if (duration >= 0 && duration < 86400) { // Less than 24 hours (reasonable max)
+              // Debug log (can be removed in production)
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[Attendance Calc] ${participant.displayName}: joinedAt=${participant.joinedAt}, leftAt=${participant.leftAt || 'N/A'}, calculated=${duration}s (${Math.floor(duration/60)}min)`);
+              }
+              return duration;
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[Attendance Calc Error] Failed to calculate duration for ${participant.displayName}:`, error);
+      }
+    }
+    
+    // PRIORITY 2: If direct calculation failed, try sessions (sum of all session durations)
+    if (participant.sessions && participant.sessions.length > 0) {
+      let totalDuration = 0;
+      let hasValidSession = false;
+      
+      for (const session of participant.sessions) {
+        // Try to calculate from session's joinedAt and leftAt first
+        if (session.joinedAt) {
+          const sessionJoinTime = new Date(session.joinedAt).getTime();
+          if (!isNaN(sessionJoinTime) && sessionJoinTime > 0) {
+            const sessionLeftTime = session.leftAt ? new Date(session.leftAt).getTime() : Date.now();
+            if (!isNaN(sessionLeftTime) && sessionLeftTime > 0) {
+              const sessionDuration = Math.floor((sessionLeftTime - sessionJoinTime) / 1000);
+              if (sessionDuration > 0 && sessionDuration < 86400) {
+                totalDuration += sessionDuration;
+                hasValidSession = true;
+                continue; // Skip to next session
+              }
+            }
+          }
+        }
+        
+        // Fallback to durationSec only if session times are not available
+        if (session.durationSec && session.durationSec > 0 && session.durationSec < 86400) {
+          totalDuration += session.durationSec;
+          hasValidSession = true;
+        }
+      }
+      
+      if (hasValidSession && totalDuration > 0) {
+        return totalDuration;
+      }
+    }
+    
+    // Last resort: use totalTime from backend (but only if it seems reasonable)
+    // WARNING: Backend totalTime is often incorrect (may be the meeting duration instead of participant duration)
+    // Only use it if we have no other option and it's not suspiciously equal to common meeting durations
+    if (participant.totalTime && participant.totalTime > 0) {
+      // If totalTime seems suspicious (like it's exactly the meeting duration), try to verify
+      // But we'll use it anyway as a last resort since we have no other data
+      console.warn(`[Attendance Calc] Using backend totalTime for ${participant.displayName}: ${participant.totalTime}s (this may be incorrect if it matches meeting duration)`);
+      return participant.totalTime;
+    }
+    
+    return 0;
+  };
+
   // ✅ Helper: Get capped attendance time (never exceeds total meeting duration)
   const getCappedAttendanceTime = (participantTotalTime: number, totalMeetingDuration: number) => {
     if (totalMeetingDuration <= 0) return participantTotalTime;
@@ -415,7 +493,9 @@ const AttendancePage: React.FC = () => {
     const csvContent = [
       ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '손들기'],
       ...attendance.participants.map((participant, index) => {
-        const cappedTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
+        // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
+        const actualDuration = calculateParticipantDuration(participant);
+        const cappedTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
         const attendancePercentage = Math.min(calculateAttendancePercentage(cappedTime, totalMeetingDuration), 100);
         return [
           index + 1,
@@ -821,8 +901,10 @@ const AttendancePage: React.FC = () => {
             <tbody>
               {filteredParticipants.map((participant, index) => {
                 const totalMeetingDuration = getTotalMeetingDuration();
+                // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
+                const actualDuration = calculateParticipantDuration(participant);
                 // ✅ FIX: Cap participant attendance time to not exceed total meeting duration
-                const cappedAttendanceTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
+                const cappedAttendanceTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
                 const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
                 
                 return (
@@ -924,7 +1006,9 @@ const AttendancePage: React.FC = () => {
           <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
             {filteredParticipants.map((participant, index) => {
               const totalMeetingDuration = getTotalMeetingDuration();
-              const cappedAttendanceTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
+              // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
+              const actualDuration = calculateParticipantDuration(participant);
+              const cappedAttendanceTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
               const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
               
               return (
@@ -1083,7 +1167,14 @@ const AttendancePage: React.FC = () => {
         </motion.div>
 
         {/* Participant Detail Modal */}
-        {showParticipantModal && selectedParticipant && (
+        {showParticipantModal && selectedParticipant && (() => {
+          // Calculate attendance values once for the modal
+          const selectedActualDuration = calculateParticipantDuration(selectedParticipant);
+          const selectedTotalMeetingDuration = getTotalMeetingDuration();
+          const selectedCappedTime = getCappedAttendanceTime(selectedActualDuration, selectedTotalMeetingDuration);
+          const selectedAttendancePercentage = Math.min(calculateAttendancePercentage(selectedCappedTime, selectedTotalMeetingDuration), 100);
+          
+          return (
           <div style={{
             position: 'fixed',
             top: 0,
@@ -1204,7 +1295,7 @@ const AttendancePage: React.FC = () => {
                      (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '정보 없음' : '진행 중')}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>총 참여 시간:</strong> {formatDuration(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()))}
+                    <strong>총 참여 시간:</strong> {formatDuration(selectedCappedTime)}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>재접속 횟수:</strong> {selectedParticipant.sessionCount}회
@@ -1215,13 +1306,13 @@ const AttendancePage: React.FC = () => {
                       marginLeft: '8px',
                       padding: '4px 8px',
                       borderRadius: '4px',
-                      backgroundColor: calculateAttendancePercentage(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()), getTotalMeetingDuration()) >= 80 ? '#d4edda' : 
-                                     calculateAttendancePercentage(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()), getTotalMeetingDuration()) >= 50 ? '#fff3cd' : '#f8d7da',
-                      color: calculateAttendancePercentage(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()), getTotalMeetingDuration()) >= 80 ? '#155724' : 
-                             calculateAttendancePercentage(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()), getTotalMeetingDuration()) >= 50 ? '#856404' : '#721c24',
+                      backgroundColor: selectedAttendancePercentage >= 80 ? '#d4edda' : 
+                                     selectedAttendancePercentage >= 50 ? '#fff3cd' : '#f8d7da',
+                      color: selectedAttendancePercentage >= 80 ? '#155724' : 
+                             selectedAttendancePercentage >= 50 ? '#856404' : '#721c24',
                       fontWeight: '500'
                     }}>
-                      {Math.min(calculateAttendancePercentage(getCappedAttendanceTime(selectedParticipant.totalTime, getTotalMeetingDuration()), getTotalMeetingDuration()), 100)}%
+                      {selectedAttendancePercentage}%
                     </span>
                   </div>
                   {selectedParticipant.hasHandRaised && (
@@ -1252,7 +1343,9 @@ const AttendancePage: React.FC = () => {
                     .filter(p => p._id !== selectedParticipant._id)
                     .map((participant, index) => {
                       const totalMeetingDuration = getTotalMeetingDuration();
-                      const cappedAttendanceTime = getCappedAttendanceTime(participant.totalTime, totalMeetingDuration);
+                      // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
+                      const actualDuration = calculateParticipantDuration(participant);
+                      const cappedAttendanceTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
                       const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
                       
                       return (
@@ -1320,7 +1413,8 @@ const AttendancePage: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </>
   );
