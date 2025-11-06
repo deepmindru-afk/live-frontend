@@ -4604,16 +4604,41 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
               {/* 화이트보드 제어 - 호스트 전용 */}
               {(() => {
-                // 사용자가 호스트인지 확인 - 신뢰성을 위해 여러 확인 사용
-                // 우선순위: 1) isHost prop, 2) 참가자 역할, 3) 시스템 역할
-                const userIsHost = 
-                  isHost || 
-                  currentParticipant?.role === 'HOST' ||
-                  currentUser?.systemRole === 'TUTOR' ||
-                  currentUser?.systemRole === 'ADMIN' ||
-                  // 추가 확인: 썸네일에 "HOST" 레이블이 표시되면 사용자가 호스트일 가능성이 높음
-                  (memoizedParticipants.find(p => p._id === currentParticipant?._id)?.role === 'HOST');
+                // ✅ CRITICAL FIX: Only show whiteboard button to ACTUAL HOST, TUTOR, or ADMIN users
+                // DO NOT rely on 'role' prop as it defaults to 'HOST' - use actual participant data
                 
+                // Check system roles first (TUTOR and ADMIN are always allowed)
+                const isSystemAdmin = currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+                
+                // If no currentParticipant data, only allow system admins
+                if (!currentParticipant) {
+                  if (!isSystemAdmin) {
+                    return null;
+                  }
+                  // System admin can see button even without participant data - continue to render button below
+                }
+                
+                // First, check if user is explicitly a PARTICIPANT - if so, hide button immediately
+                // (unless they're a system admin)
+                if (currentParticipant?.role === 'PARTICIPANT' && !isSystemAdmin) {
+                  return null;
+                }
+                
+                // Check if user is actual HOST from participant data
+                const isActualHost = currentParticipant?.role === 'HOST';
+                
+                // Check if found in memoized participants list with HOST role
+                const isHostInList = currentParticipant ? memoizedParticipants.some(p => {
+                  const pId = p._id || p.user?._id || (p as any).backendId;
+                  const currentId = currentParticipant._id || currentParticipant.user?._id || (currentParticipant as any)?.backendId;
+                  return pId === currentId && p.role === 'HOST';
+                }) : false;
+                
+                // Only show button if user is confirmed HOST, TUTOR, or ADMIN
+                // DO NOT use 'role' prop as it defaults to 'HOST' and is unreliable for participants
+                const userIsHost = isActualHost || isSystemAdmin || isHostInList;
+                
+                // ✅ STRICT CHECK: Hide button for all non-host participants
                 if (!userIsHost) {
                   return null;
                 }
