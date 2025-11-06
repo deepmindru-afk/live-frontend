@@ -25,12 +25,12 @@ interface UseWhiteboardReturn {
 /**
  * useWhiteboard Hook
  * 
- * Main hook for managing whiteboard state and LiveKit streaming.
- * Handles:
- * - Whiteboard active/inactive state
- * - Canvas stream capture
- * - LiveKit track publishing
- * - Host permission checks
+ * 화이트보드 상태 및 LiveKit 스트리밍을 관리하는 메인 훅
+ * 다음을 처리합니다:
+ * - 화이트보드 활성/비활성 상태
+ * - 캔버스 스트림 캡처
+ * - LiveKit 트랙 게시
+ * - 호스트 권한 확인
  */
 export const useWhiteboard = ({
   meetingId,
@@ -46,7 +46,7 @@ export const useWhiteboard = ({
   const [publishedTrack, setPublishedTrack] = useState<LocalVideoTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Cleanup on unmount
+  // 언마운트 시 정리
   useEffect(() => {
     return () => {
       if (whiteboardStream) {
@@ -63,80 +63,65 @@ export const useWhiteboard = ({
   }, [whiteboardStream, publishedTrack]);
 
   const startWhiteboard = useCallback(async (stream: MediaStream) => {
-    console.log('[useWhiteboard] startWhiteboard called with stream:', stream);
-    
     if (!isHost) {
-      console.warn('[useWhiteboard] Not host, cannot start whiteboard');
-      setError('Only the host can use the whiteboard');
+      console.warn('[useWhiteboard] 호스트가 아니므로 화이트보드를 시작할 수 없음');
+      setError('호스트만 화이트보드를 사용할 수 있습니다');
       return;
     }
 
     if (!liveKitService?.room) {
-      console.error('[useWhiteboard] Not connected to LiveKit room');
-      setError('Not connected to LiveKit room');
+      console.error('[useWhiteboard] LiveKit 방에 연결되지 않음');
+      setError('LiveKit 방에 연결되지 않았습니다');
       return;
     }
 
     try {
       setError(null);
       
-      // CRITICAL FIX: Unpublish any existing screen share track before publishing whiteboard
-      // This prevents "publishing a second track with the same source" error
+      // 중요 수정: 화이트보드를 게시하기 전에 기존 화면 공유 트랙 게시 취소
+      // 이렇게 하면 "같은 소스로 두 번째 트랙 게시" 오류를 방지
       const existingScreenSharePublications = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
         .filter(pub => {
           const source = pub.source || pub.track?.source;
           return source === Track.Source.ScreenShare;
         });
       
-      console.log('[useWhiteboard] Found existing screen share publications:', existingScreenSharePublications.length);
-      
-      // Unpublish all existing screen share tracks
+      // 기존 화면 공유 트랙 모두 게시 취소
       for (const pub of existingScreenSharePublications) {
         if (pub.track) {
-          console.log('[useWhiteboard] Unpublishing existing screen share track');
           try {
             await liveKitService.room.localParticipant.unpublishTrack(pub.track);
-            // CRITICAL FIX: Check if track exists and has stop method before calling
+            // 중요 수정: 호출 전에 트랙이 존재하고 stop 메서드가 있는지 확인
             if (pub.track && typeof pub.track.stop === 'function') {
               pub.track.stop();
             }
           } catch (err: any) {
-            console.warn('[useWhiteboard] Error unpublishing existing track:', err);
-            // Continue anyway - track might already be stopped
+            console.warn('[useWhiteboard] 기존 트랙 게시 취소 오류:', err);
+            // 계속 진행 - 트랙이 이미 중지되었을 수 있음
           }
         }
       }
       
-      // Wait a moment for unpublish to complete
+      // 게시 취소가 완료될 때까지 잠시 대기
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Get video track from stream
+      // 스트림에서 비디오 트랙 가져오기
       const videoTrack = stream.getVideoTracks()[0];
       if (!videoTrack) {
-        throw new Error('No video track found in stream');
+        throw new Error('스트림에서 비디오 트랙을 찾을 수 없음');
       }
 
-      console.log('[useWhiteboard] Video track found:', videoTrack);
-
-      // Create LocalVideoTrack from MediaStreamTrack
-      // LocalVideoTrack can be created from an existing MediaStreamTrack
+      // MediaStreamTrack에서 LocalVideoTrack 생성
+      // LocalVideoTrack은 기존 MediaStreamTrack에서 생성 가능
       const localVideoTrack = new LocalVideoTrack(videoTrack, {
         name: 'whiteboard',
         source: Track.Source.ScreenShare,
       });
 
-      console.log('[useWhiteboard] Created LocalVideoTrack:', localVideoTrack);
-
-      // Publish track to LiveKit room as screen share
+      // LiveKit 방에 화면 공유로 트랙 게시
       const publication = await liveKitService.room.localParticipant.publishTrack(localVideoTrack, {
         source: Track.Source.ScreenShare,
       });
-      
-      console.log('[useWhiteboard] Published track, publication:', publication);
-      console.log('[useWhiteboard] Track ID:', publication?.trackSid);
-      console.log('[useWhiteboard] Publication track:', publication?.track);
-
-      console.log('[useWhiteboard] Published track to LiveKit');
 
       setWhiteboardStream(stream);
       setPublishedTrack(localVideoTrack);
@@ -146,12 +131,12 @@ export const useWhiteboard = ({
       onWhiteboardStateChange?.(true);
       
     } catch (err: any) {
-      console.error('[useWhiteboard] Failed to start whiteboard:', err);
-      setError(err.message || 'Failed to start whiteboard');
+      console.error('[useWhiteboard] 화이트보드 시작 실패:', err);
+      setError(err.message || '화이트보드 시작 실패');
       setIsWhiteboardActive(false);
       setIsStreaming(false);
       
-      // Cleanup on error
+      // 오류 발생 시 정리
       if (stream) {
         stream.getTracks().forEach(track => {
           if (track && typeof track.stop === 'function') {
@@ -164,21 +149,21 @@ export const useWhiteboard = ({
 
   const stopWhiteboard = useCallback(async () => {
     try {
-      // Stop LiveKit track
+      // LiveKit 트랙 중지
       if (liveKitService?.room && publishedTrack) {
         try {
           await liveKitService.room.localParticipant.unpublishTrack(publishedTrack);
         } catch (err: any) {
-          console.warn('[useWhiteboard] Error unpublishing track:', err);
+          console.warn('[useWhiteboard] 트랙 게시 취소 오류:', err);
         }
-        // CRITICAL FIX: Check if track exists and has stop method before calling
+        // 중요 수정: 호출 전에 트랙이 존재하고 stop 메서드가 있는지 확인
         if (publishedTrack && typeof publishedTrack.stop === 'function') {
           publishedTrack.stop();
         }
         setPublishedTrack(null);
       }
 
-      // Stop stream tracks
+      // 스트림 트랙 중지
       if (whiteboardStream) {
         whiteboardStream.getTracks().forEach(track => {
           if (track && typeof track.stop === 'function') {
@@ -193,10 +178,10 @@ export const useWhiteboard = ({
       onStreamStopped?.();
       onWhiteboardStateChange?.(false);
     } catch (err: any) {
-      console.error('[useWhiteboard] Failed to stop whiteboard:', err);
-      setError(err.message || 'Failed to stop whiteboard');
+      console.error('[useWhiteboard] 화이트보드 중지 실패:', err);
+      setError(err.message || '화이트보드 중지 실패');
       
-      // Force cleanup even if unpublish fails
+      // 게시 취소가 실패해도 강제 정리
       setIsWhiteboardActive(false);
       setIsStreaming(false);
       if (whiteboardStream) {
@@ -215,8 +200,8 @@ export const useWhiteboard = ({
   }, [liveKitService, whiteboardStream, publishedTrack, onStreamStopped, onWhiteboardStateChange]);
 
   const clearWhiteboard = useCallback(() => {
-    // This will be handled by the WhiteboardComponent
-    // Excalidraw has its own clear functionality
+    // 이것은 WhiteboardComponent에서 처리됨
+    // Excalidraw는 자체 지우기 기능이 있음
   }, []);
 
   return {

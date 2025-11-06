@@ -75,64 +75,61 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
     };
   }, [videoTrack, isScreenSharing, isVideoOff]); // ✅ CRITICAL FIX: Include isVideoOff
 
-  // Attach screen share track with race condition fixes
+  // 경쟁 조건 수정과 함께 화면 공유 트랙 연결
   useEffect(() => {
     const el = screenShareRef.current;
     if (!el || !screenShareTrack || !isScreenSharing) {
-      // Cleanup if track is removed
+      // 트랙이 제거되면 정리
       if (el && screenShareRef.current) {
         try {
           screenShareTrack?.detach(el);
         } catch (err) {
-          // Ignore detach errors
+          // detach 오류 무시
         }
       }
       return;
     }
 
-    // CRITICAL FIX: Ensure track is subscribed and ready before attaching
-    // For remote tracks, check if they're subscribed
+    // 중요 수정: 연결하기 전에 트랙이 구독되고 준비되었는지 확인
+    // 원격 트랙의 경우 구독되었는지 확인
     const isTrackReady = screenShareTrack.isSubscribed !== false && screenShareTrack.isMuted !== true;
     
     if (!isTrackReady) {
-      // Wait a bit for track to be ready
+      // 트랙이 준비될 때까지 잠시 대기
       const waitTimer = setTimeout(() => {
         if (el && screenShareRef.current && screenShareTrack && isScreenSharing) {
           try {
             screenShareTrack.detach(el);
             screenShareTrack.attach(el);
-            console.log('[MainStageView] Screen share track attached after wait');
           } catch (err) {
-            console.error('[MainStageView] Error attaching screen share track:', err);
+            console.error('[MainStageView] 화면 공유 트랙 연결 오류:', err);
           }
         }
       }, 100);
       return () => clearTimeout(waitTimer);
     }
 
-    // Wait for element to be visible
+    // 요소가 보일 때까지 대기
     if (el.offsetWidth === 0 || el.offsetHeight === 0) {
       const timer = setTimeout(() => {
         if (el && el.offsetWidth > 0 && el.offsetHeight > 0 && screenShareTrack && isScreenSharing) {
           try {
             screenShareTrack.detach(el);
             screenShareTrack.attach(el);
-            console.log('[MainStageView] Screen share track attached to video element');
           } catch (err) {
-            console.error('[MainStageView] Error attaching screen share track:', err);
+            console.error('[MainStageView] 화면 공유 트랙 연결 오류:', err);
           }
         }
       }, 200);
       return () => clearTimeout(timer);
     }
 
-    // Always detach before attaching to prevent race conditions
+    // 경쟁 조건 방지를 위해 항상 연결 전에 분리
     try {
       screenShareTrack.detach(el);
       screenShareTrack.attach(el);
-      console.log('[MainStageView] Screen share track attached successfully');
     } catch (err) {
-      console.error('[MainStageView] Error attaching screen share track:', err);
+      console.error('[MainStageView] 화면 공유 트랙 연결 오류:', err);
     }
 
     return () => {
@@ -141,32 +138,32 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
           screenShareTrack.detach(el);
         }
       } catch (err) {
-        // Ignore cleanup errors
+        // 정리 오류 무시
       }
     };
   }, [screenShareTrack, isScreenSharing]);
 
-  // ✅ CRITICAL: Attach audio track for sound
+  // 중요: 소리를 위해 오디오 트랙 연결
   useEffect(() => {
     if (!audioRef.current || !audioTrack) return;
 
-    // ✅ Always mute local participant audio
+    // 항상 로컬 참가자 오디오 음소거
     if (isLocalParticipant || participantId === 'local') {
       audioRef.current.muted = true;
     }
 
-    // Prevent duplicate playback
+    // 중복 재생 방지
     try {
       audioTrack.detach(audioRef.current);
     } catch {}
 
-    // Attach audio track safely
+    // 안전하게 오디오 트랙 연결
     audioTrack.attach(audioRef.current);
 
-    // Force mute again just in case
+    // 혹시 모르니 다시 음소거 강제 적용
     if (isLocalParticipant || participantId === 'local') {
       audioRef.current.muted = true;
-      audioRef.current.volume = 0; // ✅ guarantee no playback
+      audioRef.current.volume = 0; // 재생 보장 없음
     }
 
     return () => {
@@ -186,12 +183,12 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
-      {/* ✅ Hidden audio element for playing participant audio - MUTE LOCAL PARTICIPANT TO PREVENT ECHO EXCEPT WHEN RECORDING */}
+      {/* 참가자 오디오 재생을 위한 숨겨진 오디오 요소 - 녹화 중이 아닐 때 에코 방지를 위해 로컬 참가자 음소거 */}
       <audio ref={audioRef} autoPlay playsInline muted={(isLocalParticipant || participantId === 'local') && !isRecording} style={{ display: 'none' }} />
       
-      {/* Main Video Container */}
+      {/* 메인 비디오 컨테이너 */}
       <div className={styles['main-stage-container']} onClick={handleClick}>
-        {/* Screen Share Video - Render when screen sharing */}
+        {/* 화면 공유 비디오 - 화면 공유 시 렌더링 */}
         {isScreenSharing && screenShareTrack ? (
           <>
             <video
@@ -206,17 +203,11 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 objectFit: 'contain',
                 backgroundColor: '#000000'
               }}
-              onLoadedMetadata={() => {
-                console.log('[MainStageView] Screen share video metadata loaded');
-              }}
-              onCanPlay={() => {
-                console.log('[MainStageView] Screen share video can play');
-              }}
             />
           </>
         ) : (
           <>
-            {/* Regular Camera Video */}
+            {/* 일반 카메라 비디오 */}
             {videoTrack && !isVideoOff ? (
               <video
                 ref={mainVideoRef}
@@ -225,7 +216,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 className={styles['main-stage-video']}
               />
             ) : (
-              /* Avatar/Placeholder when video is off */
+              // 비디오가 꺼져 있을 때 아바타/플레이스홀더
               <div className={styles['avatar-placeholder']}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={name || '참가자'} />

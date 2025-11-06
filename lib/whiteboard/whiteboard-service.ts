@@ -70,3 +70,4 @@ export const getOptimalFPS = (): number => {
   return 30;
 };
 
+

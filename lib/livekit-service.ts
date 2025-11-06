@@ -87,8 +87,8 @@ export class LiveKitService {
         adaptiveStream: true,
         dynacast: true,
         
-        // CRITICAL FIX: Enable automatic track subscription for faster screen share display
-        // This reduces the 10-second delay by auto-subscribing to published tracks
+        // 중요 수정: 더 빠른 화면 공유 표시를 위해 자동 트랙 구독 활성화
+        // 게시된 트랙을 자동 구독하여 10초 지연 감소
         defaultSubscribeToTracks: true,
         
         // Explicit video capture settings for 360p quality
@@ -305,17 +305,16 @@ export class LiveKitService {
     });
 
     this._room.on(RoomEvent.TrackPublished, async (publication, participant) => {
-      // CRITICAL FIX: Auto-subscribe to screen share tracks immediately when published
-      // This reduces the 10-second delay by subscribing as soon as track is available
+      // 중요 수정: 게시되면 즉시 화면 공유 트랙 자동 구독
+      // 트랙이 사용 가능해지는 즉시 구독하여 10초 지연 감소
       if (publication.kind === 'video' && publication.source === Track.Source.ScreenShare) {
         try {
-          // For remote participants, explicitly subscribe to the track
+          // 원격 참가자의 경우 트랙을 명시적으로 구독
           if (participant instanceof RemoteParticipant && !publication.isSubscribed) {
             await publication.setSubscribed(true);
-            console.log('[LiveKitService] Auto-subscribed to screen share track from:', participant.identity);
           }
         } catch (err) {
-          console.warn('[LiveKitService] Failed to auto-subscribe to screen share track:', err);
+          console.warn('[LiveKitService] 화면 공유 트랙 자동 구독 실패:', err);
         }
       }
       

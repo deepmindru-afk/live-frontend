@@ -411,22 +411,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     onParticipantDisconnected: (participantId) => {
     },
     onTrackSubscribed: (track, publication, participant) => {
-      // Debug: Log when screen share tracks are subscribed
+      // 중요 수정: 트랙이 구독되면 즉시 화면 공유 모드 강제
+      // 상태를 즉시 업데이트하여 10초 지연 감소
       const source = publication.source || track?.source;
       const isScreenShare = source === Track.Source.ScreenShare;
       
       if (isScreenShare) {
-        console.log('[ProfessionalLiveStreamRoom] Screen share track subscribed:', {
-          participant: participant?.identity || participant?.name,
-          trackId: track?.sid,
-          source: source,
-          publicationSource: publication.source,
-          trackSource: track?.source,
-          kind: track?.kind
-        });
-        
-        // CRITICAL FIX: Force immediate screen share mode when track is subscribed
-        // This reduces the 10-second delay by immediately updating state
         const participantIdentity = participant?.identity || participant?.name;
         const sharingParticipant = memoizedParticipants.find(p => 
           p.identity === participantIdentity ||
@@ -435,7 +425,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         );
         
         if (sharingParticipant && !queueState.screenShareMode) {
-          console.log('[ProfessionalLiveStreamRoom] Auto-starting screen share mode for:', sharingParticipant.displayName);
           const whiteboardHostId = sharingParticipant.identity || sharingParticipant._id || sharingParticipant.user?._id;
           if (whiteboardHostId) {
             startQueueScreenShare(whiteboardHostId);
@@ -2536,15 +2525,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     isHost: isHost || currentParticipant?.role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN',
     liveKitService,
     onStreamReady: (stream) => {
-      // Start queue screen share mode when whiteboard stream is ready
-      // CRITICAL FIX: Use currentUser._id (LiveKit identity) instead of participant._id
+      // 화이트보드 스트림이 준비되면 큐 화면 공유 모드 시작
+      // 중요 수정: participant._id 대신 currentUser._id (LiveKit identity) 사용
       const whiteboardHostId = currentUser?._id || currentParticipant?.user?._id || currentParticipant?._id;
       if (whiteboardHostId) {
-        console.log('[Whiteboard] Starting screen share for participant:', whiteboardHostId, 'currentParticipant:', currentParticipant?._id, 'currentUser:', currentUser?._id);
         startQueueScreenShare(whiteboardHostId);
         setIsWhiteboardMode(true);
       } else {
-        console.error('[Whiteboard] Cannot start screen share - no valid participant ID found');
+        console.error('[Whiteboard] 유효한 참가자 ID를 찾을 수 없어 화면 공유를 시작할 수 없음');
       }
     },
     onStreamStopped: () => {
@@ -2556,32 +2544,30 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     },
   });
 
-  // Memoize whiteboard callbacks to prevent re-initialization loops
+  // 재초기화 루프 방지를 위해 화이트보드 콜백 메모이제이션
   const handleWhiteboardStreamReady = useCallback((stream: MediaStream) => {
-    console.log('[ProfessionalLiveStreamRoom] Whiteboard stream ready:', stream);
     startWhiteboard(stream);
   }, [startWhiteboard]);
 
   const handleWhiteboardStreamStopped = useCallback(() => {
-    console.log('[ProfessionalLiveStreamRoom] Whiteboard stream stopped');
     stopWhiteboard();
   }, [stopWhiteboard]);
 
-  // Whiteboard toggle handler - optimized for instant response
+  // 화이트보드 토글 핸들러 - 즉각적인 응답을 위해 최적화
   const handleWhiteboardToggle = useCallback(() => {
     if (isWhiteboardActive) {
-      // Stop whiteboard - don't await, do it async in background
+      // 화이트보드 중지 - await하지 않고 백그라운드에서 비동기로 실행
       stopWhiteboard().then(() => {
         setIsWhiteboardMode(false);
       }).catch(err => {
-        console.error('[WhiteboardToggle] Error stopping whiteboard:', err);
-        setIsWhiteboardMode(false); // Still update UI even if stop fails
+        console.error('[WhiteboardToggle] 화이트보드 중지 오류:', err);
+        setIsWhiteboardMode(false); // 중지가 실패해도 UI 업데이트
       });
     } else {
-      // Start whiteboard - instant UI update
+      // 화이트보드 시작 - 즉시 UI 업데이트
       setIsWhiteboardMode(true);
-      // The WhiteboardComponent will handle stream creation and call onStreamReady
-      // which will then call startWhiteboard(stream)
+      // WhiteboardComponent가 스트림 생성을 처리하고 onStreamReady를 호출함
+      // 그러면 startWhiteboard(stream)이 호출됨
     }
   }, [isWhiteboardActive, stopWhiteboard]);
 
@@ -4008,10 +3994,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               width: '100%',
               height: '100%'
             }}>
-              {/* Whiteboard - Show ONLY to host when active */}
-              {/* Participants will see the streamed version via LiveKit screen share */}
+              {/* 화이트보드 - 활성화 시 호스트에게만 표시 */}
+              {/* 참가자는 LiveKit 화면 공유를 통해 스트리밍된 버전을 봄 */}
               {(() => {
-                // Only show whiteboard editor to host
+                // 호스트에게만 화이트보드 편집기 표시
                 const userIsHost = 
                   isHost || 
                   currentParticipant?.role === 'HOST' ||
@@ -4194,12 +4180,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 );
               }
               
-              // Speaker mode: Get the participant for main stage
-              // CRITICAL FIX: If screen share is active, prioritize screen share participant FIRST
-              // This prevents the whiteboard from disappearing when other participants speak
+              // 스피커 모드: 메인 스테이지용 참가자 가져오기
+              // 중요 수정: 화면 공유가 활성화되어 있으면 화면 공유 참가자를 먼저 우선순위 지정
+              // 다른 참가자가 말할 때 화이트보드가 사라지는 것을 방지
               let mainParticipant = null;
               
-              // Priority 1: Screen share participant (whiteboard takes highest priority)
+              // 우선순위 1: 화면 공유 참가자 (화이트보드가 최우선순위)
               if (queueState.screenShareMode && queueState.screenShareParticipant) {
                 const screenShareParticipant = memoizedParticipants.find(p => 
                   p._id === queueState.screenShareParticipant?._id ||
@@ -4210,12 +4196,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 );
                 if (screenShareParticipant) {
                   mainParticipant = screenShareParticipant;
-                  console.log('[MainStage] Using queueState screen share participant (Priority 1):', screenShareParticipant.displayName);
                 }
               }
               
-              // Priority 2: Check if any participant has active screen share (whiteboard)
-              // First check LOCAL participant (host) for screen share
+              // 우선순위 2: 활성 화면 공유(화이트보드)가 있는 참가자 확인
+              // 먼저 로컬 참가자(호스트)의 화면 공유 확인
               if (liveKitService?.room?.localParticipant) {
                 const localHasScreenShare = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
                   .some(pub => {
@@ -4224,7 +4209,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   });
                 
                 if (localHasScreenShare) {
-                  // Find local participant in our list - match by identity
+                  // 목록에서 로컬 참가자 찾기 - identity로 매칭
                   const localIdentity = liveKitService.room.localParticipant.identity;
                   const localParticipant = memoizedParticipants.find(p => 
                     p.identity === localIdentity ||
@@ -4234,13 +4219,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   );
                   
                   if (localParticipant) {
-                    console.log('[MainStage] Found LOCAL participant with screen share:', localParticipant.displayName, 'Identity:', localIdentity);
                     mainParticipant = localParticipant;
                   }
                 }
               }
               
-              // Priority 3: Check REMOTE participants for screen share (if not already found)
+              // 우선순위 3: 원격 참가자의 화면 공유 확인 (아직 찾지 못한 경우)
               if (!mainParticipant && liveKitService?.room) {
                 for (const [identity, remoteParticipant] of liveKitService.room.remoteParticipants.entries()) {
                   const hasScreenShare = Array.from(remoteParticipant.videoTrackPublications.values())
@@ -4250,7 +4234,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     });
                   
                   if (hasScreenShare) {
-                    // Find matching participant in our list - try all possible ID formats
+                    // 목록에서 일치하는 참가자 찾기 - 가능한 모든 ID 형식 시도
                     const matchingParticipant = memoizedParticipants.find(p => 
                       p.identity === identity ||
                       p._id === identity || 
@@ -4260,32 +4244,24 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     );
                     
                     if (matchingParticipant) {
-                      console.log('[MainStage] Found REMOTE participant with screen share:', matchingParticipant.displayName, 'Identity:', identity);
                       mainParticipant = matchingParticipant;
                       break;
-                    } else {
-                      console.warn('[MainStage] Screen share found but participant not matched. LiveKit identity:', identity, 'Available participants:', memoizedParticipants.map(p => ({
-                        identity: p.identity,
-                        _id: p._id,
-                        user_id: p.user?._id,
-                        userId: p.userId
-                      })));
                     }
                   }
                 }
               }
               
-              // Priority 4: Selected participant
+              // 우선순위 4: 선택된 참가자
               if (!mainParticipant && selectedParticipant) {
                 mainParticipant = selectedParticipant;
               }
               
-              // Priority 5: Active speaker
+              // 우선순위 5: 활성 스피커
               if (!mainParticipant && memoizedActiveSpeaker) {
                 mainParticipant = memoizedActiveSpeaker;
               }
               
-              // Priority 6: First participant
+              // 우선순위 6: 첫 번째 참가자
               if (!mainParticipant && memoizedParticipants.length > 0) {
                 mainParticipant = memoizedParticipants[0];
               }
@@ -4301,13 +4277,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 let mainScreenShareTrack = null;
                 let isParticipantScreenSharing = false;
 
-                // ✅ CRITICAL FIX: Use consistent identity mapping - MUST match LiveKit identity format
-                // LiveKit identity is set to currentUser._id || currentUser.id || userId
-                // Use participant.identity FIRST (set in memoizedParticipants) since it's the correct LiveKit identity
+                // 중요 수정: 일관된 identity 매핑 사용 - LiveKit identity 형식과 반드시 일치해야 함
+                // LiveKit identity는 currentUser._id || currentUser.id || userId로 설정됨
+                // 올바른 LiveKit identity이므로 participant.identity를 먼저 사용 (memoizedParticipants에서 설정됨)
                 const participantIdentity = mainParticipant.identity || mainParticipant.user?._id || mainParticipant.userId || mainParticipant._id;
                 
-                // ✅ CRITICAL FIX: Check if this is the local participant FIRST
-                // Compare with multiple possible identity formats to ensure we catch all cases
+                // 중요 수정: 이것이 로컬 참가자인지 먼저 확인
+                // 모든 경우를 포착하도록 여러 가능한 identity 형식 비교
                 const localIdentity = liveKitService?.room?.localParticipant?.identity;
                 const isLocalParticipant = liveKitService?.room && localIdentity ? (
                   participantIdentity === localIdentity ||
@@ -4317,25 +4293,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   mainParticipant.identity === localIdentity
                 ) : false;
                 
-                // Debug identity matching when screen sharing
-                if (isParticipantScreenSharing || queueState.screenShareMode) {
-                  console.log('[MainStage] Identity check for screen share:', {
-                    participantIdentity,
-                    localIdentity,
-                    isLocalParticipant,
-                    mainParticipant_identity: mainParticipant.identity,
-                    mainParticipant_id: mainParticipant._id,
-                    mainParticipant_user_id: mainParticipant.user?._id,
-                    queueState_screenShareParticipant_id: queueState.screenShareParticipant?._id
-                  });
-                }
                 
                 if (liveKitService?.room && mainParticipant._id) {
                   
                   if (isLocalParticipant) {
-                    // Local participant - get tracks from localParticipant
+                    // 로컬 참가자 - localParticipant에서 트랙 가져오기
                     
-                    // Get CAMERA video track (not screen share)
+                    // 카메라 비디오 트랙 가져오기 (화면 공유 아님)
                     const cameraTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
                       .find(pub => {
                         const track = pub.track;
@@ -4347,25 +4311,20 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     const audioTrackPub = Array.from(liveKitService.room.localParticipant.audioTrackPublications.values())[0];
                     mainAudioTrack = audioTrackPub?.track;
                     
-                    // Check for screen share (whiteboard or regular screen share)
+                    // 화면 공유 확인 (화이트보드 또는 일반 화면 공유)
                     const screenShareTrackPub = Array.from(liveKitService.room.localParticipant.videoTrackPublications.values())
                       .find(pub => {
                         const source = pub.source || pub.track?.source;
-                        // Check enum value - Track.Source.ScreenShare
+                        // enum 값 확인 - Track.Source.ScreenShare
                         return source === Track.Source.ScreenShare;
                       });
                     mainScreenShareTrack = screenShareTrackPub?.track;
                     isParticipantScreenSharing = !!mainScreenShareTrack;
-                    
-                    // Debug log for screen share detection
-                    if (mainScreenShareTrack) {
-                      console.log('[MainStage] Found local screen share track, Track:', mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
-                    }
                   } else {
-                    // Remote participant - get tracks from remoteParticipants
+                    // 원격 참가자 - remoteParticipants에서 트랙 가져오기
                     let liveKitRoomParticipant = liveKitService.room.remoteParticipants.get(participantIdentity);
                     
-                    // ✅ FALLBACK: If direct lookup fails, try to find by iterating through all participants
+                    // 대체 방법: 직접 조회가 실패하면 모든 참가자를 반복하여 찾기 시도
                     if (!liveKitRoomParticipant && liveKitService.room.remoteParticipants.size > 0) {
                       for (const [identity, p] of liveKitService.room.remoteParticipants.entries()) {
                         if (identity === participantIdentity || 
@@ -4381,10 +4340,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     
                     
                     if (liveKitRoomParticipant) {
-                      // Debug: Log all available video tracks for main video
+                      // 디버그: 메인 비디오에 사용 가능한 모든 비디오 트랙 로그
                       const allVideoTracks = Array.from(liveKitRoomParticipant.videoTrackPublications.values());
                       
-                      // Get CAMERA video track (not screen share)
+                      // 카메라 비디오 트랙 가져오기 (화면 공유 아님)
                       const cameraTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
                         .find(pub => {
                           const track = pub.track;
@@ -4396,41 +4355,34 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       const audioTrackPub = Array.from(liveKitRoomParticipant.audioTrackPublications.values())[0];
                       mainAudioTrack = audioTrackPub?.track;
                       
-                      // Check for screen share (whiteboard or regular screen share)
+                      // 화면 공유 확인 (화이트보드 또는 일반 화면 공유)
                       const screenShareTrackPub = Array.from(liveKitRoomParticipant.videoTrackPublications.values())
                         .find(pub => {
                           const source = pub.source || pub.track?.source;
-                          // Check enum value - Track.Source.ScreenShare
+                          // enum 값 확인 - Track.Source.ScreenShare
                           return source === Track.Source.ScreenShare;
                         });
                       mainScreenShareTrack = screenShareTrackPub?.track;
                       isParticipantScreenSharing = !!mainScreenShareTrack;
-                      
-                      // Debug log for screen share detection (only log once, not on every render)
-                      if (mainScreenShareTrack) {
-                        console.log('[MainStage] Found screen share track for participant:', mainParticipant.displayName, 'Track:', mainScreenShareTrack, 'Source:', screenShareTrackPub?.source);
-                      }
-                      // CRITICAL FIX: Remove continuous logging - only log when tracks change
-                      // The previous "No screen share found" log was causing console spam
                     }
                     
-                    // ✅ Guard: If no valid remote track found, enforce placeholder
+                    // 가드: 유효한 원격 트랙을 찾지 못한 경우 플레이스홀더 강제 적용
                     if (!mainVideoTrack && !isLocalParticipant) {
-                      // No valid remote track found; enforce placeholder instead of attaching local
-                      // (This ensures we never show the local camera for a remote participant)
+                      // 유효한 원격 트랙을 찾지 못함; 로컬을 연결하는 대신 플레이스홀더 강제 적용
+                      // (이렇게 하면 원격 참가자에게 로컬 카메라를 절대 표시하지 않음)
                       mainVideoTrack = null;
                       mainAudioTrack = null;
                     }
                   }
                 } else {
-                  // Fallback: Set video tracks to null for memoized participants
+                  // 대체 방법: 메모이제이션된 참가자의 경우 비디오 트랙을 null로 설정
                   mainVideoTrack = null;
                   mainAudioTrack = null;
                   mainScreenShareTrack = null;
                   isParticipantScreenSharing = false;
                 }
 
-                // Note: isLocalParticipant was already defined above, reuse it
+                // 참고: isLocalParticipant는 위에서 이미 정의되었으므로 재사용
                 const isMainParticipantLocal = isLocalParticipant;
 
                 // ✅ FIX: Check hand raise status for main participant (same logic as thumbnails)
@@ -4650,16 +4602,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 </svg>
               </button>
 
-              {/* Whiteboard Control - Host Only */}
+              {/* 화이트보드 제어 - 호스트 전용 */}
               {(() => {
-                // Check if user is host - use multiple checks for reliability
-                // Priority: 1) isHost prop, 2) participant role, 3) system role
+                // 사용자가 호스트인지 확인 - 신뢰성을 위해 여러 확인 사용
+                // 우선순위: 1) isHost prop, 2) 참가자 역할, 3) 시스템 역할
                 const userIsHost = 
                   isHost || 
                   currentParticipant?.role === 'HOST' ||
                   currentUser?.systemRole === 'TUTOR' ||
                   currentUser?.systemRole === 'ADMIN' ||
-                  // Additional check: if thumbnail shows "HOST" label, user is likely host
+                  // 추가 확인: 썸네일에 "HOST" 레이블이 표시되면 사용자가 호스트일 가능성이 높음
                   (memoizedParticipants.find(p => p._id === currentParticipant?._id)?.role === 'HOST');
                 
                 if (!userIsHost) {
@@ -4668,12 +4620,11 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 
                 return (
                   <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log('[WhiteboardButton] Clicked, toggling whiteboard');
-                      handleWhiteboardToggle();
-                    }}
+             onClick={(e) => {
+               e.preventDefault();
+               e.stopPropagation();
+               handleWhiteboardToggle();
+             }}
                     style={{
                       width: isMobile ? '40px' : '48px',
                       height: isMobile ? '40px' : '48px',
@@ -4691,7 +4642,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       zIndex: 1000,
                       position: 'relative'
                     }}
-                    title={isWhiteboardActive ? 'Close whiteboard' : 'Open whiteboard'}
+                    title={isWhiteboardActive ? '화이트보드 닫기' : '화이트보드 열기'}
                   >
                     <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
                       <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>

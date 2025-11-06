@@ -68,3 +68,4 @@ The whiteboard stream is published to LiveKit as a screen share track:
 3. Implement canvas capture
 4. Connect to LiveKit publishing
 
+

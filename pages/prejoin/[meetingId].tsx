@@ -30,6 +30,20 @@ const PrejoinPage = () => {
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [isTestingDevices, setIsTestingDevices] = useState(false);
   
+  // Device selection states
+  const [availableDevices, setAvailableDevices] = useState<{
+    cameras: MediaDeviceInfo[];
+    microphones: MediaDeviceInfo[];
+    speakers: MediaDeviceInfo[];
+  }>({
+    cameras: [],
+    microphones: [],
+    speakers: []
+  });
+  const [selectedCamera, setSelectedCamera] = useState<string>('');
+  const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string>('');
+  
   // Media refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -38,12 +52,45 @@ const PrejoinPage = () => {
   useEffect(() => {
   }, [meetingId, isLoading, meetingInfo]);
 
+  // Load available devices
+  const loadAvailableDevices = async () => {
+    try {
+      // First request permission to get device labels
+      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      tempStream.getTracks().forEach(track => track.stop());
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      const microphones = devices.filter(device => device.kind === 'audioinput');
+      const speakers = devices.filter(device => device.kind === 'audiooutput');
+      
+      setAvailableDevices({ cameras, microphones, speakers });
+      
+      // Set default selections if not already set
+      if (!selectedCamera && cameras.length > 0) {
+        setSelectedCamera(cameras[0].deviceId);
+      }
+      if (!selectedMicrophone && microphones.length > 0) {
+        setSelectedMicrophone(microphones[0].deviceId);
+      }
+      if (!selectedSpeaker && speakers.length > 0) {
+        setSelectedSpeaker(speakers[0].deviceId);
+      }
+    } catch (error) {
+      console.error('Error loading devices:', error);
+    }
+  };
+
   // Device testing functions
   const testDevices = async () => {
     setIsTestingDevices(true);
     setDeviceError(null);
     
     try {
+      // Load devices if not already loaded
+      if (availableDevices.cameras.length === 0) {
+        await loadAvailableDevices();
+      }
       
       // First, check what devices are available
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -66,15 +113,32 @@ const PrejoinPage = () => {
         return;
       }
       
-      // Request camera and microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+      // Request camera and microphone access with selected devices
+      const constraints: MediaStreamConstraints = {
+        video: selectedCamera ? {
+          deviceId: { exact: selectedCamera },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } : {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
         },
-        audio: true
-      });
+        audio: selectedMicrophone ? {
+          deviceId: { exact: selectedMicrophone }
+        } : true
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Set audio output device if speaker is selected
+      if (selectedSpeaker && audioRef.current && 'setSinkId' in audioRef.current) {
+        try {
+          await (audioRef.current as any).setSinkId(selectedSpeaker);
+        } catch (err) {
+          console.warn('Could not set audio output device:', err);
+        }
+      }
       
       setLocalStream(stream);
       
@@ -233,10 +297,81 @@ const PrejoinPage = () => {
     }
   }, [localStream]);
 
+  // Switch camera device
+  const switchCamera = async (deviceId: string) => {
+    if (!localStream) return;
+    
+    try {
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.stop();
+        localStream.removeTrack(videoTrack);
+        
+        const newVideoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        const newVideoTrack = newVideoStream.getVideoTracks()[0];
+        localStream.addTrack(newVideoTrack);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = localStream;
+        }
+        
+        setSelectedCamera(deviceId);
+      }
+    } catch (error) {
+      setDeviceError('Failed to switch camera. Please try again.');
+    }
+  };
+
+  // Switch microphone device
+  const switchMicrophone = async (deviceId: string) => {
+    if (!localStream) return;
+    
+    try {
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.stop();
+        localStream.removeTrack(audioTrack);
+        
+        const newAudioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: deviceId }
+          }
+        });
+        
+        const newAudioTrack = newAudioStream.getAudioTracks()[0];
+        localStream.addTrack(newAudioTrack);
+        
+        setSelectedMicrophone(deviceId);
+      }
+    } catch (error) {
+      setDeviceError('Failed to switch microphone. Please try again.');
+    }
+  };
+
+  // Switch speaker device
+  const switchSpeaker = async (deviceId: string) => {
+    try {
+      if (audioRef.current && 'setSinkId' in audioRef.current) {
+        await (audioRef.current as any).setSinkId(deviceId);
+        setSelectedSpeaker(deviceId);
+      }
+    } catch (error) {
+      setDeviceError('Failed to switch speaker. Please try again.');
+    }
+  };
+
   // Check device availability on component mount
   useEffect(() => {
     const checkDeviceAvailability = async () => {
       try {
+        await loadAvailableDevices();
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
         const videoInputs = devices.filter(device => device.kind === 'videoinput');
@@ -255,6 +390,17 @@ const PrejoinPage = () => {
     };
     
     checkDeviceAvailability();
+
+    // Listen for device changes
+    const handleDeviceChange = () => {
+      loadAvailableDevices();
+    };
+    
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
   }, []);
 
   const fetchMeetingInfo = async () => {
@@ -417,6 +563,17 @@ const PrejoinPage = () => {
       // Store in sessionStorage so livestream page can read them
       sessionStorage.setItem('prejoin_audio_enabled', String(isMicOn));
       sessionStorage.setItem('prejoin_video_enabled', String(isVideoOn));
+      
+      // Store selected device IDs
+      if (selectedCamera) {
+        sessionStorage.setItem('prejoin_camera_device_id', selectedCamera);
+      }
+      if (selectedMicrophone) {
+        sessionStorage.setItem('prejoin_microphone_device_id', selectedMicrophone);
+      }
+      if (selectedSpeaker) {
+        sessionStorage.setItem('prejoin_speaker_device_id', selectedSpeaker);
+      }
       
       // Check user authentication and role
       const { isAuthenticated, getCurrentUser } = await import('../../lib/simple-auth-handlers');
@@ -592,7 +749,7 @@ const PrejoinPage = () => {
           position: 'relative',
           zIndex: 1
         }}>
-          Loading Meeting
+          미팅 로딩 중
         </h2>
         <p style={{ 
           margin: '0 0 20px 0', 
@@ -602,7 +759,7 @@ const PrejoinPage = () => {
           position: 'relative',
           zIndex: 1
         }}>
-          Preparing your meeting room...
+          미팅방을 준비하는 중...
         </p>
         <div style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -617,8 +774,8 @@ const PrejoinPage = () => {
           position: 'relative',
           zIndex: 1
         }}>
-          <div>Meeting ID: {meetingId}</div>
-          <div style={{ marginTop: '4px' }}>Status: Loading...</div>
+          <div>미팅 ID: {meetingId}</div>
+          <div style={{ marginTop: '4px' }}>상태: 로딩 중...</div>
         </div>
       </div>
     );
@@ -666,7 +823,7 @@ const PrejoinPage = () => {
             fontSize: '24px',
             fontWeight: '600'
           }}>
-            Meeting Not Found
+            미팅을 찾을 수 없음
           </h2>
           
           <p style={{ 
@@ -675,7 +832,7 @@ const PrejoinPage = () => {
             fontSize: '16px',
             lineHeight: '1.5'
           }}>
-            The meeting with ID "{meetingId}" could not be found or may have been deleted.
+            ID "{meetingId}"인 미팅을 찾을 수 없거나 삭제되었을 수 있습니다.
           </p>
           
         <button
@@ -694,7 +851,7 @@ const PrejoinPage = () => {
               marginBottom: '16px'
           }}
         >
-          {isJoining ? 'Creating...' : 'Create New Meeting'}
+          {isJoining ? '생성 중...' : '새 미팅 만들기'}
         </button>
           
         {joinError && (
@@ -765,7 +922,7 @@ const PrejoinPage = () => {
           margin: '0',
           textShadow: '0 1px 2px rgba(0,0,0,0.3)'
         }}>
-          Meeting ID: {meetingInfo.inviteCode}
+          미팅 ID: {meetingInfo.inviteCode}
         </p>
       </div>
 
@@ -797,8 +954,161 @@ const PrejoinPage = () => {
             color: '#333',
             fontWeight: '600'
           }}>
-            Camera Preview
+            카메라 미리보기
           </h3>
+
+          {/* Device Selection Dropdowns */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <span style={{ 
+              fontSize: '14px', 
+              color: '#333', 
+              fontWeight: '600'
+            }}>
+              장치 선택
+            </span>
+            <button
+              onClick={async () => {
+                await loadAvailableDevices();
+              }}
+              style={{
+                padding: '4px 8px',
+                fontSize: '11px',
+                backgroundColor: '#f0f0f0',
+                color: '#666',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#e0e0e0';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#f0f0f0';
+              }}
+            >
+              🔄 새로고침
+            </button>
+          </div>
+          
+          {availableDevices.cameras.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: '#666', 
+                marginBottom: '4px',
+                fontWeight: '500'
+              }}>
+                📹 카메라 선택
+              </label>
+              <select
+                value={selectedCamera}
+                onChange={(e) => {
+                  const deviceId = e.target.value;
+                  setSelectedCamera(deviceId);
+                  if (localStream) {
+                    switchCamera(deviceId);
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {availableDevices.cameras.map((camera) => (
+                  <option key={camera.deviceId} value={camera.deviceId}>
+                    {camera.label || `Camera ${availableDevices.cameras.indexOf(camera) + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availableDevices.microphones.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: '#666', 
+                marginBottom: '4px',
+                fontWeight: '500'
+              }}>
+                🎤 마이크 선택
+              </label>
+              <select
+                value={selectedMicrophone}
+                onChange={(e) => {
+                  const deviceId = e.target.value;
+                  setSelectedMicrophone(deviceId);
+                  if (localStream) {
+                    switchMicrophone(deviceId);
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {availableDevices.microphones.map((mic) => (
+                  <option key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label || `Microphone ${availableDevices.microphones.indexOf(mic) + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {availableDevices.speakers.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: '#666', 
+                marginBottom: '4px',
+                fontWeight: '500'
+              }}>
+                🔊 스피커 선택
+              </label>
+              <select
+                value={selectedSpeaker}
+                onChange={(e) => {
+                  const deviceId = e.target.value;
+                  switchSpeaker(deviceId);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                {availableDevices.speakers.map((speaker) => (
+                  <option key={speaker.deviceId} value={speaker.deviceId}>
+                    {speaker.label || `Speaker ${availableDevices.speakers.indexOf(speaker) + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           
           <div style={{
             width: '100%',
@@ -849,10 +1159,10 @@ const PrejoinPage = () => {
                 gap: '8px'
               }}>
                 <div style={{ fontSize: '24px' }}>📹</div>
-                <div>{isTestingDevices ? 'Testing camera...' : 'Camera not active'}</div>
+                <div>{isTestingDevices ? '카메라 테스트 중...' : '카메라 비활성화됨'}</div>
                 {!isTestingDevices && (
                   <div style={{ fontSize: '12px', color: '#666' }}>
-                    Click "Test Camera & Mic" to start
+                    "카메라 및 마이크 테스트"를 클릭하여 시작하세요
                   </div>
                 )}
               </div>
@@ -882,7 +1192,7 @@ const PrejoinPage = () => {
                 transition: 'all 0.2s ease'
               }}
             >
-              {isVideoOn ? '📹 On' : '📹 Off'}
+              {isVideoOn ? '📹 켜기' : '📹 끄기'}
             </button>
             
             <button
@@ -901,7 +1211,7 @@ const PrejoinPage = () => {
                 transition: 'all 0.2s ease'
               }}
             >
-              {isMicOn ? '🎤 On' : '🎤 Off'}
+              {isMicOn ? '🎤 켜기' : '🎤 끄기'}
             </button>
           </div>
 
@@ -924,7 +1234,7 @@ const PrejoinPage = () => {
                 boxShadow: '0 4px 15px rgba(74, 144, 226, 0.3)'
               }}
             >
-              {isTestingDevices ? 'Testing...' : 'Test Camera & Mic'}
+              {isTestingDevices ? '테스트 중...' : '카메라 및 마이크 테스트'}
             </button>
           ) : (
             <button
@@ -942,7 +1252,7 @@ const PrejoinPage = () => {
                 transition: 'all 0.3s ease'
               }}
             >
-              Stop Test
+              테스트 중지
             </button>
           )}
 
@@ -967,7 +1277,7 @@ const PrejoinPage = () => {
               fontSize: '12px',
               textAlign: 'center'
             }}>
-              ✅ Camera working perfectly!
+              ✅ 카메라가 정상적으로 작동합니다!
             </div>
           ) : null}
         </div>
@@ -987,7 +1297,7 @@ const PrejoinPage = () => {
             color: '#333',
             fontWeight: '600'
           }}>
-            Ready to Join?
+            참여할 준비가 되셨나요?
           </h3>
 
           {/* Device Status */}
@@ -999,13 +1309,13 @@ const PrejoinPage = () => {
               padding: '8px 0',
               borderBottom: '1px solid rgba(74, 144, 226, 0.2)'
             }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>Camera</span>
+              <span style={{ fontSize: '14px', color: '#666' }}>카메라</span>
               <span style={{ 
                 fontSize: '14px',
                 color: isVideoOn ? '#4A90E2' : '#E74C3C',
                 fontWeight: '500'
               }}>
-                {isVideoOn ? '✓ Working' : '✗ Not tested'}
+                {isVideoOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
               </span>
             </div>
             
@@ -1016,13 +1326,13 @@ const PrejoinPage = () => {
               padding: '8px 0',
               borderBottom: '1px solid rgba(74, 144, 226, 0.2)'
             }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>Microphone</span>
+              <span style={{ fontSize: '14px', color: '#666' }}>마이크</span>
               <span style={{ 
                 fontSize: '14px',
                 color: isMicOn ? '#4A90E2' : '#E74C3C',
                 fontWeight: '500'
               }}>
-                {isMicOn ? '✓ Working' : '✗ Not tested'}
+                {isMicOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
               </span>
             </div>
             
@@ -1032,13 +1342,13 @@ const PrejoinPage = () => {
               justifyContent: 'space-between',
               padding: '8px 0'
             }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>Speaker</span>
+              <span style={{ fontSize: '14px', color: '#666' }}>스피커</span>
               <span style={{ 
                 fontSize: '14px',
                 color: isSpeakerOn ? '#4A90E2' : '#E74C3C',
                 fontWeight: '500'
               }}>
-                {isSpeakerOn ? '✓ Working' : '✗ Not tested'}
+                {isSpeakerOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
               </span>
             </div>
           </div>
@@ -1062,7 +1372,7 @@ const PrejoinPage = () => {
               boxShadow: '0 4px 15px rgba(74, 144, 226, 0.3)'
           }}
         >
-          {isJoining ? 'Joining...' : 'Join Meeting'}
+          {isJoining ? '참여 중...' : '미팅 참여'}
         </button>
 
           {/* Meeting Details */}
@@ -1075,7 +1385,7 @@ const PrejoinPage = () => {
             border: '1px solid rgba(74, 144, 226, 0.2)'
           }}>
             <div style={{ marginBottom: '4px' }}>
-              <strong>Status:</strong> {meetingInfo.status}
+              <strong>상태:</strong> {meetingInfo.status === 'SCHEDULED' ? '예약됨' : meetingInfo.status}
             </div>
             <div>
               <strong>ID:</strong> {meetingInfo._id.slice(-8)}

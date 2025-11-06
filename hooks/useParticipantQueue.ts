@@ -167,11 +167,11 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
     });
   }, []); // ✅ FIXED: Remove sortParticipants dependency
 
-  // Start screen share
+  // 화면 공유 시작
   const startScreenShare = useCallback((participantId: string) => {
     setQueueState(prev => {
-      // CRITICAL FIX: Try multiple ID formats to find the participant
-      // participantId could be: user._id, participant._id, identity, or userId
+      // 중요 수정: 참가자를 찾기 위해 여러 ID 형식 시도
+      // participantId는 다음 중 하나일 수 있음: user._id, participant._id, identity, 또는 userId
       const screenShareParticipant = prev.participants.find(p => 
         p._id === participantId ||
         p.identity === participantId ||
@@ -180,20 +180,8 @@ export const useParticipantQueue = (initialParticipants: Participant[] = []) => 
         (p as any).backendId === participantId
       );
       
-      if (screenShareParticipant) {
-        console.log('[useParticipantQueue] Starting screen share for:', {
-          participantId,
-          found: screenShareParticipant.displayName,
-          matched_id: screenShareParticipant._id,
-          matched_identity: screenShareParticipant.identity
-        });
-      } else {
-        console.warn('[useParticipantQueue] Screen share participant not found. ID:', participantId, 'Available participants:', prev.participants.map(p => ({
-          _id: p._id,
-          identity: p.identity,
-          user_id: p.user?._id,
-          userId: p.userId
-        })));
+      if (!screenShareParticipant) {
+        console.warn('[useParticipantQueue] 화면 공유 참가자를 찾을 수 없음. ID:', participantId);
       }
       
       return {
