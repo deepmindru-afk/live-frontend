@@ -3105,7 +3105,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             overflow: 'hidden',
             // Reserve space for fixed header and bottom bar
             paddingTop: isMobile ? '56px' : '70px',
-            paddingBottom: isMobile ? '100px' : '80px', // Increased bottom padding for mobile controls
+            // When controls are hidden in video player mode, extend to bottom (no padding)
+            paddingBottom: (isVideoPlayerMode && !showControls) 
+              ? '0px' 
+              : (isMobile ? '100px' : '80px'),
             minHeight: 0 // Allow flex item to shrink
           }}>
             {/* Mobile Picture-in-Picture Mode */}
@@ -4682,20 +4685,23 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           
           {/* Video Player Control Bar - Auto-hide */}
           <div style={{
-            height: isMobile ? '80px' : '80px', // Increased height for mobile
+            // When controls are hidden in video player mode, completely remove the section (height: 0)
+            height: (isVideoPlayerMode && !showControls) 
+              ? '0px' 
+              : (isMobile ? '80px' : '80px'),
             backgroundColor: isVideoPlayerMode 
-              ? (showControls ? 'rgba(0, 0, 0, 0.9)' : 'transparent')
-              : '#ffffff',
+              ? (showControls ? 'rgba(0, 0, 0, 0.7)' : 'transparent')
+              : 'transparent',
             borderTop: isVideoPlayerMode 
               ? (showControls ? '1px solid rgba(255, 255, 255, 0.1)' : 'none')
-              : '1px solid #e5e7eb',
-            display: 'flex',
+              : 'none',
+            display: (isVideoPlayerMode && !showControls) ? 'none' : 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: isMobile ? '8px 12px' : '0 24px', // Added top padding for mobile
             boxShadow: isVideoPlayerMode 
               ? (showControls ? '0 -2px 10px rgba(0,0,0,0.3)' : 'none')
-              : '0 -2px 8px rgba(0,0,0,0.1)',
+              : 'none',
             position: 'fixed',
             bottom: 0,
             left: 0,
@@ -4707,8 +4713,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               ? (showControls ? 'translateY(0)' : 'translateY(100%)')
               : 'translateY(0)',
             backdropFilter: isVideoPlayerMode && showControls ? 'blur(10px)' : 'none',
-            // Ensure mobile controls are always visible
-            minHeight: isMobile ? '80px' : '80px'
+            // Ensure mobile controls are always visible when shown
+            minHeight: (isVideoPlayerMode && !showControls) 
+              ? '0px' 
+              : (isMobile ? '80px' : '80px'),
+            // Hide completely when controls are closed in video player mode
+            opacity: isVideoPlayerMode && !showControls ? 0 : 1,
+            pointerEvents: isVideoPlayerMode && !showControls ? 'none' : 'auto',
+            overflow: 'hidden' // Hide content when height is 0
           }}>
             <div style={{ 
               display: 'flex', 
@@ -4724,7 +4736,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                 width: '44px',
                 height: '44px',
                 borderRadius: '8px',
-                backgroundColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                backdropFilter: 'blur(10px)',
+                border: '2px solid rgba(255, 255, 255, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -4744,20 +4758,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     width: isMobile ? '44px' : '52px',
                     height: isMobile ? '44px' : '52px',
                     borderRadius: '50%',
-                    backgroundColor: isVideoPlayerMode 
-                      ? (micEnabled ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)')
-                      : (micEnabled ? '#22c55e' : '#ef4444'),
-                    border: isVideoPlayerMode ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                    backgroundColor: micEnabled 
+                      ? 'rgba(34, 197, 94, 0.7)' 
+                      : 'rgba(239, 68, 68, 0.7)',
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
                     cursor: 'pointer',
                     color: 'white',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     transition: 'all 0.2s ease',
-                    boxShadow: isVideoPlayerMode 
-                      ? '0 4px 12px rgba(0,0,0,0.3)'
-                      : '0 2px 8px rgba(0,0,0,0.15)',
-                    backdropFilter: isVideoPlayerMode ? 'blur(10px)' : 'none'
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    backdropFilter: 'blur(10px)'
                   }}
                   title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
@@ -4780,15 +4792,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: isMobile ? '40px' : '48px',
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
-                  backgroundColor: cameraEnabled ? '#22c55e' : '#ef4444',
-                  border: 'none',
+                  backgroundColor: cameraEnabled 
+                    ? 'rgba(34, 197, 94, 0.7)' 
+                    : 'rgba(239, 68, 68, 0.7)',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(10px)'
                 }}
                 title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
@@ -4810,15 +4825,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: isMobile ? '40px' : '48px',
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
-                  backgroundColor: liveKitIsScreenSharing ? '#3b82f6' : '#f3f4f6',
-                  border: 'none',
+                  backgroundColor: liveKitIsScreenSharing 
+                    ? 'rgba(59, 130, 246, 0.7)' 
+                    : 'rgba(243, 244, 246, 0.5)',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
                   color: liveKitIsScreenSharing ? 'white' : '#6b7280',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(10px)'
                 }}
                 title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
               >
@@ -4879,15 +4897,18 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       width: isMobile ? '40px' : '48px',
                       height: isMobile ? '40px' : '48px',
                       borderRadius: '50%',
-                      backgroundColor: isWhiteboardActive ? '#8b5cf6' : '#f3f4f6',
-                      border: '2px solid ' + (isWhiteboardActive ? '#7c3aed' : '#d1d5db'),
+                      backgroundColor: isWhiteboardActive 
+                        ? 'rgba(139, 92, 246, 0.7)' 
+                        : 'rgba(243, 244, 246, 0.5)',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
                       cursor: 'pointer',
                       color: isWhiteboardActive ? 'white' : '#6b7280',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       transition: 'all 0.2s ease',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                      backdropFilter: 'blur(10px)',
                       flexShrink: 0,
                       zIndex: 1000,
                       position: 'relative'
@@ -4908,8 +4929,10 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: isMobile ? '40px' : '48px',
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
-                  backgroundColor: sidebarOpen ? '#3b82f6' : '#f3f4f6',
-                  border: 'none',
+                  backgroundColor: sidebarOpen 
+                    ? 'rgba(59, 130, 246, 0.7)' 
+                    : 'rgba(243, 244, 246, 0.5)',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
                   color: sidebarOpen ? 'white' : '#6b7280',
                   display: 'flex',
@@ -4917,7 +4940,8 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   justifyContent: 'center',
                   position: 'relative',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(10px)'
                 }}
                 title="Open/Close chat panel"
               >
@@ -4972,15 +4996,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                   width: isMobile ? '40px' : '48px',
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
-                  backgroundColor: '#ef4444',
-                  border: 'none',
+                  backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
                   color: 'white',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(10px)'
                 }}
                 title="회의 나가기"
               >
