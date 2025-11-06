@@ -351,80 +351,122 @@ const AttendancePage: React.FC = () => {
   };
 
   // ✅ Calculate actual attendance duration from joinedAt and leftAt times
-  // PRIORITY: Always calculate from participant's joinedAt/leftAt first (most accurate)
+  // CRITICAL: Always calculate from participant's joinedAt/leftAt ONLY - never use sessions or totalTime
   const calculateParticipantDuration = (participant: ParticipantAttendance): number => {
-    // PRIORITY 1: Calculate directly from participant's joinedAt and leftAt (most reliable)
-    if (participant.joinedAt) {
-      try {
-        const joinTime = new Date(participant.joinedAt).getTime();
-        // Check if joinTime is valid
-        if (!isNaN(joinTime) && joinTime > 0) {
-          // Use leftAt if available, otherwise use current time (for ongoing participants)
-          const leftTimeRaw = participant.leftAt || (meeting?.status === 'ENDED' || meeting?.status === 'END' ? meeting?.endedAt : null);
-          const leftTime = leftTimeRaw ? new Date(leftTimeRaw).getTime() : Date.now();
-          
-          // Check if leftTime is valid
-          if (!isNaN(leftTime) && leftTime > 0 && leftTime >= joinTime) {
-            const duration = Math.floor((leftTime - joinTime) / 1000);
-            // Only return if duration is positive and reasonable (not negative)
-            if (duration >= 0 && duration < 86400) { // Less than 24 hours (reasonable max)
-              // Debug log (can be removed in production)
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[Attendance Calc] ${participant.displayName}: joinedAt=${participant.joinedAt}, leftAt=${participant.leftAt || 'N/A'}, calculated=${duration}s (${Math.floor(duration/60)}min)`);
-              }
-              return duration;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`[Attendance Calc Error] Failed to calculate duration for ${participant.displayName}:`, error);
-      }
+    // ENFORCE: We ONLY use participant.joinedAt and participant.leftAt - nothing else!
+    // Sessions and totalTime are often incorrect, so we completely ignore them
+    
+    if (!participant.joinedAt) {
+      return 0;
     }
     
-    // PRIORITY 2: If direct calculation failed, try sessions (sum of all session durations)
-    if (participant.sessions && participant.sessions.length > 0) {
-      let totalDuration = 0;
-      let hasValidSession = false;
+    try {
+      // Parse joinedAt - handle both ISO strings and numeric timestamps (string or number)
+      let joinTime: number;
       
-      for (const session of participant.sessions) {
-        // Try to calculate from session's joinedAt and leftAt first
-        if (session.joinedAt) {
-          const sessionJoinTime = new Date(session.joinedAt).getTime();
-          if (!isNaN(sessionJoinTime) && sessionJoinTime > 0) {
-            const sessionLeftTime = session.leftAt ? new Date(session.leftAt).getTime() : Date.now();
-            if (!isNaN(sessionLeftTime) && sessionLeftTime > 0) {
-              const sessionDuration = Math.floor((sessionLeftTime - sessionJoinTime) / 1000);
-              if (sessionDuration > 0 && sessionDuration < 86400) {
-                totalDuration += sessionDuration;
-                hasValidSession = true;
-                continue; // Skip to next session
-              }
-            }
-          }
+      if (typeof participant.joinedAt === 'number') {
+        // Already a timestamp in milliseconds
+        joinTime = participant.joinedAt;
+      } else if (typeof participant.joinedAt === 'string') {
+        // Check if it's a numeric string (timestamp)
+        if (/^\d+$/.test(participant.joinedAt)) {
+          // It's a numeric string timestamp
+          joinTime = parseInt(participant.joinedAt, 10);
+        } else {
+          // It's an ISO date string
+          joinTime = new Date(participant.joinedAt).getTime();
+        }
+      } else {
+        // Try to parse as date
+        joinTime = new Date(participant.joinedAt).getTime();
+      }
+      
+      // Validate joinTime
+      if (isNaN(joinTime) || joinTime <= 0) {
+        return 0;
+      }
+      
+      // Determine leftTime - MUST have a valid leftAt or meeting.endedAt
+      let leftTime: number | null = null;
+      
+      // Helper function to parse date/timestamp
+      const parseDateTime = (value: string | number | Date | null | undefined): number | null => {
+        if (!value) return null;
+        
+        if (typeof value === 'number') {
+          return value; // Already a timestamp
         }
         
-        // Fallback to durationSec only if session times are not available
-        if (session.durationSec && session.durationSec > 0 && session.durationSec < 86400) {
-          totalDuration += session.durationSec;
-          hasValidSession = true;
+        if (typeof value === 'string') {
+          // Check if it's a numeric string (timestamp)
+          if (/^\d+$/.test(value)) {
+            return parseInt(value, 10); // Parse as timestamp
+          }
+          // Otherwise parse as ISO date string
+          const parsed = new Date(value).getTime();
+          return !isNaN(parsed) && parsed > 0 ? parsed : null;
+        }
+        
+        // If it's a Date object
+        if (value instanceof Date) {
+          return value.getTime();
+        }
+        
+        // Try generic Date parsing
+        const parsed = new Date(value as any).getTime();
+        return !isNaN(parsed) && parsed > 0 ? parsed : null;
+      };
+      
+      // PRIORITY 1: Use participant.leftAt (MOST ACCURATE - always use this if available)
+      if (participant.leftAt) {
+        const parsedLeftTime = parseDateTime(participant.leftAt);
+        if (parsedLeftTime !== null) {
+          leftTime = parsedLeftTime;
         }
       }
       
-      if (hasValidSession && totalDuration > 0) {
-        return totalDuration;
+      // PRIORITY 2: If no leftAt and meeting has ended, use meeting.endedAt
+      if (!leftTime && meeting && (meeting.status === 'ENDED' || meeting.status === 'END') && meeting.endedAt) {
+        const parsedEndTime = parseDateTime(meeting.endedAt);
+        if (parsedEndTime !== null) {
+          leftTime = parsedEndTime;
+        }
       }
+      
+      // PRIORITY 3: Only use current time if meeting is still ongoing (LIVE/STARTED)
+      // NEVER use Date.now() for ended meetings
+      if (!leftTime && meeting && meeting.status !== 'ENDED' && meeting.status !== 'END') {
+        leftTime = Date.now();
+      }
+      
+      // If we don't have a valid leftTime, return 0
+      if (leftTime === null || leftTime <= 0) {
+        return 0;
+      }
+      
+      // Validate leftTime is after joinTime
+      if (leftTime < joinTime) {
+        return 0;
+      }
+      
+      // Calculate duration in seconds
+      const duration = Math.floor((leftTime - joinTime) / 1000);
+      
+      // Validate duration is reasonable (0 to 24 hours)
+      if (duration < 0 || duration >= 86400) {
+        return 0;
+      }
+      
+      return duration;
+      
+    } catch (error) {
+      // Silently return 0 on error
+      return 0;
     }
     
-    // Last resort: use totalTime from backend (but only if it seems reasonable)
-    // WARNING: Backend totalTime is often incorrect (may be the meeting duration instead of participant duration)
-    // Only use it if we have no other option and it's not suspiciously equal to common meeting durations
-    if (participant.totalTime && participant.totalTime > 0) {
-      // If totalTime seems suspicious (like it's exactly the meeting duration), try to verify
-      // But we'll use it anyway as a last resort since we have no other data
-      console.warn(`[Attendance Calc] Using backend totalTime for ${participant.displayName}: ${participant.totalTime}s (this may be incorrect if it matches meeting duration)`);
-      return participant.totalTime;
-    }
-    
+    // NOTE: We completely ignore sessions and totalTime as they are often incorrect
+    // The calculation above from joinedAt/leftAt is the ONLY reliable source
+    // If we reach here, it means we couldn't calculate (missing data)
     return 0;
   };
 
@@ -901,11 +943,13 @@ const AttendancePage: React.FC = () => {
             <tbody>
               {filteredParticipants.map((participant, index) => {
                 const totalMeetingDuration = getTotalMeetingDuration();
-                // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
+                // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times ONLY
+                // This MUST use the same calculation as the modal to ensure consistency
                 const actualDuration = calculateParticipantDuration(participant);
                 // ✅ FIX: Cap participant attendance time to not exceed total meeting duration
                 const cappedAttendanceTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
                 const attendancePercentage = calculateAttendancePercentage(cappedAttendanceTime, totalMeetingDuration);
+                
                 
                 return (
                   <tr 
