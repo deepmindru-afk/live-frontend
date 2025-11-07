@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin, showErrorAlert } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin, showErrorAlert, getAuthToken } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
 import { GET_TUTOR_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
@@ -47,6 +47,7 @@ const Dashboard: React.FC = () => {
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
   const [courseCode, setCourseCode] = useState('');
+  const [classMaterialFile, setClassMaterialFile] = useState<File | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   
   // VOD state
@@ -62,6 +63,7 @@ const Dashboard: React.FC = () => {
   
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const materialInputRef = useRef<HTMLInputElement>(null);
   
   // Screen width for responsive design
   const [screenWidth, setScreenWidth] = useState<number>(0);
@@ -334,6 +336,35 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const uploadMeetingMaterial = async (meetingId: string, file: File) => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const formData = new FormData();
+    formData.append('material', file);
+
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${baseUrl}/meeting-materials/${meetingId}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    }).catch((error) => {
+      throw new Error(`자료 업로드 요청에 실패했습니다: ${error.message}`);
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(
+        errorText || '수업 자료 업로드에 실패했습니다. 나중에 다시 시도해주세요.',
+      );
+    }
+
+    return response.json().catch(() => ({}));
+  };
+
   const handleCreateMeeting = async () => {
     if (!newMeetingTitle.trim()) {
       await Swal.fire({
@@ -398,10 +429,27 @@ const Dashboard: React.FC = () => {
           // Add to existing meetings
           setMeetings(prev => [newMeeting, ...prev]);
 
+          let successMessage = '방이 성공적으로 생성되었습니다!';
+
+          if (classMaterialFile) {
+            try {
+              await uploadMeetingMaterial(newMeeting._id, classMaterialFile);
+              successMessage += '\n선택한 수업 자료도 함께 업로드되었습니다.';
+            } catch (materialError: any) {
+              const materialErrorMessage = materialError?.message || '수업 자료 업로드에 실패했습니다.';
+              successMessage += `\n단, 자료 업로드 중 문제가 발생했습니다: ${materialErrorMessage}`;
+            } finally {
+              setClassMaterialFile(null);
+              if (materialInputRef.current) {
+                materialInputRef.current.value = '';
+              }
+            }
+          }
+
           await Swal.fire({
             icon: 'success',
             title: '성공',
-            text: '방이 성공적으로 생성되었습니다!',
+            text: successMessage,
             confirmButtonText: '확인'
           });
 
@@ -1012,6 +1060,125 @@ const Dashboard: React.FC = () => {
                   textTransform: 'uppercase'
                 }}
               />
+              <div
+                style={{
+                  marginTop: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <label
+                  htmlFor="class-material-upload"
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: '0.85rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  수업 자료 업로드 (선택)
+                </label>
+                <input
+                  id="class-material-upload"
+                  ref={materialInputRef}
+                  type="file"
+                  accept=".pdf,.ppt,.pptx,.doc,.docx,.xlsx,.xls,.zip,.png,.jpg,.jpeg"
+                  style={{ display: 'none' }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      setClassMaterialFile(file);
+                    } else {
+                      setClassMaterialFile(null);
+                    }
+                  }}
+                />
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => materialInputRef.current?.click()}
+                    style={{
+                      padding: '0.6rem 1rem',
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      color: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.3)',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                    }}
+                  >
+                    파일 선택
+                  </button>
+                  <span
+                    style={{
+                      color: 'rgba(255, 255, 255, 0.85)',
+                      fontSize: '0.8rem',
+                      maxWidth: '180px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={classMaterialFile?.name || ''}
+                  >
+                    {classMaterialFile
+                      ? classMaterialFile.name
+                      : '선택된 파일 없음'}
+                  </span>
+                  {classMaterialFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClassMaterialFile(null);
+                        if (materialInputRef.current) {
+                          materialInputRef.current.value = '';
+                        }
+                      }}
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#fee2e2',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                      }}
+                    >
+                      제거
+                    </button>
+                  )}
+                </div>
+                <span
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  PDF, 문서, 이미지 등 최대 25MB 파일까지 업로드할 수 있습니다.
+                </span>
+              </div>
             </div>
 
             {/* Schedule Panel */}
