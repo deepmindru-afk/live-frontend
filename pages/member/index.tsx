@@ -603,35 +603,32 @@ const MemberDashboard: React.FC = () => {
       </Head>
       
       <div className="member-dashboard">
-        {/* Mobile Header */}
-        <div className="mobile-header">
-          <div className="mobile-logo">
-            <Image
-              src="/logoHRDe.png"
-              alt="HRDE"
-              width={100}
-              height={45}
-              style={{
-                objectFit: 'contain'
-              }}
-            />
-          </div>
-          <div className="mobile-profile">
-            {user?.avatarUrl && (
-              <img
-                src={user.avatarUrl}
-                alt="Profile"
-                className="mobile-avatar"
+        <header className="dashboard-topbar">
+          <div className="topbar-inner">
+            <div className="topbar-logo">
+              <Image
+                src="/logoHRDe.png"
+                alt="HRDe"
+                width={96}
+                height={40}
+                priority
               />
-            )}
-            <button 
-              className="mobile-logout-btn"
+            </div>
+            <button
+              type="button"
+              className="topbar-logout"
               onClick={handleLogoutClick}
             >
-              로그아웃
+              <Image
+                src="/Icons/dashboard/logout.svg"
+                alt="로그아웃"
+                width={20}
+                height={20}
+              />
+              <span>로그아웃</span>
             </button>
           </div>
-        </div>
+        </header>
 
         {/* Mobile Welcome Section */}
         <div className="mobile-welcome">
@@ -1275,44 +1272,81 @@ const MemberDashboard: React.FC = () => {
           flex-direction: column;
         }
 
-        /* Mobile Header - Show on all screen sizes */
-        .mobile-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: white;
-          padding: 1rem;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        /* Dashboard Topbar */
+        .dashboard-topbar {
           position: sticky;
           top: 0;
-          z-index: 1000;
+          z-index: 1100;
+          background: linear-gradient(160deg, #111111 0%, #1a1a1a 60%, #0e0e0f 100%);
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
         }
 
-        .mobile-logo {
+        .dashboard-topbar::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 4px;
+          background: linear-gradient(90deg, #4A6CF7 0%, #8C5AEF 100%);
+        }
+
+        .topbar-inner {
+          max-width: 1280px;
+          margin: 0 auto;
           display: flex;
           align-items: center;
+          justify-content: space-between;
+          padding: 1.1rem 2.5rem;
         }
 
-        .mobile-profile {
-          display: flex;
+        .topbar-logo :global(img) {
+          width: auto;
+          height: 36px;
+          object-fit: contain;
+          filter: drop-shadow(0 6px 18px rgba(74, 108, 247, 0.35));
+        }
+
+        .topbar-logout {
+          display: inline-flex;
           align-items: center;
-          gap: 12px;
-        }
-
-        .mobile-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .mobile-menu-toggle {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
+          gap: 0.55rem;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.85);
+          padding: 0.65rem 1.4rem;
+          border-radius: 999px;
+          font-size: 0.95rem;
+          font-weight: 500;
+          letter-spacing: 0.04em;
           cursor: pointer;
-          padding: 0.5rem;
-          color: #333;
+          transition: all 0.25s ease;
+        }
+
+        .topbar-logout:hover {
+          background: rgba(255, 255, 255, 0.08);
+          transform: translateY(-1px);
+          box-shadow: 0 12px 24px rgba(12, 39, 99, 0.35);
+        }
+
+        .topbar-logout :global(img) {
+          width: 18px;
+          height: 18px;
+        }
+
+        @media (max-width: 768px) {
+          .topbar-inner {
+            padding: 0.9rem 1.25rem;
+          }
+
+          .topbar-logo :global(img) {
+            height: 32px;
+          }
+
+          .topbar-logout {
+            padding: 0.55rem 1.1rem;
+            font-size: 0.9rem;
+          }
         }
 
         /* Mobile Welcome Section - Show on all screen sizes */
@@ -1443,67 +1477,6 @@ const MemberDashboard: React.FC = () => {
 
         .mobile-nav-item:hover {
           background: #f5f5f5;
-        }
-
-        .mobile-logout-btn {
-          background: #dc3545;
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          min-width: auto;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .mobile-logout-btn:hover {
-          background: #c82333;
-          transform: translateY(-1px);
-        }
-
-        /* Desktop Logout Button */
-        .desktop-logout-btn {
-          background: #dc3545;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .desktop-logout-btn:hover {
-          background: #c82333;
-          transform: translateY(-1px);
-        }
-
-        /* Responsive logout button */
-        @media (max-width: 768px) {
-          .mobile-logout-btn {
-            padding: 6px 12px;
-            font-size: 13px;
-            height: 32px;
-          }
-        }
-
-        @media (min-width: 769px) {
-          .mobile-logout-btn {
-            padding: 10px 20px;
-            font-size: 15px;
-            height: 40px;
-          }
         }
 
         /* Desktop Sidebar - Hide on all screen sizes */
