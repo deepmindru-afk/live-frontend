@@ -1032,51 +1032,137 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Create Room Panel */}
-            <div className="action-panel create-room">
-              <h3>방 만들기</h3>
-              <div className="input-group">
-                <input
-                  type="text"
-                  placeholder="방 이름을 입력하세요"
-                  value={newMeetingTitle}
-                  onChange={(e) => setNewMeetingTitle(e.target.value)}
-                />
-                <button onClick={handleCreateMeeting}>→</button>
-              </div>
-              <input
-                type="text"
-                placeholder="강의 코드 (선택사항)"
-                value={courseCode}
-                onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
-                style={{ 
-                  marginTop: '12px',
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  color: 'white',
-                  fontSize: '0.9rem',
-                  textTransform: 'uppercase'
-                }}
-              />
+            <div
+              className="action-panel create-room"
+              style={{
+                background: 'linear-gradient(180deg, #111827 0%, #0f172a 35%, #1f2937 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: '0 18px 40px rgba(15, 23, 42, 0.35)',
+                padding: '1.75rem',
+              }}
+            >
               <div
                 style={{
-                  marginTop: '12px',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginBottom: '1.25rem',
                 }}
               >
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '1.15rem',
+                  }}
+                >
+                  <Image
+                    src="/Icons/dashboard/Vector.svg"
+                    alt="Create meeting"
+                    width={20}
+                    height={20}
+                    style={{ filter: 'brightness(3)' }}
+                  />
+                </div>
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '1.25rem',
+                      fontWeight: 600,
+                      color: 'rgba(255,255,255,0.95)',
+                    }}
+                  >
+                    방 만들기
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0.25rem 0 0 0',
+                      fontSize: '0.9rem',
+                      color: 'rgba(255,255,255,0.6)',
+                    }}
+                  >
+                    LIVE방을 생성합니다.
+                  </p>
+                </div>
+              </div>
+
+              <label
+                htmlFor="meeting-title"
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'rgba(255,255,255,0.7)',
+                  marginBottom: '0.4rem',
+                }}
+              >
+                방 제목 *
+              </label>
+              <input
+                id="meeting-title"
+                type="text"
+                placeholder="방 제목"
+                value={newMeetingTitle}
+                onChange={(e) => setNewMeetingTitle(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'rgba(17, 24, 39, 0.65)',
+                  color: 'white',
+                  fontSize: '0.95rem',
+                  marginBottom: '1rem',
+                }}
+              />
+
+              <label
+                htmlFor="course-code"
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  color: 'rgba(255,255,255,0.7)',
+                  marginBottom: '0.4rem',
+                }}
+              >
+                강의코드 (선택)
+              </label>
+              <input
+                id="course-code"
+                type="text"
+                placeholder="강의코드"
+                value={courseCode}
+                onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: 'rgba(17, 24, 39, 0.65)',
+                  color: 'white',
+                  fontSize: '0.95rem',
+                  textTransform: 'uppercase',
+                  marginBottom: '1.1rem',
+                }}
+              />
+
+              <div style={{ marginBottom: '1.5rem' }}>
                 <label
                   htmlFor="class-material-upload"
                   style={{
-                    color: 'rgba(255, 255, 255, 0.9)',
+                    display: 'block',
                     fontSize: '0.85rem',
-                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.7)',
+                    marginBottom: '0.6rem',
                   }}
                 >
-                  수업 자료 업로드 (선택)
+                  수업자료 업로드 (선택)
                 </label>
                 <input
                   id="class-material-upload"
@@ -1097,7 +1183,7 @@ const Dashboard: React.FC = () => {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '0.75rem',
                     flexWrap: 'wrap',
                   }}
                 >
@@ -1105,28 +1191,28 @@ const Dashboard: React.FC = () => {
                     type="button"
                     onClick={() => materialInputRef.current?.click()}
                     style={{
-                      padding: '0.6rem 1rem',
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      color: '#ffffff',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.3)',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
+                      padding: '0.7rem 1.2rem',
+                      borderRadius: '9px',
+                      border: '1px solid rgba(255, 255, 255, 0.18)',
+                      background: 'linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(99,102,241,0.25) 100%)',
+                      color: 'rgba(255,255,255,0.9)',
                       fontWeight: 600,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
                       transition: 'all 0.3s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.35) 0%, rgba(99,102,241,0.35) 100%)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(99,102,241,0.25) 100%)';
                     }}
                   >
-                    파일 선택
+                    파일선택
                   </button>
                   <span
                     style={{
-                      color: 'rgba(255, 255, 255, 0.85)',
+                      color: 'rgba(255,255,255,0.7)',
                       fontSize: '0.8rem',
                       maxWidth: '180px',
                       overflow: 'hidden',
@@ -1135,9 +1221,7 @@ const Dashboard: React.FC = () => {
                     }}
                     title={classMaterialFile?.name || ''}
                   >
-                    {classMaterialFile
-                      ? classMaterialFile.name
-                      : '선택된 파일 없음'}
+                    {classMaterialFile ? classMaterialFile.name : '선택된 파일 없음'}
                   </span>
                   {classMaterialFile && (
                     <button
@@ -1149,36 +1233,64 @@ const Dashboard: React.FC = () => {
                         }
                       }}
                       style={{
-                        padding: '0.45rem 0.75rem',
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        color: '#fee2e2',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                        cursor: 'pointer',
+                        padding: '0.55rem 0.9rem',
+                        borderRadius: '9px',
+                        border: '1px solid rgba(239,68,68,0.45)',
+                        background: 'rgba(239,68,68,0.15)',
+                        color: '#fecaca',
                         fontSize: '0.75rem',
                         fontWeight: 600,
+                        cursor: 'pointer',
                         transition: 'all 0.3s ease',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
+                        e.currentTarget.style.background = 'rgba(239,68,68,0.25)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                        e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
                       }}
                     >
                       제거
                     </button>
                   )}
                 </div>
-                <span
+                <p
                   style={{
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '0.75rem',
+                    margin: '0.6rem 0 0 0',
+                    fontSize: '0.72rem',
+                    color: 'rgba(255,255,255,0.45)',
                   }}
                 >
-                  PDF, 문서, 이미지 등 최대 25MB 파일까지 업로드할 수 있습니다.
-                </span>
+                  PDF, 문서, 이미지 등 25MB까지 업로드 가능합니다.
+                </p>
               </div>
+
+              <button
+                onClick={handleCreateMeeting}
+                style={{
+                  width: '100%',
+                  padding: '0.95rem 1rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                  color: 'white',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 14px 28px rgba(79, 70, 229, 0.35)',
+                  letterSpacing: '0.01em',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 16px 32px rgba(79, 70, 229, 0.45)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 14px 28px rgba(79, 70, 229, 0.35)';
+                }}
+              >
+                생성하기
+              </button>
             </div>
 
             {/* Schedule Panel */}
