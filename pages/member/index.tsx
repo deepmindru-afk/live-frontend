@@ -1153,75 +1153,55 @@ const MemberDashboard: React.FC = () => {
         {showAttendancePopup && selectedMeeting && (
           <div className="attendance-popup-overlay" onClick={closeAttendancePopup}>
             <div className="attendance-popup" onClick={(e) => e.stopPropagation()}>
-              <div className="popup-header">
-                <h3 className="popup-title">📊 출석 상세 정보</h3>
-                <button className="popup-close" onClick={closeAttendancePopup}>×</button>
-              </div>
-              
-              <div className="popup-content">
-                {loadingAttendance ? (
-                  <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
-                    <p>출석 정보를 불러오는 중...</p>
-                  </div>
-                ) : participantData?.getParticipantByUserAndMeeting ? (
-                  <>
-                    <div className="meeting-info-card">
-                      <h4 className="meeting-title">{selectedMeeting.title}</h4>
-                      <div className="meeting-badge">
-                        <span>📅 {formatDate(selectedMeeting.createdAt)}</span>
+              {loadingAttendance ? (
+                <div className="attendance-loading">
+                  <div className="attendance-loading-icon">⏳</div>
+                  <p className="attendance-loading-text">출석 정보를 불러오는 중...</p>
+                </div>
+              ) : participantData?.getParticipantByUserAndMeeting ? (() => {
+                const participantTime = participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes || 0;
+                const meetingDuration = selectedMeeting.duration || 60;
+                const attendancePercentage = meetingDuration > 0 ? Math.min(Math.round((participantTime / meetingDuration) * 100), 100) : 0;
+                const meetingDate = selectedMeeting.schedule || selectedMeeting.createdAt;
+
+                return (
+                  <div className="attendance-card">
+                    <h3 className="attendance-heading">출석상세정보</h3>
+                    <p className="attendance-meeting-title">강의 제목: {selectedMeeting.title}</p>
+                    <p className="attendance-meeting-date">{meetingDate ? formatDate(meetingDate) : '-'}</p>
+                    <div className="attendance-divider" />
+                    <div className="attendance-stats">
+                      <div className="attendance-row">
+                        <span>총 미팅시간</span>
+                        <strong>{meetingDuration} 분</strong>
+                      </div>
+                      <div className="attendance-row">
+                        <span>참석시간</span>
+                        <strong>{participantTime} 분</strong>
+                      </div>
+                      <div className="attendance-row">
+                        <span>출석률</span>
+                        <strong>{attendancePercentage} %</strong>
                       </div>
                     </div>
-
-                    {(() => {
-                      const participantTime = participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes || 0;
-                      const meetingDuration = selectedMeeting.duration || 60; // Default to 60 minutes if not specified
-                      const attendancePercentage = meetingDuration > 0 ? Math.min(Math.round((participantTime / meetingDuration) * 100), 100) : 0;
-                      
-                      return (
-                        <div className="attendance-main-stats">
-                          <div className="main-stat-card total-meeting">
-                            <div className="stat-icon-large">⏱️</div>
-                            <div className="stat-info">
-                              <div className="stat-label-main">총 미팅 시간</div>
-                              <div className="stat-value-large">{meetingDuration}분</div>
-                            </div>
-                          </div>
-
-                          <div className="main-stat-card participant-time">
-                            <div className="stat-icon-large">👤</div>
-                            <div className="stat-info">
-                              <div className="stat-label-main">참석 시간</div>
-                              <div className="stat-value-large">{participantTime}분</div>
-                            </div>
-                          </div>
-
-                          <div className="main-stat-card percentage-card">
-                            <div className="stat-icon-large">📊</div>
-                            <div className="stat-info">
-                              <div className="stat-label-main">출석률</div>
-                              <div className="stat-value-large percentage">{attendancePercentage}%</div>
-                              <div className="progress-bar-container">
-                                <div 
-                                  className="progress-bar" 
-                                  style={{ width: `${attendancePercentage}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                  </>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>📋</div>
-                    <h3>출석 정보가 없습니다</h3>
-                    <p>이 회의에 대한 참석 기록이 없습니다.</p>
+                    <div className="attendance-progress">
+                      <div className="attendance-progress-track">
+                        <div
+                          className="attendance-progress-bar"
+                          style={{ width: `${attendancePercentage}%` }}
+                        />
+                      </div>
+                      <span className="attendance-progress-value">{attendancePercentage} %</span>
+                    </div>
+                    <button className="attendance-close-btn" onClick={closeAttendancePopup}>닫기</button>
                   </div>
-                )}
-              </div>
+                );
+              })() : (
+                <div className="attendance-loading">
+                  <div className="attendance-loading-icon">📋</div>
+                  <p className="attendance-loading-text">출석 정보가 없습니다.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1604,403 +1584,171 @@ const MemberDashboard: React.FC = () => {
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
+          background: rgba(0, 0, 0, 0.5);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 10000;
-          animation: fadeIn 0.3s ease;
-          backdrop-filter: blur(5px);
+          backdrop-filter: blur(6px);
         }
 
         .attendance-popup {
-          background: #161616;
-          border-radius: 16px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-          max-width: 1000px;
-          width: 95%;
-          max-height: 85vh;
-          overflow-y: auto;
-          animation: slideUp 0.3s ease;
-          border: 1px solid #e0e0e0;
+          position: relative;
+          width: 420px;
+          max-width: calc(100% - 40px);
+          background: #ffffff;
+          border-radius: 20px;
+          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+          padding: 28px 30px 26px;
         }
 
-        .popup-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 20px 24px;
-          border-bottom: 1px solid #e9ecef;
-          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-          color: white;
-          border-radius: 16px 16px 0 0;
-        }
-
-        .popup-title {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 600;
-        }
-
-        .popup-close {
-          background: none;
-          border: none;
-          font-size: 24px;
-          color: white;
-          cursor: pointer;
-          padding: 0;
+        .attendance-close {
+          position: absolute;
+          top: 18px;
+          right: 18px;
           width: 32px;
           height: 32px;
-          display: flex;
+          border: none;
+          border-radius: 50%;
+          background: rgba(22, 22, 22, 0.06);
+          color: #161616;
+          font-size: 18px;
+          cursor: pointer;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          border-radius: 50%;
-          transition: all 0.2s ease;
         }
 
-        .popup-close:hover {
-          background: rgba(255, 255, 255, 0.2);
-          transform: rotate(90deg);
+        .attendance-close:hover {
+          background: rgba(22, 22, 22, 0.12);
         }
 
-        .popup-content {
-          padding: 24px;
-        }
-
-        .meeting-info-card {
-          margin-bottom: 30px;
-          padding: 24px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 16px;
-          color: white;
-          text-align: center;
-          box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-        }
-
-        .meeting-title {
-          margin: 0 0 16px 0;
-          font-size: 22px;
-          font-weight: 700;
-        }
-
-        .meeting-badge {
-          display: inline-block;
-          background: rgba(255, 255, 255, 0.2);
-          backdrop-filter: blur(10px);
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-size: 14px;
-          font-weight: 500;
-        }
-
-        .attendance-main-stats {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .main-stat-card {
-          background: #161616;
-          padding: 24px;
-          border-radius: 16px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-          transition: all 0.3s ease;
-          border: 2px solid transparent;
-        }
-
-        .main-stat-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-        }
-
-        .main-stat-card.total-meeting {
-          border-top: 4px solid #667eea;
-        }
-
-        .main-stat-card.participant-time {
-          border-top: 4px solid #f093fb;
-        }
-
-        .main-stat-card.percentage-card {
-          border-top: 4px solid #4facfe;
-        }
-
-        .stat-icon-large {
-          font-size: 36px;
-          margin-bottom: 12px;
-        }
-
-        .stat-info {
+        .attendance-card {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 18px;
+          color: #161616;
         }
 
-        .stat-label-main {
-          font-size: 13px;
-          color: #666;
-          font-weight: 500;
-        }
-
-        .stat-value-large {
-          font-size: 28px;
-          font-weight: 700;
-          color: #333;
-        }
-
-        .stat-value-large.percentage {
-          color: #4facfe;
-        }
-
-        .progress-bar-container {
-          width: 100%;
-          height: 8px;
-          background: #e9ecef;
-          border-radius: 10px;
-          overflow: hidden;
-          margin-top: 12px;
-        }
-
-        .progress-bar {
-          height: 100%;
-          background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
-          border-radius: 10px;
-          transition: width 0.8s ease;
-        }
-
-
-        .attendance-timeline {
-          margin-bottom: 24px;
-        }
-
-        .timeline-title {
-          margin: 0 0 16px 0;
-          font-size: 16px;
-          font-weight: 600;
-          color: #333;
-        }
-
-        .timeline {
-          position: relative;
-          padding-left: 20px;
-        }
-
-        .timeline::before {
-          content: '';
-          position: absolute;
-          left: 8px;
-          top: 0;
-          bottom: 0;
-          width: 2px;
-          background: linear-gradient(to bottom, #dc3545, #c82333);
-          animation: drawLine 1s ease-out;
-        }
-
-        .timeline-item {
-          position: relative;
-          margin-bottom: 20px;
-          animation: slideInLeft 0.6s ease;
-          opacity: 0;
-          animation-fill-mode: forwards;
-        }
-
-        .timeline-item:nth-child(1) { animation-delay: 0.2s; }
-        .timeline-item:nth-child(2) { animation-delay: 0.4s; }
-        .timeline-item:nth-child(3) { animation-delay: 0.6s; }
-
-        .timeline-item::before {
-          content: '';
-          position: absolute;
-          left: -16px;
-          top: 6px;
-          width: 12px;
-          height: 12px;
-          background: #dc3545;
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 0 0 3px #dc3545;
-          animation: pulse 2s infinite;
-        }
-
-        .timeline-time {
-          font-size: 12px;
-          color: #666;
-          font-weight: 600;
-          margin-bottom: 4px;
-        }
-
-        .timeline-content {
-          background: #f8f9fa;
-          padding: 12px 16px;
-          border-radius: 8px;
-          border-left: 3px solid #dc3545;
-          transition: all 0.2s ease;
-        }
-
-        .timeline-content:hover {
-          background: #e9ecef;
-          transform: translateX(5px);
-        }
-
-        .timeline-title {
-          font-size: 14px;
-          font-weight: 600;
-          color: #333;
-          margin: 0 0 4px 0;
-        }
-
-        .timeline-desc {
-          font-size: 12px;
-          color: #666;
+        .attendance-heading {
           margin: 0;
+          font-size: 1.05rem;
+          font-weight: 700;
         }
 
-        .attendance-summary {
-          background: #f8f9fa;
-          padding: 20px;
-          border-radius: 12px;
-          border: 1px solid #e9ecef;
-          animation: slideInUp 0.8s ease;
-        }
-
-        .summary-title {
-          margin: 0 0 16px 0;
-          font-size: 16px;
+        .attendance-meeting-title {
+          margin: 0;
+          font-size: 1rem;
           font-weight: 600;
-          color: #333;
+          color: #161616;
         }
 
-        .summary-content {
+        .attendance-meeting-date {
+          margin: -4px 0 0;
+          font-size: 0.85rem;
+          color: #737373;
+        }
+
+        .attendance-divider {
+          height: 1px;
+          background: #e5e5e5;
+          margin: 12px 0 8px;
+        }
+
+        .attendance-divider {
+          height: 1px;
+          background: #e5e5e5;
+          margin: 4px 0 12px;
+        }
+
+        .attendance-stats {
           display: flex;
           flex-direction: column;
           gap: 12px;
         }
 
-        .summary-item {
+        .attendance-row {
           display: flex;
           justify-content: space-between;
+          font-size: 0.95rem;
+          color: #737373;
+        }
+
+        .attendance-row strong {
+          color: #161616;
+          font-weight: 700;
+        }
+
+        .attendance-progress {
+          display: flex;
           align-items: center;
-          padding: 8px 0;
-          border-bottom: 1px solid #e9ecef;
-          transition: all 0.2s ease;
+          gap: 12px;
+          margin-top: 8px;
         }
 
-        .summary-item:hover {
-          background: #e9ecef;
-          padding-left: 8px;
-          border-radius: 4px;
+        .attendance-progress-track {
+          flex: 1;
+          height: 12px;
+          border-radius: 999px;
+          background: #d9d9d9;
+          overflow: hidden;
         }
 
-        .summary-item:last-child {
-          border-bottom: none;
+        .attendance-progress-bar {
+          height: 100%;
+          background: #73428f;
+          border-radius: 999px;
+          transition: width 0.3s ease;
         }
 
-        .summary-label {
-          font-size: 14px;
-          color: #666;
-        }
-
-        .summary-value {
-          font-size: 14px;
+        .attendance-progress-value {
+          font-size: 0.85rem;
           font-weight: 600;
-          color: #dc3545;
+          color: #737373;
         }
 
-        /* Animations */
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        .attendance-close-btn {
+          align-self: flex-end;
+          margin-top: 20px;
+          padding: 0.55rem 1.4rem;
+          border: 1px solid #d9d9d9;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #161616;
+          font-weight: 500;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: background 0.2s ease;
         }
 
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .attendance-close-btn:hover {
+          background: #f5f5f5;
         }
 
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .attendance-loading {
+          text-align: center;
+          padding: 40px 20px;
+          color: #737373;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          align-items: center;
         }
 
-        @keyframes slideInLeft {
-          from {
-            opacity: 0;
-            transform: translateX(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
+        .attendance-loading-icon {
+          font-size: 2.5rem;
         }
 
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .attendance-loading-text {
+          margin: 0;
+          font-size: 1rem;
         }
 
-        @keyframes bounce {
-          0%, 20%, 50%, 80%, 100% {
-            transform: translateY(0);
-          }
-          40% {
-            transform: translateY(-10px);
-          }
-          60% {
-            transform: translateY(-5px);
+        @media (max-width: 768px) {
+          .attendance-popup {
+            padding: 24px 20px;
           }
         }
-
-        @keyframes countUp {
-          from {
-            opacity: 0;
-            transform: scale(0.5);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes drawLine {
-          from {
-            height: 0;
-          }
-          to {
-            height: 100%;
-          }
-        }
-
-        @keyframes pulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
-          }
-          70% {
-            box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
-          }
-        }
-
         /* Responsive Design */
         @media (max-width: 768px) {
           .attendance-popup {
