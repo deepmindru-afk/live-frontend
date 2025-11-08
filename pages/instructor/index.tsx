@@ -939,6 +939,14 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const displayName =
+    user?.name ||
+    user?.fullName ||
+    user?.displayName ||
+    user?.nickname ||
+    user?.username ||
+    (user?.email ? user.email.split('@')[0] : '강사');
+
   return (
     <>
       <Head>
@@ -949,28 +957,36 @@ const Dashboard: React.FC = () => {
       
       <div className="dashboard-container">
         {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '20px 30px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
-        }}>
-          <div 
+        <div className="dashboard-header">
+          <div
+            className="dashboard-header-logo"
             onClick={() => router.push('/dashboard')}
-            style={{ cursor: 'pointer' }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                router.push('/dashboard');
+              }
+            }}
           >
             <Image
               src="/logoHRDe.png"
               alt="HRDe Live"
               width={120}
               height={40}
-              style={{ objectFit: 'contain' }}
+              className="dashboard-header-logo-image"
             />
           </div>
+          <div className="dashboard-header-greeting">
+            <div className="dashboard-header-pill">
+              <span className="dashboard-header-pill-text">
+                {`${displayName}님, 안녕하세요 👋`}
+              </span>
+            </div>
+          </div>
           <button
+            type="button"
+            className="dashboard-header-logout"
             onClick={async () => {
               try {
                 // Ask for confirmation before logout
@@ -993,31 +1009,17 @@ const Dashboard: React.FC = () => {
               } catch (error) {
               }
             }}
-            style={{
-              padding: '10px 20px',
-              background: 'rgba(255, 255, 255, 0.2)',
-              backdropFilter: 'blur(10px)',
-              border: '2px solid rgba(255, 255, 255, 0.3)',
-              borderRadius: '12px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              className="dashboard-header-logout-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16,17 21,12 16,7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -1029,9 +1031,6 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-content">
           {/* Left Sidebar */}
           <div className="dashboard-sidebar">
-            <div className="greeting">
-              <h2>{user?.displayName}님, 안녕하세요 👋</h2>
-            </div>
 
             {/* Create Room Panel */}
             <div
