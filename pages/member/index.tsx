@@ -829,17 +829,22 @@ const MemberDashboard: React.FC = () => {
           {activeTab === 'join' && (
             <div className="join-section">
               <div className="join-container">
-                <div className="join-icon">
-                  🔗
+                <div className="join-visual">
+                  <div className="join-visual-circle">
+                    <Image
+                      src="/Icons/dashboard/joinByCode.svg"
+                      alt="초대코드 아이콘"
+                      width={40}
+                      height={40}
+                    />
+                  </div>
                 </div>
-                <h2 className="join-title">
-                  초대코드로 미팅 참여
-                </h2>
-                <p className="join-description">
-                  미팅 호스트로부터 받은 초대코드를 입력하세요.
-                </p>
+                <h2 className="join-title">초대코드로 미팅 참여</h2>
+                <p className="join-description">미팅 호스트로부터 받은 초대코드를 입력하세요.</p>
                 <div className="join-form">
+                  <label className="join-label" htmlFor="invite-code-input">초대코드</label>
                   <input
+                    id="invite-code-input"
                     type="text"
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
@@ -854,9 +859,8 @@ const MemberDashboard: React.FC = () => {
                   </button>
                 </div>
                 <div className="join-help">
-                  <p className="help-text">
-                    💡 초대코드는 미팅 호스트가 제공하는 고유한 코드입니다.
-                  </p>
+                  <span className="join-help-icon">💡</span>
+                  <p className="help-text">초대코드는 미팅 호스트가 제공하는 고유한 코드입니다.</p>
                 </div>
               </div>
             </div>
@@ -2260,96 +2264,129 @@ const MemberDashboard: React.FC = () => {
           justify-content: center;
           align-items: center;
           min-height: 60vh;
-          padding: 2rem 1rem;
+          padding: 3rem 1rem;
         }
 
         .join-container {
-          max-width: 500px;
+          max-width: 520px;
           width: 100%;
           text-align: center;
-          background: #161616;
-          padding: 3rem 2rem;
-          border-radius: 20px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+          background: linear-gradient(150deg, rgba(59, 59, 59, 0.95) 0%, rgba(38, 38, 38, 0.95) 100%);
+          padding: 3rem 2.75rem;
+          border-radius: 32px;
+          box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
+          border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .join-icon {
-          font-size: 4rem;
-          margin-bottom: 1.5rem;
+        .join-visual {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 2rem;
+        }
+
+        .join-visual-circle {
+          width: 76px;
+          height: 76px;
+          border-radius: 26px;
+          background: linear-gradient(145deg, rgba(114, 114, 114, 0.35) 0%, rgba(38, 38, 38, 0.9) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 6px 16px rgba(255, 255, 255, 0.04), 0 18px 30px rgba(0, 0, 0, 0.35);
         }
 
         .join-title {
-          font-size: 1.75rem;
+          font-size: 1.65rem;
           font-weight: 700;
-          color: #333;
-          margin: 0 0 1rem 0;
+          color: #ffffff;
+          margin: 0 0 0.75rem 0;
         }
 
         .join-description {
-          font-size: 1.1rem;
-          color: #666;
-          margin: 0 0 2rem 0;
+          font-size: 1rem;
+          color: #929397;
+          margin: 0;
           line-height: 1.6;
         }
 
         .join-form {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
+          gap: 0.9rem;
+          margin-top: 2.25rem;
+        }
+
+        .join-label {
+          text-align: left;
+          font-size: 0.9rem;
+          color: rgba(255, 255, 255, 0.6);
+          letter-spacing: 0.05em;
         }
 
         .join-input {
           width: 100%;
-          padding: 1rem 1.5rem;
-          border: 2px solid #e1e5e9;
-          border-radius: 12px;
-          font-size: 1.1rem;
-          background-color: #161616;
+          padding: 1rem 1.35rem;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 16px;
+          font-size: 1.05rem;
+          background-color: #262626;
+          color: #ffffff;
           transition: all 0.3s ease;
           box-sizing: border-box;
         }
 
+        .join-input::placeholder {
+          color: rgba(255, 255, 255, 0.35);
+        }
+
         .join-input:focus {
           outline: none;
-          border-color: #1976d2;
-          background-color: #161616;
-          box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+          border-color: rgba(74, 108, 247, 0.85);
+          box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.25);
         }
 
         .join-submit-btn {
           width: 100%;
-          padding: 1rem 1.5rem;
-          background-color: #1976d2;
+          padding: 1rem 1.35rem;
+          background: linear-gradient(135deg, #2478df 0%, #1f5ec4 100%);
           color: white;
           border: none;
-          border-radius: 12px;
-          font-size: 1.1rem;
+          border-radius: 16px;
+          font-size: 1.05rem;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s ease;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.04em;
         }
 
         .join-submit-btn:hover {
-          background-color: #1565c0;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+          transform: translateY(-2px);
+          box-shadow: 0 16px 32px rgba(36, 120, 223, 0.45);
         }
 
         .join-help {
-          margin-top: 1rem;
+          margin-top: 2rem;
+          padding: 1rem 1.25rem;
+          border-radius: 16px;
+          background: rgba(22, 22, 22, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          color: #929397;
+          text-align: left;
+        }
+
+        .join-help-icon {
+          font-size: 1.2rem;
+          line-height: 1;
         }
 
         .help-text {
-          font-size: 0.95rem;
-          color: #666;
           margin: 0;
-          padding: 1rem;
-          background-color: #161616;
-          border-radius: 8px;
-          border-left: 4px solid #1976d2;
+          font-size: 0.95rem;
+          color: #929397;
         }
 
         /* Profile Section */
