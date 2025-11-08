@@ -681,9 +681,16 @@ const MemberDashboard: React.FC = () => {
               <div className="section-header">
                 <button
                   onClick={fetchMeetings}
-                  className="refresh-btn"
+                  className="refresh-chip"
+                  type="button"
                 >
-                  새로고침
+                  <Image
+                    src="/Icons/dashboard/reset.svg"
+                    alt="초기화"
+                    width={16}
+                    height={16}
+                  />
+                  <span>초기화</span>
                 </button>
               </div>
 
@@ -1220,7 +1227,7 @@ const MemberDashboard: React.FC = () => {
       <style jsx>{`
         .member-dashboard {
           min-height: 100vh;
-          background-color: #f8f9fa;
+          background-color: #161616;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           display: flex;
           flex-direction: column;
@@ -1409,7 +1416,7 @@ const MemberDashboard: React.FC = () => {
           align-items: center;
           justify-content: center;
           gap: 0.75rem;
-          background: rgba(0, 0, 0, 0.25);
+          background: rgba(255, 255, 255, 0.06);
           border-radius: 999px;
           padding: 0.45rem;
           margin: 0 auto;
@@ -1431,7 +1438,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .hero-tab.active {
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.12);
           color: #ffffff;
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
         }
@@ -1513,7 +1520,7 @@ const MemberDashboard: React.FC = () => {
           right: 0;
           bottom: 0;
           width: 280px;
-          background: white;
+          background: #161616;
           padding: 0;
           transform: translateX(100%);
           transition: transform 0.3s ease;
@@ -1603,7 +1610,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .attendance-popup {
-          background: white;
+          background: #161616;
           border-radius: 16px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
           max-width: 1000px;
@@ -1690,7 +1697,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .main-stat-card {
-          background: white;
+          background: #161616;
           padding: 24px;
           border-radius: 16px;
           box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -2031,7 +2038,7 @@ const MemberDashboard: React.FC = () => {
         /* Main Content - Full width without sidebar */
         .main-content {
           width: 100%;
-          background-color: white;
+          background-color: #161616;
           padding: 30px;
         }
 
@@ -2043,31 +2050,36 @@ const MemberDashboard: React.FC = () => {
 
         .section-header {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           align-items: center;
           margin-bottom: 2rem;
         }
 
-        .section-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #333;
-          margin: 0;
-        }
-
-        .refresh-btn {
-          padding: 0.75rem 1.5rem;
-          background-color: #1976d2;
-          color: white;
-          border: none;
-          border-radius: 8px;
+        .refresh-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.65rem 1.4rem;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: #161616;
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 0.95rem;
+          font-weight: 600;
           cursor: pointer;
-          font-size: 1rem;
-          transition: all 0.2s ease;
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .refresh-btn:hover {
-          background-color: #1565c0;
+        .refresh-chip:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        .refresh-chip :global(span) {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
         }
 
         /* Meetings Grid */
@@ -2085,7 +2097,7 @@ const MemberDashboard: React.FC = () => {
           gap: 1.25rem;
           padding: 1.8rem;
           border-radius: 24px;
-          background: linear-gradient(155deg, #212121 0%, #161616 100%);
+          background: linear-gradient(155deg, rgba(59, 59, 59, 0.95) 0%, rgba(41, 41, 41, 0.95) 100%);
           border: 1px solid rgba(255, 255, 255, 0.08);
           box-shadow: 0 22px 45px rgba(0, 0, 0, 0.45);
           color: rgba(255, 255, 255, 0.92);
@@ -2145,7 +2157,7 @@ const MemberDashboard: React.FC = () => {
           height: 36px;
           border-radius: 12px;
           border: 1px solid rgba(255, 255, 255, 0.15);
-          background: rgba(0, 0, 0, 0.25);
+          background: rgba(255, 255, 255, 0.06);
           color: rgba(255, 255, 255, 0.8);
           display: inline-flex;
           align-items: center;
@@ -2155,7 +2167,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .card-icon-button:hover {
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.12);
           transform: translateY(-1px);
         }
 
@@ -2255,7 +2267,7 @@ const MemberDashboard: React.FC = () => {
           max-width: 500px;
           width: 100%;
           text-align: center;
-          background: white;
+          background: #161616;
           padding: 3rem 2rem;
           border-radius: 20px;
           box-shadow: 0 8px 32px rgba(0,0,0,0.1);
@@ -2293,7 +2305,7 @@ const MemberDashboard: React.FC = () => {
           border: 2px solid #e1e5e9;
           border-radius: 12px;
           font-size: 1.1rem;
-          background-color: #f8f9fa;
+          background-color: #161616;
           transition: all 0.3s ease;
           box-sizing: border-box;
         }
@@ -2301,7 +2313,7 @@ const MemberDashboard: React.FC = () => {
         .join-input:focus {
           outline: none;
           border-color: #1976d2;
-          background-color: white;
+          background-color: #161616;
           box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
         }
 
@@ -2335,7 +2347,7 @@ const MemberDashboard: React.FC = () => {
           color: #666;
           margin: 0;
           padding: 1rem;
-          background-color: #f8f9fa;
+          background-color: #161616;
           border-radius: 8px;
           border-left: 4px solid #1976d2;
         }
@@ -2348,7 +2360,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .profile-container {
-          background: white;
+          background: #161616;
           border-radius: 20px;
           padding: 2rem;
           box-shadow: 0 8px 32px rgba(0,0,0,0.1);
@@ -2446,7 +2458,7 @@ const MemberDashboard: React.FC = () => {
           border: 2px solid #e1e5e9;
           border-radius: 12px;
           font-size: 1rem;
-          background-color: #f8f9fa;
+          background-color: #161616;
           transition: all 0.3s ease;
           box-sizing: border-box;
         }
@@ -2454,12 +2466,12 @@ const MemberDashboard: React.FC = () => {
         .form-input:focus {
           outline: none;
           border-color: #1976d2;
-          background-color: white;
+          background-color: #161616;
           box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
         }
 
         .form-input.disabled {
-          background-color: #f8f9fa;
+          background-color: #161616;
           color: #666;
           cursor: not-allowed;
         }
@@ -2530,7 +2542,7 @@ const MemberDashboard: React.FC = () => {
         }
 
         .attendance-container {
-          background: white;
+          background: #161616;
           border-radius: 20px;
           padding: 2rem;
           box-shadow: 0 8px 32px rgba(0,0,0,0.1);
