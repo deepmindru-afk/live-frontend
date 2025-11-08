@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
@@ -39,7 +39,6 @@ const MemberDashboard: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'meetings' | 'join' | 'menu'>('meetings');
-  const [showMeetingsDropdown, setShowMeetingsDropdown] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +53,8 @@ const MemberDashboard: React.FC = () => {
   const [showAttendancePopup, setShowAttendancePopup] = useState(false);
   const [participantData, setParticipantData] = useState<any>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+
+  const heroSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -234,23 +235,6 @@ const MemberDashboard: React.FC = () => {
       setFilteredMeetings(filtered);
     }
   }, [searchQuery, meetings]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showMeetingsDropdown) {
-        const target = event.target as HTMLElement;
-        if (!target.closest('.meetings-dropdown')) {
-          setShowMeetingsDropdown(false);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMeetingsDropdown]);
 
   const handleJoinByCode = async () => {
     if (!inviteCode.trim()) {
@@ -630,60 +614,63 @@ const MemberDashboard: React.FC = () => {
           </div>
         </header>
 
-        {/* Mobile Welcome Section */}
-        <div className="mobile-welcome">
-          <div className="welcome-content">
-            {user?.avatarUrl && (
-              <img
-                src={user.avatarUrl}
-                alt="Profile"
-                className="welcome-avatar"
+        <section className="dashboard-hero">
+          <div className="hero-inner">
+            <span className="hero-eyebrow">학생 대시보드</span>
+            <h1 className="hero-heading">
+              {(user?.displayName || '회원')}님, 안녕하세요 👋
+            </h1>
+            <p className="hero-subtext">나의 라이브 미팅을 빠르게 찾고 바로 참여하세요.</p>
+            <div className="hero-search">
+              <input
+                ref={heroSearchInputRef}
+                type="text"
+                placeholder="미팅 제목으로 검색하세요."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="hero-search-input"
               />
-            )}
-            <div className="welcome-text">
-              <h1 className="welcome-greeting">
-                {user?.displayName}님, 안녕하세요 👋
-              </h1>
-              <p className="welcome-subtitle">Member Dashboard</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Meetings Dropdown */}
-        <div className="meetings-dropdown">
-          <button
-            onClick={() => setShowMeetingsDropdown(!showMeetingsDropdown)}
-            className={`meetings-dropdown-toggle ${activeTab === 'meetings' || activeTab === 'join' ? 'active' : ''}`}
-          >
-            📅 내 미팅
-            <span className={`dropdown-arrow ${showMeetingsDropdown ? 'open' : ''}`}>
-              ▼
-            </span>
-          </button>
-          {showMeetingsDropdown && (
-            <div className="meetings-dropdown-menu">
               <button
-                onClick={() => {
-                  setActiveTab('meetings');
-                  setShowMeetingsDropdown(false);
-                }}
-                className={`dropdown-item ${activeTab === 'meetings' ? 'active' : ''}`}
+                type="button"
+                className="hero-search-button"
+                aria-label="미팅 검색"
+                onClick={() => heroSearchInputRef.current?.focus()}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.134 17 3 13.866 3 10C3 6.13401 6.134 3 10 3C13.866 3 17 6.13401 17 10Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="hero-tabs">
+              <button
+                type="button"
+                className={`hero-tab ${activeTab === 'meetings' ? 'active' : ''}`}
+                onClick={() => setActiveTab('meetings')}
               >
                 내 미팅
               </button>
               <button
-                onClick={() => {
-                  setActiveTab('join');
-                  setShowMeetingsDropdown(false);
-                }}
-                className={`dropdown-item ${activeTab === 'join' ? 'active' : ''}`}
+                type="button"
+                className={`hero-tab ${activeTab === 'join' ? 'active' : ''}`}
+                onClick={() => setActiveTab('join')}
               >
                 미팅 참여
               </button>
             </div>
-          )}
-        </div>
-
+          </div>
+        </section>
 
         {/* Main Content */}
         <div className="main-content" style={{ marginLeft: 0, width: '100%' }}>
@@ -700,35 +687,6 @@ const MemberDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Search Container */}
-              <div className="search-filters-container">
-                <div className="search-wrapper">
-                  <svg 
-                    className="search-icon" 
-                    width="20" 
-                    height="20" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path 
-                      d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="미팅 제목으로 검색..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-input"
-                  />
-                </div>
-              </div>
-
               {filteredMeetings.length > 0 ? (
                 <div className="meetings-grid">
                   {filteredMeetings.map((meeting) => {
@@ -737,64 +695,63 @@ const MemberDashboard: React.FC = () => {
                       key={meeting._id}
                       className={`meeting-card ${meeting.status.toLowerCase()}`}
                     >
-                      <div className="meeting-card-header">
-                        <div className="status-row">
-                          <span className={`status-pill ${meeting.status.toLowerCase()}`}>
-                            {meeting.status === 'STARTED' ? '진행중' : 
-                             meeting.status === 'SCHEDULED' ? '예약됨' : '종료'}
-                          </span>
-                          {(meeting.status === 'STARTED' || meeting.status === 'SCHEDULED') && (
-                            <button
-                              type="button"
-                              className="download-button"
-                              aria-label="미팅 자료 다운로드"
+                      <div className="meeting-card-status">
+                        <span className={`status-pill ${meeting.status.toLowerCase()}`}>
+                          {meeting.status === 'STARTED' ? '진행중' : 
+                           meeting.status === 'SCHEDULED' ? '예약' : '종료'}
+                        </span>
+                        {meeting.status === 'SCHEDULED' && (
+                          <button
+                            type="button"
+                            className="card-icon-button"
+                            aria-label="미팅 자료 다운로드"
+                          >
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
                             >
-                              <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M12 3V15M12 15L16.5 10.5M12 15L7.5 10.5"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                                <path
-                                  d="M5 18H19"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        <h3 className="meeting-title">
-                          {meeting.title}
-                        </h3>
+                              <path
+                                d="M12 4V14M12 14L16 10M12 14L8 10"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <path
+                                d="M6 18H18"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        )}
                       </div>
+                      <h3 className="meeting-card-title">
+                        {meeting.title}
+                      </h3>
+                      <p className="meeting-card-description">강의 제목: {meeting.title}</p>
                       <div className="meeting-card-body">
                         <div className="meeting-info">
                           <div className="info-item">
-                            <span className="info-label">초대코드:</span>
+                            <span className="info-label">초대코드</span>
                             <span className="info-value">{meeting.inviteCode}</span>
                           </div>
                           <div className="info-item">
-                            <span className="info-label">강의코드:</span>
+                            <span className="info-label">강의코드</span>
                             <span className="info-value">{meeting.courseCode || '-'}</span>
                           </div>
                           <div className="info-item">
-                            <span className="info-label">생성일:</span>
+                            <span className="info-label">생성일</span>
                             <span className="info-value">{formatDate(meeting.createdAt)}</span>
                           </div>
                           {meeting.schedule && (
                             <div className="info-item">
-                              <span className="info-label">예약일:</span>
+                              <span className="info-label">예약일</span>
                               <span className="info-value">{formatDate(meeting.schedule)}</span>
                             </div>
                           )}
@@ -802,13 +759,10 @@ const MemberDashboard: React.FC = () => {
                         <button
                           onClick={async () => {
                             if (meeting.status === 'ENDED') {
-                              // Show attendance as popup for ENDED meetings
                               await handleAttendanceClick(meeting);
                             } else if (meeting.status === 'STARTED') {
-                              // Join live meetings
                               router.push(`/prejoin/${meeting._id}`);
                             } else if (meeting.status === 'SCHEDULED') {
-                              // For scheduled meetings, can't join yet
                               await Swal.fire({
                                 icon: 'info',
                                 title: '예정된 미팅',
@@ -817,10 +771,10 @@ const MemberDashboard: React.FC = () => {
                               });
                             }
                           }}
-                          className={`join-btn ${meeting.status.toLowerCase()}`}
+                          className={`meeting-action ${meeting.status.toLowerCase()}`}
                         >
-                          {meeting.status === 'STARTED' ? '참여하기' : 
-                           meeting.status === 'SCHEDULED' ? '대기중' : '출석확인'}
+                          {meeting.status === 'STARTED' ? '출석 확인' : 
+                           meeting.status === 'SCHEDULED' ? '대기중' : '출석 확인'}
                         </button>
                       </div>
                     </div>
@@ -1349,40 +1303,188 @@ const MemberDashboard: React.FC = () => {
           }
         }
 
-        /* Mobile Welcome Section - Show on all screen sizes */
-        .mobile-welcome {
-          display: block;
-          background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-          color: white;
-          padding: 2rem 1rem;
-          text-align: center;
+        /* Dashboard Hero */
+        .dashboard-hero {
+          position: relative;
+          padding: 5rem 1.5rem 4rem;
+          margin: 0;
+          background-image: linear-gradient(140deg, rgba(74, 108, 247, 0.78) 0%, rgba(140, 90, 239, 0.82) 40%, rgba(12, 18, 54, 0.9) 100%), url('/background.jpg');
+          background-size: cover;
+          background-position: center;
+          color: #ffffff;
         }
 
-        .welcome-content {
+        .dashboard-hero::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(10, 12, 32, 0.35) 0%, rgba(10, 12, 32, 0.75) 100%);
+          mix-blend-mode: screen;
+          pointer-events: none;
+        }
+
+        .hero-inner {
+          position: relative;
+          z-index: 1;
+          max-width: 880px;
+          margin: 0 auto;
+          text-align: center;
           display: flex;
           flex-direction: column;
+          gap: 1.75rem;
+        }
+
+        .hero-eyebrow {
+          display: inline-block;
+          font-size: 0.95rem;
+          letter-spacing: 0.35em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        .hero-heading {
+          font-size: 2.75rem;
+          font-weight: 800;
+          margin: 0;
+          letter-spacing: -0.01em;
+        }
+
+        .hero-subtext {
+          margin: 0 auto;
+          max-width: 540px;
+          font-size: 1.05rem;
+          color: rgba(255, 255, 255, 0.85);
+          line-height: 1.6;
+        }
+
+        .hero-search {
+          display: flex;
           align-items: center;
-          gap: 1rem;
+          background: rgba(9, 9, 9, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 48px;
+          padding: 0.5rem 0.5rem 0.5rem 1.5rem;
+          box-shadow: 0 24px 55px rgba(8, 8, 16, 0.45);
         }
 
-        .welcome-avatar {
-          width: 80px;
-          height: 80px;
+        .hero-search-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          color: #ffffff;
+          font-size: 1.05rem;
+          padding: 0.75rem 0;
+        }
+
+        .hero-search-input::placeholder {
+          color: rgba(255, 255, 255, 0.55);
+        }
+
+        .hero-search-input:focus {
+          outline: none;
+        }
+
+        .hero-search-button {
+          width: 52px;
+          height: 52px;
           border-radius: 50%;
-          object-fit: cover;
-          border: 3px solid rgba(255,255,255,0.3);
+          border: none;
+          background: linear-gradient(135deg, #4A6CF7 0%, #8C5AEF 100%);
+          color: white;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 16px 30px rgba(74, 108, 247, 0.45);
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .welcome-greeting {
-          font-size: 1.5rem;
-          font-weight: 700;
-          margin: 0;
+        .hero-search-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 20px 40px rgba(74, 108, 247, 0.55);
         }
 
-        .welcome-subtitle {
-          font-size: 1rem;
-          margin: 0;
-          opacity: 0.9;
+        .hero-tabs {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          background: rgba(0, 0, 0, 0.25);
+          border-radius: 999px;
+          padding: 0.45rem;
+          margin: 0 auto;
+          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .hero-tab {
+          position: relative;
+          border: none;
+          border-radius: 999px;
+          padding: 0.65rem 1.75rem;
+          font-size: 0.95rem;
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.75);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .hero-tab.active {
+          background: rgba(255, 255, 255, 0.15);
+          color: #ffffff;
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        }
+
+        .hero-tab:hover {
+          color: #ffffff;
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-hero {
+            padding: 4rem 1.25rem 3rem;
+          }
+
+          .hero-heading {
+            font-size: 2.1rem;
+          }
+
+          .hero-search {
+            padding: 0.45rem 0.45rem 0.45rem 1.25rem;
+          }
+
+          .hero-search-button {
+            width: 48px;
+            height: 48px;
+          }
+
+          .hero-tabs {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .hero-tab {
+            padding: 0.55rem 1.35rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .hero-heading {
+            font-size: 1.8rem;
+          }
+
+          .hero-eyebrow {
+            font-size: 0.85rem;
+            letter-spacing: 0.25em;
+          }
+
+          .hero-search {
+            flex-direction: row;
+          }
+
+          .hero-search-input {
+            font-size: 0.95rem;
+          }
         }
 
         /* Mobile Navigation - Show on all screen sizes */
@@ -1482,92 +1584,6 @@ const MemberDashboard: React.FC = () => {
         /* Desktop Sidebar - Hide on all screen sizes */
         .desktop-sidebar {
           display: none;
-        }
-
-        /* Meetings Dropdown */
-        .meetings-dropdown {
-          position: relative;
-          margin: 20px;
-        }
-
-        .meetings-dropdown-toggle {
-          width: 100%;
-          padding: 15px 20px;
-          background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-          color: white;
-          border: none;
-          border-radius: 12px;
-          cursor: pointer;
-          font-size: 16px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
-          transition: all 0.3s ease;
-        }
-
-        .meetings-dropdown-toggle:hover {
-          background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(25, 118, 210, 0.4);
-        }
-
-        .meetings-dropdown-toggle.active {
-          background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
-        }
-
-        .dropdown-arrow {
-          transition: transform 0.3s ease;
-          font-size: 14px;
-        }
-
-        .dropdown-arrow.open {
-          transform: rotate(180deg);
-        }
-
-        .meetings-dropdown-menu {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          right: 0;
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-          z-index: 1000;
-          overflow: hidden;
-          margin-top: 8px;
-          border: 1px solid #e0e0e0;
-        }
-
-        .dropdown-item {
-          width: 100%;
-          padding: 15px 20px;
-          background: none;
-          border: none;
-          text-align: left;
-          cursor: pointer;
-          font-size: 15px;
-          color: #333;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .dropdown-item:hover {
-          background-color: #f5f5f5;
-          color: #1976d2;
-        }
-
-        .dropdown-item.active {
-          background-color: #e3f2fd;
-          color: #1976d2;
-          font-weight: 600;
-        }
-
-        .dropdown-item:first-child {
-          border-bottom: 1px solid #e0e0e0;
         }
 
         /* Attendance Popup Styles */
@@ -2054,87 +2070,25 @@ const MemberDashboard: React.FC = () => {
           background-color: #1565c0;
         }
 
-        /* Search and Filters Container */
-        .search-filters-container {
-          background: white;
-          border-radius: 16px;
-          padding: 1.5rem;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          margin-bottom: 2rem;
-          border: 1px solid #e1e5e9;
-        }
-
-        /* Search Container */
-        .search-container {
-          margin-bottom: 1.5rem;
-        }
-
-        .search-wrapper {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-icon {
-          position: absolute;
-          left: 1.5rem;
-          color: #9ca3af;
-          pointer-events: none;
-          transition: all 0.3s ease;
-        }
-
-        .search-input {
-          width: 100%;
-          padding: 1.25rem 1.75rem 1.25rem 3.5rem;
-          border: 2px solid #e1e5e9;
-          border-radius: 16px;
-          font-size: 1.1rem;
-          background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-          transition: all 0.3s ease;
-          box-sizing: border-box;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .search-input:focus {
-          outline: none;
-          border-color: #1976d2;
-          background: white;
-          box-shadow: 0 4px 20px rgba(25, 118, 210, 0.15);
-          transform: translateY(-2px);
-        }
-
-        .search-wrapper:focus-within .search-icon {
-          color: #1976d2;
-        }
-
         /* Meetings Grid */
         .meetings-grid {
           display: grid;
           gap: 2rem;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         }
 
         /* Meeting Card */
         .meeting-card {
           position: relative;
-          background: linear-gradient(155deg, rgba(59, 59, 59, 0.95) 0%, rgba(59, 59, 59, 0.75) 100%);
-          border-radius: 22px;
-          padding: 1.75rem;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          box-shadow: 0 22px 45px rgba(0, 0, 0, 0.35);
-          transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-          color: #f1f1f1;
-          overflow: hidden;
-        }
-
-        .meeting-card::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(130deg, rgba(255,255,255,0.08) 0%, transparent 45%);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          pointer-events: none;
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+          padding: 1.8rem;
+          border-radius: 24px;
+          background: linear-gradient(155deg, #212121 0%, #161616 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 22px 45px rgba(0, 0, 0, 0.45);
+          color: rgba(255, 255, 255, 0.92);
         }
 
         .meeting-card.started {
@@ -2142,30 +2096,14 @@ const MemberDashboard: React.FC = () => {
         }
 
         .meeting-card.scheduled {
-          border-color: rgba(220, 196, 155, 0.55);
+          border-color: rgba(220, 196, 155, 0.45);
         }
 
         .meeting-card.ended {
-          border-color: rgba(161, 30, 32, 0.55);
+          border-color: rgba(31, 107, 224, 0.45);
         }
 
-        .meeting-card:hover {
-          transform: translateY(-6px);
-          box-shadow: 0 28px 55px rgba(0, 0, 0, 0.45);
-        }
-
-        .meeting-card:hover::after {
-          opacity: 1;
-        }
-
-        .meeting-card-header {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-        }
-
-        .status-row {
+        .meeting-card-status {
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -2176,72 +2114,74 @@ const MemberDashboard: React.FC = () => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0.45rem 0.9rem;
+          padding: 0.35rem 0.85rem;
           border-radius: 999px;
-          font-size: 0.85rem;
+          font-size: 0.8rem;
           font-weight: 600;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.05em;
           text-transform: uppercase;
         }
 
         .status-pill.started {
-          background: #1EA141;
-          color: #ffffff;
-          border: 1px solid #1EA141;
-          box-shadow: 0 6px 14px rgba(30, 161, 65, 0.35);
+          background: rgba(30, 161, 65, 0.22);
+          color: #28c76f;
+          border: 1px solid rgba(30, 161, 65, 0.45);
         }
 
         .status-pill.scheduled {
-          background: #DCC49B;
-          color: #A1521E;
-          border: 1px solid rgba(161, 82, 30, 0.35);
-          box-shadow: 0 6px 14px rgba(220, 196, 155, 0.4);
+          background: rgba(220, 196, 155, 0.25);
+          color: #e0b276;
+          border: 1px solid rgba(220, 196, 155, 0.45);
         }
 
         .status-pill.ended {
-          background: #A11E20;
-          color: #ffffff;
-          border: 1px solid #A11E20;
-          box-shadow: 0 6px 14px rgba(161, 30, 32, 0.45);
+          background: rgba(237, 111, 115, 0.25);
+          color: #ff7b82;
+          border: 1px solid rgba(237, 111, 115, 0.45);
         }
 
-        .download-button {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
+        .card-icon-button {
           width: 36px;
           height: 36px;
           border-radius: 12px;
-          border: none;
-          background: rgba(255, 255, 255, 0.08);
-          color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: rgba(0, 0, 0, 0.25);
+          color: rgba(255, 255, 255, 0.8);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           cursor: pointer;
-          transition: background 0.25s ease, transform 0.25s ease;
+          transition: background 0.2s ease, transform 0.2s ease;
         }
 
-        .download-button:hover {
-          background: rgba(255, 255, 255, 0.16);
-          transform: translateY(-2px);
+        .card-icon-button:hover {
+          background: rgba(255, 255, 255, 0.15);
+          transform: translateY(-1px);
         }
 
-        .meeting-title {
-          font-size: 1.3rem;
+        .meeting-card-title {
+          font-size: 1.25rem;
           font-weight: 700;
-          color: #ffffff;
           margin: 0;
-          line-height: 1.35;
+          color: #ffffff;
+        }
+
+        .meeting-card-description {
+          margin: 0;
+          font-size: 0.95rem;
+          color: rgba(255, 255, 255, 0.7);
         }
 
         .meeting-card-body {
           display: flex;
           flex-direction: column;
-          gap: 1.1rem;
+          gap: 1.2rem;
         }
 
         .meeting-info {
           display: flex;
           flex-direction: column;
-          gap: 0.85rem;
+          gap: 0.65rem;
         }
 
         .info-item {
@@ -2249,20 +2189,26 @@ const MemberDashboard: React.FC = () => {
           justify-content: space-between;
           align-items: center;
           font-size: 0.95rem;
-          gap: 1rem;
+          color: rgba(255, 255, 255, 0.8);
         }
 
         .info-label {
-          color: rgba(255, 255, 255, 0.6);
+          color: rgba(255, 255, 255, 0.55);
           font-weight: 500;
         }
 
+        .info-label::after {
+          content: ' :';
+          color: rgba(255, 255, 255, 0.35);
+          margin-left: 0.2rem;
+        }
+
         .info-value {
-          color: #ffffff;
+          color: rgba(255, 255, 255, 0.9);
           font-weight: 600;
         }
 
-        .join-btn {
+        .meeting-action {
           width: 100%;
           padding: 0.95rem;
           border: none;
@@ -2271,64 +2217,31 @@ const MemberDashboard: React.FC = () => {
           font-weight: 600;
           cursor: pointer;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
-          text-transform: none;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.03em;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-        }
-
-        .join-btn.started {
-          background: #1EA141;
           color: #ffffff;
-          box-shadow: 0 10px 24px rgba(30, 161, 65, 0.35);
         }
 
-        .join-btn.scheduled {
-          background: #929397;
-          color: #ffffff;
-          box-shadow: 0 10px 24px rgba(146, 147, 151, 0.35);
+        .meeting-action.started {
+          background: #1ea141;
+          box-shadow: 0 12px 25px rgba(30, 161, 65, 0.35);
         }
 
-        .join-btn.ended {
-          background: #1864B7;
-          color: #ffffff;
-          box-shadow: 0 10px 24px rgba(24, 100, 183, 0.4);
+        .meeting-action.scheduled {
+          background: #737373;
+          box-shadow: 0 12px 25px rgba(115, 115, 115, 0.35);
         }
 
-        .join-btn:hover {
+        .meeting-action.ended {
+          background: #1f6be0;
+          box-shadow: 0 12px 25px rgba(31, 107, 224, 0.4);
+        }
+
+        .meeting-action:hover {
           transform: translateY(-2px);
-          box-shadow: 0 12px 28px rgba(0,0,0,0.35);
         }
-
-        /* Empty State */
-        .empty-state {
-          text-align: center;
-          padding: 4rem 2rem;
-          color: #666;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 1.5rem;
-        }
-
-        .empty-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          margin: 0 0 1rem 0;
-        }
-
-        .reset-search-btn {
-          padding: 0.75rem 1.5rem;
-          background-color: #6c757d;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 1rem;
-        }
-
         /* Join Section */
         .join-section {
           display: flex;
@@ -2771,22 +2684,6 @@ const MemberDashboard: React.FC = () => {
             font-size: 1.25rem;
           }
 
-          .search-input {
-            padding: 1rem 1.25rem 1rem 3rem;
-            font-size: 1rem;
-          }
-
-          .search-icon {
-            left: 1.25rem;
-            width: 18px;
-            height: 18px;
-          }
-
-          .join-btn {
-            padding: 0.875rem;
-            font-size: 1rem;
-          }
-
           .join-container {
             padding: 2rem 1.5rem;
           }
@@ -2833,17 +2730,6 @@ const MemberDashboard: React.FC = () => {
 
           .info-item {
             font-size: 0.9rem;
-          }
-
-          .search-input {
-            padding: 0.875rem 1rem 0.875rem 2.75rem;
-            font-size: 0.95rem;
-          }
-
-          .search-icon {
-            left: 1rem;
-            width: 16px;
-            height: 16px;
           }
 
           .join-container {
@@ -2916,9 +2802,6 @@ const MemberDashboard: React.FC = () => {
             font-size: 1.5rem;
           }
 
-          .search-filters-container {
-            padding: 1rem;
-          }
         }
       `}</style>
     </>
