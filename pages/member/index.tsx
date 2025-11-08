@@ -591,7 +591,7 @@ const MemberDashboard: React.FC = () => {
           <div className="topbar-inner">
             <div className="topbar-logo">
               <Image
-                src="/logoHRDe.png"
+                src="/Icons/HRDeOnAirLogo.svg"
                 alt="HRDe"
                 width={96}
                 height={40}

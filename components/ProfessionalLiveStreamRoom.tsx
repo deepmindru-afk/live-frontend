@@ -3164,7 +3164,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
               flexShrink: 0
             }}>
               <img 
-                src="/logoHRDe.png" 
+                src="/Icons/HRDeOnAirLogo.svg" 
                 alt="HRDe Logo" 
                 style={{
                   width: '100%',

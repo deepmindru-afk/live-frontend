@@ -370,7 +370,7 @@ const MyPage: React.FC = () => {
             
             <div className="logo-container" onClick={() => router.push('/dashboard')}>
               <Image
-                src="/logoHRDe.png"
+                src="/Icons/HRDeOnAirLogo.svg"
                 alt="HRDe Live"
                 width={140}
                 height={45}

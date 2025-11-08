@@ -466,7 +466,7 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-header">
           <div className="logo" onClick={() => router.push('/dashboard')}>
             <Image
-              src="/logoHRDe.png"
+              src="/Icons/HRDeOnAirLogo.svg"
               alt="HRDe Live"
               width={120}
               height={40}

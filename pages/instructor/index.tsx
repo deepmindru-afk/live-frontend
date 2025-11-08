@@ -1066,7 +1066,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <Image
-              src="/logoHRDe.png"
+              src="/Icons/HRDeOnAirLogo.svg"
               alt="HRDe Live"
               width={120}
               height={40}

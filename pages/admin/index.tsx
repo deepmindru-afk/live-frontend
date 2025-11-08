@@ -505,7 +505,7 @@ const AdminDashboard: React.FC = () => {
         <div className="admin-header">
           <div className="admin-logo">
             <Image
-              src="/logoHRDe.png"
+              src="/Icons/HRDeOnAirLogo.svg"
               alt="Meet: mate"
               width={120}
               height={40}

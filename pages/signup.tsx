@@ -153,7 +153,7 @@ const SignupPage: React.FC = () => {
         <div className="auth-modal">
           <div className="logo">
             <Image
-              src="/logoHRDe.png"
+              src="/Icons/HRDeOnAirLogo.svg"
               alt="HRDE"
               width={150}
               height={69}
