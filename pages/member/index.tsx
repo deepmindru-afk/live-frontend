@@ -738,16 +738,48 @@ const MemberDashboard: React.FC = () => {
                     return (
                     <div
                       key={meeting._id}
-                      className="meeting-card"
+                      className={`meeting-card ${meeting.status.toLowerCase()}`}
                     >
                       <div className="meeting-card-header">
+                        <div className="status-row">
+                          <span className={`status-pill ${meeting.status.toLowerCase()}`}>
+                            {meeting.status === 'STARTED' ? '진행중' : 
+                             meeting.status === 'SCHEDULED' ? '예약됨' : '종료'}
+                          </span>
+                          {(meeting.status === 'STARTED' || meeting.status === 'SCHEDULED') && (
+                            <button
+                              type="button"
+                              className="download-button"
+                              aria-label="미팅 자료 다운로드"
+                            >
+                              <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M12 3V15M12 15L16.5 10.5M12 15L7.5 10.5"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M5 18H19"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                         <h3 className="meeting-title">
                           {meeting.title}
                         </h3>
-                        <span className={`status-badge ${meeting.status.toLowerCase()}`}>
-                          {meeting.status === 'STARTED' ? '진행중' : 
-                           meeting.status === 'SCHEDULED' ? '예약됨' : '종료됨'}
-                        </span>
                       </div>
                       <div className="meeting-card-body">
                         <div className="meeting-info">
@@ -2105,75 +2137,138 @@ const MemberDashboard: React.FC = () => {
         /* Meetings Grid */
         .meetings-grid {
           display: grid;
-          gap: 1.5rem;
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+          gap: 2rem;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         }
 
         /* Meeting Card */
         .meeting-card {
-          background: white;
-          border-radius: 16px;
-          padding: 1.5rem;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          border: 1px solid #e1e5e9;
-          transition: all 0.3s ease;
+          position: relative;
+          background: linear-gradient(155deg, rgba(59, 59, 59, 0.95) 0%, rgba(59, 59, 59, 0.75) 100%);
+          border-radius: 22px;
+          padding: 1.75rem;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          box-shadow: 0 22px 45px rgba(0, 0, 0, 0.35);
+          transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+          color: #f1f1f1;
+          overflow: hidden;
+        }
+
+        .meeting-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(130deg, rgba(255,255,255,0.08) 0%, transparent 45%);
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          pointer-events: none;
+        }
+
+        .meeting-card.started {
+          border-color: rgba(30, 161, 65, 0.45);
+        }
+
+        .meeting-card.scheduled {
+          border-color: rgba(220, 196, 155, 0.55);
+        }
+
+        .meeting-card.ended {
+          border-color: rgba(161, 30, 32, 0.55);
         }
 
         .meeting-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+          transform: translateY(-6px);
+          box-shadow: 0 28px 55px rgba(0, 0, 0, 0.45);
+        }
+
+        .meeting-card:hover::after {
+          opacity: 1;
         }
 
         .meeting-card-header {
           display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
+        }
+
+        .status-row {
+          display: flex;
+          align-items: center;
           justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 1rem;
+          gap: 0.75rem;
+        }
+
+        .status-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.45rem 0.9rem;
+          border-radius: 999px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .status-pill.started {
+          background: #1EA141;
+          color: #ffffff;
+          border: 1px solid #1EA141;
+          box-shadow: 0 6px 14px rgba(30, 161, 65, 0.35);
+        }
+
+        .status-pill.scheduled {
+          background: #DCC49B;
+          color: #A1521E;
+          border: 1px solid rgba(161, 82, 30, 0.35);
+          box-shadow: 0 6px 14px rgba(220, 196, 155, 0.4);
+        }
+
+        .status-pill.ended {
+          background: #A11E20;
+          color: #ffffff;
+          border: 1px solid #A11E20;
+          box-shadow: 0 6px 14px rgba(161, 30, 32, 0.45);
+        }
+
+        .download-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 12px;
+          border: none;
+          background: rgba(255, 255, 255, 0.08);
+          color: #ffffff;
+          cursor: pointer;
+          transition: background 0.25s ease, transform 0.25s ease;
+        }
+
+        .download-button:hover {
+          background: rgba(255, 255, 255, 0.16);
+          transform: translateY(-2px);
         }
 
         .meeting-title {
-          font-size: 1.25rem;
+          font-size: 1.3rem;
           font-weight: 700;
-          color: #333;
+          color: #ffffff;
           margin: 0;
-          flex: 1;
-          margin-right: 1rem;
-        }
-
-        .status-badge {
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          font-size: 0.875rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          white-space: nowrap;
-        }
-
-        .status-badge.started {
-          background-color: #e8f5e8;
-          color: #2e7d32;
-        }
-
-        .status-badge.scheduled {
-          background-color: #fff3e0;
-          color: #f57c00;
-        }
-
-        .status-badge.ended {
-          background-color: #ffebee;
-          color: #c62828;
+          line-height: 1.35;
         }
 
         .meeting-card-body {
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 1.1rem;
         }
 
         .meeting-info {
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
+          gap: 0.85rem;
         }
 
         .info-item {
@@ -2181,49 +2276,56 @@ const MemberDashboard: React.FC = () => {
           justify-content: space-between;
           align-items: center;
           font-size: 0.95rem;
+          gap: 1rem;
         }
 
         .info-label {
-          color: #666;
+          color: rgba(255, 255, 255, 0.6);
           font-weight: 500;
         }
 
         .info-value {
-          color: #333;
+          color: #ffffff;
           font-weight: 600;
         }
 
         .join-btn {
           width: 100%;
-          padding: 1rem;
+          padding: 0.95rem;
           border: none;
-          border-radius: 12px;
-          font-size: 1.1rem;
+          border-radius: 14px;
+          font-size: 1.05rem;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s ease;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          text-transform: none;
+          letter-spacing: 0.02em;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .join-btn.started {
-          background-color: #4caf50;
-          color: white;
+          background: #1EA141;
+          color: #ffffff;
+          box-shadow: 0 10px 24px rgba(30, 161, 65, 0.35);
         }
 
         .join-btn.scheduled {
-          background-color: #ff9800;
-          color: white;
+          background: #929397;
+          color: #ffffff;
+          box-shadow: 0 10px 24px rgba(146, 147, 151, 0.35);
         }
 
         .join-btn.ended {
-          background-color: #f44336;
-          color: white;
+          background: #1864B7;
+          color: #ffffff;
+          box-shadow: 0 10px 24px rgba(24, 100, 183, 0.4);
         }
 
         .join-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+          transform: translateY(-2px);
+          box-shadow: 0 12px 28px rgba(0,0,0,0.35);
         }
 
         /* Empty State */
