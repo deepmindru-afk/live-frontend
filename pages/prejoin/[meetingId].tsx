@@ -4,8 +4,9 @@ import Swal from 'sweetalert2';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
 import { CREATE_MEETING, START_MEETING, JOIN_MEETING } from '../../apollo/meeting/mutations';
-import { CreateMeetingInput, JoinParticipantInput, Meeting } from '../../types/meeting';
+import { CreateMeetingInput, JoinParticipantInput } from '../../types/meeting';
 import { isValidObjectId, getInvalidIdErrorMessage } from '../../lib/validation';
+import styles from '../../styles/prejoin.module.css';
 
 interface MeetingInfo {
   _id: string;
@@ -99,12 +100,12 @@ const PrejoinPage = () => {
       
       
       // Check for missing devices
-      const warnings = [];
+      const warnings: string[] = [];
       if (videoInputs.length === 0) {
-        warnings.push('No camera detected. Please connect a camera to participate in video calls.');
+        warnings.push('카메라를 찾을 수 없습니다. 비디오 통화를 위해 카메라를 연결해 주세요.');
       }
       if (audioInputs.length === 0) {
-        warnings.push('No microphone detected. Please connect a microphone to participate in audio calls.');
+        warnings.push('마이크를 찾을 수 없습니다. 오디오 통화를 위해 마이크를 연결해 주세요.');
       }
       
       if (warnings.length > 0) {
@@ -148,13 +149,13 @@ const PrejoinPage = () => {
       
       
       if (videoTracks.length === 0) {
-        setDeviceError('Camera access denied or no camera available. Please check permissions and try again.');
+        setDeviceError('카메라 접근이 거부되었거나 카메라가 연결되어 있지 않습니다. 권한과 장치를 확인해 주세요.');
         setIsTestingDevices(false);
         return;
       }
       
       if (audioTracks.length === 0) {
-        setDeviceError('Microphone access denied or no microphone available. Please check permissions and try again.');
+        setDeviceError('마이크 접근이 거부되었거나 마이크가 연결되어 있지 않습니다. 권한과 장치를 확인해 주세요.');
         setIsTestingDevices(false);
         return;
       }
@@ -184,7 +185,7 @@ const PrejoinPage = () => {
         // Don't set error immediately, wait a bit for the ref to be available
         setTimeout(() => {
           if (!videoRef.current) {
-            setDeviceError('Video element not found');
+            setDeviceError('비디오 요소를 찾을 수 없습니다. 잠시 후 다시 시도해 주세요.');
           }
         }, 100);
       }
@@ -203,15 +204,15 @@ const PrejoinPage = () => {
       
       // Provide specific error messages based on the error type
       if (error.name === 'NotAllowedError') {
-        setDeviceError('Camera and microphone access denied. Please allow access and try again.');
+        setDeviceError('카메라와 마이크 접근이 거부되었습니다. 브라우저 권한을 허용한 뒤 다시 시도해 주세요.');
       } else if (error.name === 'NotFoundError') {
-        setDeviceError('No camera or microphone found. Please connect your devices and try again.');
+        setDeviceError('카메라 또는 마이크를 찾을 수 없습니다. 장치를 연결한 뒤 다시 시도해 주세요.');
       } else if (error.name === 'NotReadableError') {
-        setDeviceError('Camera or microphone is being used by another application. Please close other apps and try again.');
+        setDeviceError('다른 프로그램이 카메라 또는 마이크를 사용 중입니다. 해당 프로그램을 종료한 뒤 다시 시도해 주세요.');
       } else if (error.name === 'OverconstrainedError') {
-        setDeviceError('Camera settings are not supported. Please try with different settings.');
+        setDeviceError('해당 카메라 설정을 사용할 수 없습니다. 다른 설정으로 다시 시도해 주세요.');
       } else {
-        setDeviceError('Unable to access camera or microphone. Please check your devices and permissions.');
+        setDeviceError('카메라 또는 마이크에 접근하지 못했습니다. 장치와 권한을 확인해 주세요.');
       }
     } finally {
       setIsTestingDevices(false);
@@ -262,6 +263,11 @@ const PrejoinPage = () => {
         setIsMicOn(!isMicOn);
       }
     }
+  };
+
+  const handleRefresh = async () => {
+    await loadAvailableDevices();
+    await testDevices();
   };
 
   const stopDeviceTest = () => {
@@ -325,7 +331,7 @@ const PrejoinPage = () => {
         setSelectedCamera(deviceId);
       }
     } catch (error) {
-      setDeviceError('Failed to switch camera. Please try again.');
+      setDeviceError('카메라 전환에 실패했습니다. 다시 시도해 주세요.');
     }
   };
 
@@ -351,7 +357,7 @@ const PrejoinPage = () => {
         setSelectedMicrophone(deviceId);
       }
     } catch (error) {
-      setDeviceError('Failed to switch microphone. Please try again.');
+      setDeviceError('마이크 전환에 실패했습니다. 다시 시도해 주세요.');
     }
   };
 
@@ -363,7 +369,7 @@ const PrejoinPage = () => {
         setSelectedSpeaker(deviceId);
       }
     } catch (error) {
-      setDeviceError('Failed to switch speaker. Please try again.');
+      setDeviceError('스피커 전환에 실패했습니다. 다시 시도해 주세요.');
     }
   };
 
@@ -379,11 +385,11 @@ const PrejoinPage = () => {
         
         // Show warning if no devices are detected
         if (videoInputs.length === 0 && audioInputs.length === 0) {
-          setDeviceError('No camera or microphone detected. Please connect your devices before joining the meeting.');
+          setDeviceError('카메라와 마이크를 찾을 수 없습니다. 미팅에 참여하기 전에 장치를 연결해 주세요.');
         } else if (videoInputs.length === 0) {
-          setDeviceError('No camera detected. You can still join with audio only.');
+          setDeviceError('카메라를 찾을 수 없습니다. 오디오만으로 참여할 수 있습니다.');
         } else if (audioInputs.length === 0) {
-          setDeviceError('No microphone detected. You can still join with video only.');
+          setDeviceError('마이크를 찾을 수 없습니다. 비디오만으로 참여할 수 있습니다.');
         }
       } catch (error) {
       }
@@ -704,78 +710,15 @@ const PrejoinPage = () => {
 
   if (isLoading) {
     return (
-      <div style={{ 
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: '#333',
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        flexDirection: 'column',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1000 1000\'><defs><filter id=\'blur\'><feGaussianBlur stdDeviation=\'10\'/></filter></defs><circle cx=\'200\' cy=\'200\' r=\'100\' fill=\'%23ff6b6b\' filter=\'url(%23blur)\'/><circle cx=\'800\' cy=\'300\' r=\'150\' fill=\'%234ecdc4\' filter=\'url(%23blur)\'/><circle cx=\'400\' cy=\'700\' r=\'120\' fill=\'%2345b7d1\' filter=\'url(%23blur)\'/><circle cx=\'700\' cy=\'600\' r=\'80\' fill=\'%2396ceb4\' filter=\'url(%23blur)\'/></svg>") no-repeat center center',
-          backgroundSize: 'cover',
-          filter: 'blur(20px)',
-          opacity: 0.3,
-          zIndex: 0
-        }} />
-        
-        <div style={{ 
-          width: '60px', 
-          height: '60px', 
-          border: '3px solid rgba(255, 255, 255, 0.3)',
-          borderTop: '3px solid #4A90E2',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          marginBottom: '24px',
-          position: 'relative',
-          zIndex: 1
-        }}></div>
-        <h2 style={{ 
-          margin: '0 0 8px 0', 
-          fontSize: '24px',
-          fontWeight: '600',
-          color: '#ffffff',
-          textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-          position: 'relative',
-          zIndex: 1
-        }}>
-          미팅 로딩 중
-        </h2>
-        <p style={{ 
-          margin: '0 0 20px 0', 
-          color: 'rgba(255, 255, 255, 0.9)',
-          fontSize: '16px',
-          textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-          position: 'relative',
-          zIndex: 1
-        }}>
-          미팅방을 준비하는 중...
-        </p>
-        <div style={{ 
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '12px',
-          padding: '16px',
-          fontSize: '14px',
-          color: '#4A90E2',
-          textAlign: 'center',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-          position: 'relative',
-          zIndex: 1
-        }}>
-          <div>미팅 ID: {meetingId}</div>
-          <div style={{ marginTop: '4px' }}>상태: 로딩 중...</div>
+      <div className={styles.loaderContainer}>
+        <div className={styles.loaderSpinner} />
+        <h2 className={styles.meetingTitle}>미팅을 준비하고 있습니다</h2>
+        <p className={styles.subtleText}>장치를 초기화하는 동안 잠시만 기다려 주세요.</p>
+        <div className={styles.loaderCard}>
+          <div className={styles.loaderMeta}>
+            <span>Meeting ID: {meetingId}</span>
+            <span>상태: 연결 중...</span>
+          </div>
         </div>
       </div>
     );
@@ -783,634 +726,263 @@ const PrejoinPage = () => {
 
   if (!meetingInfo) {
     return (
-      <div style={{ 
-        minHeight: '100vh',
-        backgroundColor: '#1a1a1a',
-        color: 'white',
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        flexDirection: 'column',
-        padding: '20px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-      }}>
-        <div style={{
-          backgroundColor: '#2a2a2a',
-          borderRadius: '12px',
-          padding: '40px',
-          textAlign: 'center',
-          maxWidth: '500px',
-          width: '100%',
-          border: '1px solid #333'
-        }}>
-          <div style={{
-            width: '80px',
-            height: '80px',
-            backgroundColor: '#f59e0b',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '32px',
-            margin: '0 auto 24px'
-          }}>
-            ⚠️
-          </div>
-          
-          <h2 style={{ 
-            color: '#ffffff', 
-            marginBottom: '16px',
-            fontSize: '24px',
-            fontWeight: '600'
-          }}>
-            미팅을 찾을 수 없음
-          </h2>
-          
-          <p style={{ 
-            color: '#a0a0a0', 
-            marginBottom: '32px', 
-            fontSize: '16px',
-            lineHeight: '1.5'
-          }}>
-            ID "{meetingId}"인 미팅을 찾을 수 없거나 삭제되었을 수 있습니다.
+      <div className={styles.emptyState}>
+        <div className={styles.emptyCard}>
+          <div className={styles.emptyIcon}>⚠️</div>
+          <h2 className={styles.emptyTitle}>미팅을 찾을 수 없습니다</h2>
+          <p className={styles.emptyDescription}>
+            ID "{meetingId}"인 미팅이 존재하지 않거나 이미 종료되었을 수 있습니다.
           </p>
-          
-        <button
-          onClick={handleCreateAndStartMeeting}
-          disabled={isJoining}
-          style={{
-              width: '100%',
-              padding: '16px',
-              backgroundColor: isJoining ? '#6b7280' : '#10b981',
-            color: 'white',
-            border: 'none',
-              borderRadius: '8px',
-              cursor: isJoining ? 'not-allowed' : 'pointer',
-              fontSize: '16px',
-              fontWeight: '600',
-              marginBottom: '16px'
-          }}
-        >
-          {isJoining ? '생성 중...' : '새 미팅 만들기'}
-        </button>
-          
-        {joinError && (
-          <div style={{
-              color: '#ffffff',
-              padding: '12px',
-              backgroundColor: '#ef4444',
-              borderRadius: '8px',
-              fontSize: '14px'
-          }}>
-            {joinError}
+          <div className={styles.buttonRow}>
+            <button
+              onClick={handleCreateAndStartMeeting}
+              disabled={isJoining}
+              className={styles.actionButton}
+            >
+              {isJoining ? '새 미팅 생성 중...' : '새 미팅 만들기'}
+            </button>
+            {joinError && (
+              <div className={styles.errorBanner}>{joinError}</div>
+            )}
           </div>
-        )}
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-    <div style={{ 
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: '#333',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        padding: '20px',
-      display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center',
-      justifyContent: 'center', 
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-      {/* Blurred background effect */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1000 1000\'><defs><filter id=\'blur\'><feGaussianBlur stdDeviation=\'10\'/></filter></defs><circle cx=\'200\' cy=\'200\' r=\'100\' fill=\'%23ff6b6b\' filter=\'url(%23blur)\'/><circle cx=\'800\' cy=\'300\' r=\'150\' fill=\'%234ecdc4\' filter=\'url(%23blur)\'/><circle cx=\'400\' cy=\'700\' r=\'120\' fill=\'%2345b7d1\' filter=\'url(%23blur)\'/><circle cx=\'700\' cy=\'600\' r=\'80\' fill=\'%2396ceb4\' filter=\'url(%23blur)\'/></svg>") no-repeat center center',
-        backgroundSize: 'cover',
-        filter: 'blur(20px)',
-        opacity: 0.3,
-        zIndex: 0
-      }} />
-      
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '40px', position: 'relative', zIndex: 1 }}>
-        <h1 style={{ 
-          fontSize: 'clamp(24px, 5vw, 32px)', 
-          fontWeight: '600', 
-          margin: '0 0 8px 0',
-          color: '#ffffff',
-          textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-        }}>
-          {meetingInfo.title}
-        </h1>
-        <p style={{ 
-          color: 'rgba(255, 255, 255, 0.9)', 
-          fontSize: '14px',
-          margin: '0',
-          textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-        }}>
-          미팅 ID: {meetingInfo.inviteCode}
-        </p>
-      </div>
+    <div className={styles.prejoinPage}>
+      <div className={styles.backgroundBlur} />
+      <div className={styles.content}>
+        <header className={styles.header}>
+          <h1 className={styles.meetingTitle}>{meetingInfo.title}</h1>
+        </header>
 
-      {/* Main Content Container */}
-      <div style={{
-        width: '100%',
-        maxWidth: '800px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '20px',
-        alignItems: 'stretch',
-        position: 'relative',
-        zIndex: 1
-      }}>
-        
-        {/* Video Preview */}
-        <div style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '20px',
-          padding: '20px',
-          textAlign: 'center',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)'
-        }}>
-          <h3 style={{ 
-            margin: '0 0 16px 0', 
-            fontSize: '18px',
-            color: '#333',
-            fontWeight: '600'
-          }}>
-            카메라 미리보기
-          </h3>
-
-          {/* Device Selection Dropdowns */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: '8px'
-          }}>
-            <span style={{ 
-              fontSize: '14px', 
-              color: '#333', 
-              fontWeight: '600'
-            }}>
-              장치 선택
-            </span>
-            <button
-              onClick={async () => {
-                await loadAvailableDevices();
-              }}
-              style={{
-                padding: '4px 8px',
-                fontSize: '11px',
-                backgroundColor: '#f0f0f0',
-                color: '#666',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#e0e0e0';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = '#f0f0f0';
-              }}
-            >
-              🔄 새로고침
-            </button>
-          </div>
-          
-          {availableDevices.cameras.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '12px', 
-                color: '#666', 
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                📹 카메라 선택
-              </label>
-              <select
-                value={selectedCamera}
-                onChange={(e) => {
-                  const deviceId = e.target.value;
-                  setSelectedCamera(deviceId);
-                  if (localStream) {
-                    switchCamera(deviceId);
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
-                }}
+        <div className={styles.layout}>
+          <section className={styles.leftColumn}>
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionLabel}>카메라 &amp; 오디오 테스트</span>
+              <button
+                type="button"
+                className={styles.refreshButton}
+                onClick={handleRefresh}
+                aria-label="장치 새로고침 및 테스트"
               >
-                {availableDevices.cameras.map((camera) => (
-                  <option key={camera.deviceId} value={camera.deviceId}>
-                    {camera.label || `Camera ${availableDevices.cameras.indexOf(camera) + 1}`}
-                  </option>
-                ))}
-              </select>
+                <img src="/Icons/waitingRoom/reset.svg" alt="새로고침" />
+                새로고침
+              </button>
             </div>
-          )}
 
-          {availableDevices.microphones.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '12px', 
-                color: '#666', 
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                🎤 마이크 선택
-              </label>
-              <select
-                value={selectedMicrophone}
-                onChange={(e) => {
-                  const deviceId = e.target.value;
-                  setSelectedMicrophone(deviceId);
-                  if (localStream) {
-                    switchMicrophone(deviceId);
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                {availableDevices.microphones.map((mic) => (
-                  <option key={mic.deviceId} value={mic.deviceId}>
-                    {mic.label || `Microphone ${availableDevices.microphones.indexOf(mic) + 1}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {availableDevices.speakers.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '12px', 
-                color: '#666', 
-                marginBottom: '4px',
-                fontWeight: '500'
-              }}>
-                🔊 스피커 선택
-              </label>
-              <select
-                value={selectedSpeaker}
-                onChange={(e) => {
-                  const deviceId = e.target.value;
-                  switchSpeaker(deviceId);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                {availableDevices.speakers.map((speaker) => (
-                  <option key={speaker.deviceId} value={speaker.deviceId}>
-                    {speaker.label || `Speaker ${availableDevices.speakers.indexOf(speaker) + 1}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          
-          <div style={{
-            width: '100%',
-            aspectRatio: '16/9',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            marginBottom: '16px',
-            position: 'relative',
-            border: '2px solid #4A90E2',
-            boxShadow: '0 4px 15px rgba(74, 144, 226, 0.2)'
-          }}>
-            {localStream ? (
+            <div className={styles.videoPreview}>
               <video
                 ref={videoRef}
                 autoPlay
                 muted
                 playsInline
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  backgroundColor: '#000'
-                }}
-                onLoadStart={() => {
-                  // Load start handler
-                }}
-                onCanPlay={() => {
-                  setDeviceError(null);
-                }}
-                onPlay={() => {
-                  setDeviceError(null);
-                }}
-                onError={(e) => {
-                  setDeviceError('Camera preview failed to load');
-                }}
+                className={!isVideoOn || !localStream ? styles.videoHidden : ''}
+                onCanPlay={() => setDeviceError(null)}
+                onPlay={() => setDeviceError(null)}
+                onError={() => setDeviceError('Camera preview failed to load')}
               />
-            ) : (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                color: '#4A90E2',
-                fontSize: '14px',
-                fontWeight: '500',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ fontSize: '24px' }}>📹</div>
-                <div>{isTestingDevices ? '카메라 테스트 중...' : '카메라 비활성화됨'}</div>
-                {!isTestingDevices && (
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    "카메라 및 마이크 테스트"를 클릭하여 시작하세요
+
+              {localStream && isVideoOn && <div className={styles.cameraBadge}>카메라 활성</div>}
+
+              {(!localStream || !isVideoOn) && (
+                <div className={styles.videoPlaceholder}>
+                  <div className={styles.videoPlaceholderIcon}>
+                    <img src="/Icons/waitingRoom/waitingRoomCameraMain.svg" alt="카메라 준비" />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                  <div>
+                    {isTestingDevices
+                      ? '카메라 테스트 중...'
+                      : localStream
+                      ? '카메라가 꺼져 있습니다'
+                      : '카메라 비활성화됨'}
+                  </div>
+                  {!isTestingDevices && (
+                    <div className={styles.videoPlaceholderHint}>
+                      오른쪽에서 장치를 선택하고 확인하기를 눌러 테스트하세요.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-          {/* Device Controls */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            justifyContent: 'center',
-            marginBottom: '16px'
-          }}>
-            <button
-              onClick={toggleVideo}
-              disabled={!localStream}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: isVideoOn ? '#4A90E2' : '#E74C3C',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: localStream ? 'pointer' : 'not-allowed',
-                fontSize: '12px',
-                fontWeight: '500',
-                opacity: localStream ? 1 : 0.5,
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {isVideoOn ? '📹 켜기' : '📹 끄기'}
-            </button>
-            
-            <button
-              onClick={toggleMic}
-              disabled={!localStream}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: isMicOn ? '#4A90E2' : '#E74C3C',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: localStream ? 'pointer' : 'not-allowed',
-                fontSize: '12px',
-                fontWeight: '500',
-                opacity: localStream ? 1 : 0.5,
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {isMicOn ? '🎤 켜기' : '🎤 끄기'}
-            </button>
-          </div>
+            <div className={styles.videoControls}>
+              <button
+                type="button"
+                className={`${styles.controlButton} ${isVideoOn ? styles.controlButtonPrimary : ''}`}
+                onClick={toggleVideo}
+                disabled={!localStream}
+                aria-pressed={isVideoOn}
+                aria-label={isVideoOn ? '카메라 끄기' : '카메라 켜기'}
+              >
+                <img
+                  src={isVideoOn ? '/Icons/waitingRoom/onCamera.svg' : '/Icons/waitingRoom/offCamera.svg'}
+                  alt={isVideoOn ? '카메라 켜짐' : '카메라 꺼짐'}
+                />
+              </button>
+              <button
+                type="button"
+                className={`${styles.controlButton} ${isMicOn ? styles.controlButtonPrimary : ''}`}
+                onClick={toggleMic}
+                disabled={!localStream}
+                aria-pressed={isMicOn}
+                aria-label={isMicOn ? '마이크 끄기' : '마이크 켜기'}
+              >
+                <img
+                  src={isMicOn ? '/Icons/waitingRoom/unmutedMic.png' : '/Icons/waitingRoom/muteMic.png'}
+                  alt={isMicOn ? '마이크 켜짐' : '마이크 꺼짐'}
+                />
+              </button>
+              <button
+                type="button"
+                className={styles.controlButton}
+                onClick={handleRefresh}
+                disabled={isTestingDevices}
+                aria-label="장치 새로고침 및 테스트"
+              >
+                <img src="/Icons/waitingRoom/reset.svg" alt="장치 테스트" />
+              </button>
+            </div>
 
-          {/* Test Devices Button */}
-          {!localStream ? (
+            {deviceError && <div className={styles.deviceError}>{deviceError}</div>}
+          </section>
+
+          <section className={styles.rightColumn}>
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionLabel}>장치 선택 </span>
+            </div>
+
+            <div className={styles.deviceSelectGroup}>
+              {availableDevices.cameras.length > 0 && (
+                <label className={styles.deviceField}>
+                  <span className={styles.deviceLabel}>카메라</span>
+                  <select
+                    value={selectedCamera}
+                    onChange={(e) => {
+                      const deviceId = e.target.value;
+                      setSelectedCamera(deviceId);
+                      if (localStream) {
+                        switchCamera(deviceId);
+                      }
+                    }}
+                    className={styles.deviceSelect}
+                  >
+                    {availableDevices.cameras.map((camera, index) => (
+                      <option key={camera.deviceId} value={camera.deviceId}>
+                        {camera.label || `Camera ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {availableDevices.microphones.length > 0 && (
+                <label className={styles.deviceField}>
+                  <span className={styles.deviceLabel}>마이크</span>
+                  <select
+                    value={selectedMicrophone}
+                    onChange={(e) => {
+                      const deviceId = e.target.value;
+                      setSelectedMicrophone(deviceId);
+                      if (localStream) {
+                        switchMicrophone(deviceId);
+                      }
+                    }}
+                    className={styles.deviceSelect}
+                  >
+                    {availableDevices.microphones.map((mic, index) => (
+                      <option key={mic.deviceId} value={mic.deviceId}>
+                        {mic.label || `Microphone ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {availableDevices.speakers.length > 0 && (
+                <label className={styles.deviceField}>
+                  <span className={styles.deviceLabel}>스피커</span>
+                  <select
+                    value={selectedSpeaker}
+                    onChange={(e) => {
+                      const deviceId = e.target.value;
+                      switchSpeaker(deviceId);
+                    }}
+                    className={styles.deviceSelect}
+                  >
+                    {availableDevices.speakers.map((speaker, index) => (
+                      <option key={speaker.deviceId} value={speaker.deviceId}>
+                        {speaker.label || `Speaker ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+
             <button
-              onClick={testDevices}
+              type="button"
+              className={styles.confirmButton}
+              onClick={handleRefresh}
               disabled={isTestingDevices}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: isTestingDevices ? 'linear-gradient(135deg, #6b7280, #4b5563)' : 'linear-gradient(135deg, #4A90E2, #357ABD)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: isTestingDevices ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 4px 15px rgba(74, 144, 226, 0.3)'
-              }}
             >
-              {isTestingDevices ? '테스트 중...' : '카메라 및 마이크 테스트'}
+              확인하기
             </button>
-          ) : (
+
+            <div className={styles.statusPanel}>
+              <div className={styles.statusPanelTitle}>상태 확인</div>
+              <div className={styles.statusList}>
+                <div className={styles.statusItem}>
+                  <span className={styles.statusLabel}>카메라</span>
+                  <span
+                    className={`${styles.statusValue} ${
+                      isVideoOn ? styles.statusValueSuccess : styles.statusValueError
+                    }`}
+                  >
+                    {isVideoOn ? '연결 성공' : '테스트 필요'}
+                  </span>
+                </div>
+                <div className={styles.statusItem}>
+                  <span className={styles.statusLabel}>마이크</span>
+                  <span
+                    className={`${styles.statusValue} ${
+                      isMicOn ? styles.statusValueSuccess : styles.statusValueError
+                    }`}
+                  >
+                    {isMicOn ? '연결 성공' : '테스트 필요'}
+                  </span>
+                </div>
+                <div className={styles.statusItem}>
+                  <span className={styles.statusLabel}>스피커</span>
+                  <span
+                    className={`${styles.statusValue} ${
+                      isSpeakerOn ? styles.statusValueSuccess : styles.statusValueError
+                    }`}
+                  >
+                    {isSpeakerOn ? '연결 성공' : '테스트 필요'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <button
-              onClick={stopDeviceTest}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: 'linear-gradient(135deg, #6b7280, #4b5563)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                transition: 'all 0.3s ease'
-              }}
+              type="button"
+              onClick={handleJoinMeeting}
+              disabled={isJoining}
+              className={styles.actionButton}
             >
-              테스트 중지
+              {isJoining ? '참여 중...' : '참여하기'}
             </button>
-          )}
 
-          {deviceError ? (
-            <div style={{
-              marginTop: '12px',
-              padding: '8px 12px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              borderRadius: '6px',
-              fontSize: '12px'
-            }}>
-              {deviceError}
-            </div>
-          ) : localStream && isVideoOn ? (
-            <div style={{
-              marginTop: '12px',
-              padding: '8px 12px',
-              backgroundColor: '#4A90E2',
-              color: 'white',
-              borderRadius: '6px',
-              fontSize: '12px',
-              textAlign: 'center'
-            }}>
-              ✅ 카메라가 정상적으로 작동합니다!
-            </div>
-          ) : null}
+            {joinError && <div className={styles.errorBanner}>{joinError}</div>}
+          </section>
         </div>
-
-        {/* Meeting Info & Join */}
-        <div style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '20px',
-          padding: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)'
-        }}>
-          <h3 style={{ 
-            margin: '0 0 16px 0', 
-            fontSize: '18px',
-            color: '#333',
-            fontWeight: '600'
-          }}>
-            참여할 준비가 되셨나요?
-          </h3>
-
-          {/* Device Status */}
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid rgba(74, 144, 226, 0.2)'
-            }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>카메라</span>
-              <span style={{ 
-                fontSize: '14px',
-                color: isVideoOn ? '#4A90E2' : '#E74C3C',
-                fontWeight: '500'
-              }}>
-                {isVideoOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: '1px solid rgba(74, 144, 226, 0.2)'
-            }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>마이크</span>
-              <span style={{ 
-                fontSize: '14px',
-                color: isMicOn ? '#4A90E2' : '#E74C3C',
-                fontWeight: '500'
-              }}>
-                {isMicOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
-              </span>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 0'
-            }}>
-              <span style={{ fontSize: '14px', color: '#666' }}>스피커</span>
-              <span style={{ 
-                fontSize: '14px',
-                color: isSpeakerOn ? '#4A90E2' : '#E74C3C',
-                fontWeight: '500'
-              }}>
-                {isSpeakerOn ? '✓ 작동 중' : '✗ 테스트 안 됨'}
-              </span>
-            </div>
-          </div>
-
-          {/* Join Button */}
-        <button
-          onClick={handleJoinMeeting}
-          disabled={isJoining}
-          style={{
-              width: '100%',
-              padding: '16px',
-              background: isJoining ? 'linear-gradient(135deg, #6b7280, #4b5563)' : 'linear-gradient(135deg, #4A90E2, #357ABD)',
-            color: 'white',
-            border: 'none',
-              borderRadius: '12px',
-            cursor: isJoining ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-              fontWeight: '600',
-              marginBottom: '16px',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 15px rgba(74, 144, 226, 0.3)'
-          }}
-        >
-          {isJoining ? '참여 중...' : '미팅 참여'}
-        </button>
-
-          {/* Meeting Details */}
-          <div style={{
-            backgroundColor: 'rgba(74, 144, 226, 0.1)',
-            borderRadius: '12px',
-            padding: '12px',
-            fontSize: '12px',
-            color: '#4A90E2',
-            border: '1px solid rgba(74, 144, 226, 0.2)'
-          }}>
-            <div style={{ marginBottom: '4px' }}>
-              <strong>상태:</strong> {meetingInfo.status === 'SCHEDULED' ? '예약됨' : meetingInfo.status}
-            </div>
-            <div>
-              <strong>ID:</strong> {meetingInfo._id.slice(-8)}
-            </div>
-          </div>
-
-          {joinError && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              borderRadius: '8px',
-              fontSize: '14px'
-          }}>
-            {joinError}
-          </div>
-        )}
       </div>
-    </div>
 
-      {/* Hidden audio element for testing */}
       <audio ref={audioRef} style={{ display: 'none' }} />
-      </div>
-    </>
+    </div>
   );
 };
 
