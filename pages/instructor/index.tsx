@@ -699,7 +699,19 @@ const Dashboard: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ko-KR');
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+      return '-';
+    }
+
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
   };
 
   // VOD Functions
@@ -930,6 +942,21 @@ const Dashboard: React.FC = () => {
   const filteredVODs = vods.filter(vod =>
     !searchQuery || vod.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const searchResultsCount = activeTab === 'VOD' ? filteredVODs.length : filteredMeetings.length;
+
+  const getStatusBadge = (status: Meeting['status']) => {
+    switch (status) {
+      case 'LIVE':
+      case 'STARTED':
+        return { label: '진행중', className: 'status-badge status-badge--live' };
+      case 'SCHEDULED':
+        return { label: '예약됨', className: 'status-badge status-badge--scheduled' };
+      case 'ENDED':
+      default:
+        return { label: '종료', className: 'status-badge status-badge--ended' };
+    }
+  };
 
   if (loading) {
     return (
@@ -1434,19 +1461,31 @@ const Dashboard: React.FC = () => {
 
               {/* Search */}
               <div className="search-bar">
-                <input
-                  type="text"
-                  placeholder="검색어를 입력하세요"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button 
-                  className="search-button"
-                  onClick={handleSearch}
-                  title="검색"
-                >
-                  🔍
-                </button>
+                <div className="search-meta">
+                  <span className="search-meta-label">총</span>
+                  <span className="search-meta-count">{searchResultsCount.toLocaleString()}</span>
+                </div>
+                <div className="search-input-wrapper">
+                  <input
+                    type="text"
+                    placeholder="검색어를 입력하세요"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  <button 
+                    className="search-button"
+                    onClick={handleSearch}
+                    title="검색"
+                    type="button"
+                  >
+                    <Image
+                      src="/Icons/dashboard/searchLoop.svg"
+                      alt="검색"
+                      width={16}
+                      height={16}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Content based on active tab */}
@@ -1483,102 +1522,76 @@ const Dashboard: React.FC = () => {
                       <>
                         {/* Desktop Table */}
                         <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
-                            <thead>
-                              <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>No.</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>회의 제목</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>회의시간</th>
-                                <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>기록 상태</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {filteredMeetings.map((meeting, index) => {
-                                const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
-                                return (
-                                  <tr key={meeting._id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                                    <td style={{ padding: '12px' }}>{index + 1}</td>
-                                    <td style={{ padding: '12px', fontWeight: '500' }}>{meeting.title}</td>
-                                    <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
-                                      {formatDate(meeting.createdAt)}
-                                    </td>
-                                    <td style={{ padding: '12px' }}>
-                                      {vodAccessDenied ? (
-                                        <span
-                                          style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '13px',
-                                            fontWeight: '600',
-                                            backgroundColor: 'rgba(108, 117, 125, 0.1)',
-                                            color: '#6c757d',
-                                            border: '1px solid #6c757d',
-                                            display: 'inline-block'
-                                          }}
-                                        >
-                                          ⚠️ 확인 불가
-                                        </span>
-                                      ) : (
-                                        <span
-                                          style={{
-                                            padding: '6px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '13px',
-                                            fontWeight: '600',
-                                            backgroundColor: hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
-                                            color: hasRecording ? '#28a745' : '#dc3545',
-                                            border: `1px solid ${hasRecording ? '#28a745' : '#dc3545'}`,
-                                            display: 'inline-block'
-                                          }}
-                                        >
-                                          {hasRecording ? '✅ 기록됨' : '❌ 기록 안됨'}
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                          <div className="table-shell table-shell--compact">
+                            <table className="modern-table modern-table--compact">
+                              <thead>
+                                <tr>
+                                  <th>No.</th>
+                                  <th>회의 제목</th>
+                                  <th>회의시간</th>
+                                  <th>기록 상태</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredMeetings.map((meeting, index) => {
+                                  const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
+                                  const recordingClass = vodAccessDenied
+                                    ? 'chip chip--muted'
+                                    : hasRecording
+                                      ? 'chip chip--success'
+                                      : 'chip chip--danger';
+                                  const recordingLabel = vodAccessDenied
+                                    ? '확인 불가'
+                                    : hasRecording
+                                      ? '기록됨'
+                                      : '기록 없음';
+
+                                  return (
+                                    <tr key={meeting._id}>
+                                      <td className="modern-table__cell modern-table__cell--number">{index + 1}</td>
+                                      <td className="modern-table__cell modern-table__cell--title">
+                                        <span className="meeting-title-text">{meeting.title}</span>
+                                      </td>
+                                      <td className="modern-table__cell modern-table__cell--time">
+                                        <span className="muted-text">{formatDate(meeting.createdAt)}</span>
+                                      </td>
+                                      <td className="modern-table__cell modern-table__cell--status">
+                                        <span className={recordingClass}>{recordingLabel}</span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
 
                         {/* Mobile Card View */}
                         <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
                           {filteredMeetings.map((meeting, index) => {
                             const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
+                            const recordingClass = vodAccessDenied
+                              ? 'chip chip--muted chip--tight mobile-meeting-card__badge'
+                              : hasRecording
+                                ? 'chip chip--success chip--tight mobile-meeting-card__badge'
+                                : 'chip chip--danger chip--tight mobile-meeting-card__badge';
+                            const recordingLabel = vodAccessDenied
+                              ? '확인 불가'
+                              : hasRecording
+                                ? '기록됨'
+                                : '기록 없음';
+
                             return (
-                              <div
-                                key={meeting._id}
-                                style={{
-                                  backgroundColor: 'white',
-                                  borderRadius: '12px',
-                                  padding: '16px',
-                                  marginBottom: '12px',
-                                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                  border: '1px solid #e9ecef'
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                              <div key={meeting._id} className="mobile-meeting-card">
+                                <div className="mobile-meeting-card__header">
                                   <div>
-                                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>#{index + 1}</div>
-                                    <div style={{ fontWeight: '600', fontSize: '16px', color: '#333' }}>{meeting.title}</div>
+                                    <div className="mobile-meeting-card__index">#{index + 1}</div>
+                                    <div className="mobile-meeting-card__title">{meeting.title}</div>
                                   </div>
-                                  <span
-                                    style={{
-                                      padding: '4px 10px',
-                                      borderRadius: '20px',
-                                      fontSize: '11px',
-                                      fontWeight: '600',
-                                      backgroundColor: vodAccessDenied ? 'rgba(108, 117, 125, 0.1)' : (hasRecording ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)'),
-                                      color: vodAccessDenied ? '#6c757d' : (hasRecording ? '#28a745' : '#dc3545'),
-                                      border: `1px solid ${vodAccessDenied ? '#6c757d' : (hasRecording ? '#28a745' : '#dc3545')}`
-                                    }}
-                                  >
-                                    {vodAccessDenied ? '⚠️' : (hasRecording ? '✅' : '❌')}
-                                  </span>
+                                  <span className={recordingClass}>{recordingLabel}</span>
                                 </div>
-                                <div style={{ fontSize: '13px', color: '#666' }}>
-                                  📅 {formatDate(meeting.createdAt)}
+                                <div className="mobile-meeting-card__meta">
+                                  <span>📅 {formatDate(meeting.createdAt)}</span>
                                 </div>
                               </div>
                             );
@@ -1605,103 +1618,55 @@ const Dashboard: React.FC = () => {
                     <>
                       {/* Desktop Table */}
                       <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>No.</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>회의 제목</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>회의시간</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>상태</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>초대코드</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>강의코드</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '14px' }}>비고</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredMeetings.map((meeting, index) => (
-                              <tr 
-                                key={meeting._id}
-                                style={{ 
-                                  borderBottom: '1px solid #e9ecef',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                              >
-                                <td style={{ padding: '12px', color: '#666' }}>{index + 1}</td>
-                                <td style={{ padding: '12px', fontWeight: '500', color: '#333' }}>{meeting.title}</td>
-                                <td style={{ padding: '12px', fontSize: '13px', color: '#666' }}>
-                                  {meeting.schedule 
-                                    ? formatDate(meeting.schedule)
-                                    : formatDate(meeting.createdAt)
-                                  }
-                                </td>
-                                <td style={{ padding: '12px' }}>
-                                  <span 
-                                    style={{
-                                      padding: '6px 12px',
-                                      borderRadius: '20px',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      color: 'white',
-                                      background: meeting.status === 'LIVE' ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' : 
-                                                 meeting.status === 'STARTED' ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' :
-                                                 meeting.status === 'SCHEDULED' ? 'linear-gradient(135deg, #ffc107 0%, #ffb300 100%)' : 
-                                                 meeting.status === 'ENDED' ? 'linear-gradient(135deg, #6c757d 0%, #495057 100%)' : 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'
-                                    }}
-                                  >
-                                    {meeting.status === 'LIVE' ? '🟢 진행중' :
-                                     meeting.status === 'STARTED' ? '🟢 진행중' : 
-                                     meeting.status === 'SCHEDULED' ? '⏰ 예정' : 
-                                     meeting.status === 'ENDED' ? '✅ 종료' : '🟢 진행중'}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '12px' }}>
-                                  <span 
-                                    className="invite-code"
-                                    onClick={() => copyInviteCode(meeting.inviteCode)}
-                                    style={{
-                                      padding: '6px 10px',
-                                      borderRadius: '6px',
-                                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                      color: 'white',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.transform = 'scale(1.05)';
-                                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.transform = 'scale(1)';
-                                      e.currentTarget.style.boxShadow = 'none';
-                                    }}
-                                  >
-                                    🔑 {meeting.inviteCode}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '12px' }}>
-                                  {meeting.courseCode ? (
-                                    <span 
-                                      style={{
-                                        padding: '6px 10px',
-                                        borderRadius: '6px',
-                                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                                        color: 'white',
-                                        fontSize: '12px',
-                                        fontWeight: '600',
-                                        display: 'inline-block'
-                                      }}
-                                    >
-                                      📚 {meeting.courseCode}
-                                    </span>
-                                  ) : (
-                                    <span style={{ color: '#999', fontSize: '12px' }}>-</span>
-                                  )}
-                                </td>
-                            <td>
+                        <div className="table-shell">
+                          <table className="modern-table">
+                            <thead>
+                              <tr>
+                                <th>No.</th>
+                                <th>회의 제목</th>
+                                <th>회의시간</th>
+                                <th>상태</th>
+                                <th>초대코드</th>
+                                <th>강의코드</th>
+                                <th>비고</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredMeetings.map((meeting, index) => {
+                                const statusInfo = getStatusBadge(meeting.status);
+                                const meetingDate = meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt);
+
+                                return (
+                                  <tr key={meeting._id}>
+                                    <td className="modern-table__cell modern-table__cell--number">{index + 1}</td>
+                                    <td className="modern-table__cell modern-table__cell--title">
+                                      <span className="meeting-title-text">{meeting.title}</span>
+                                    </td>
+                                    <td className="modern-table__cell modern-table__cell--time">
+                                      <span className="muted-text">{meetingDate}</span>
+                                    </td>
+                                    <td className="modern-table__cell modern-table__cell--status">
+                                      <span className={statusInfo.className}>{statusInfo.label}</span>
+                                    </td>
+                                    <td className="modern-table__cell modern-table__cell--code">
+                                      <button
+                                        type="button"
+                                        className="chip chip--invite"
+                                        onClick={() => copyInviteCode(meeting.inviteCode)}
+                                      >
+                                        <span className="chip__label">{meeting.inviteCode}</span>
+                                      </button>
+                                    </td>
+                                    <td className="modern-table__cell modern-table__cell--code">
+                                      {meeting.courseCode ? (
+                                        <span className="chip chip--course">
+                                          <span className="chip__label">{meeting.courseCode}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="chip chip--muted">없음</span>
+                                      )}
+                                    </td>
+                            <td className="modern-table__cell modern-table__cell--actions">
                               <div className="actions">
                                 {meeting.status === 'SCHEDULED' && (
                                   <>
@@ -1717,8 +1682,11 @@ const Dashboard: React.FC = () => {
                                         background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
                                         color: 'white',
                                         boxShadow: '0 4px 12px rgba(86, 171, 47, 0.3)',
-                                        marginRight: '8px',
-                                        transition: 'all 0.3s ease'
+                                        transition: 'all 0.3s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '92px'
                                       }}
                                       onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1729,32 +1697,7 @@ const Dashboard: React.FC = () => {
                                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(86, 171, 47, 0.3)';
                                       }}
                                     >
-                                      ▶️ 시작
-                                    </button>
-                                    <button 
-                                      onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                                        color: 'white',
-                                        boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)',
-                                        transition: 'all 0.3s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 172, 254, 0.4)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 172, 254, 0.3)';
-                                      }}
-                                    >
-                                      📊 상세
+                                      시작
                                     </button>
                                   </>
                                 )}
@@ -1780,22 +1723,25 @@ const Dashboard: React.FC = () => {
                                         cursor: 'pointer',
                                         fontSize: '13px',
                                         fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                      background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
                                         color: 'white',
-                                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                                        marginRight: '8px',
-                                        transition: 'all 0.3s ease'
+                                      boxShadow: '0 4px 12px rgba(34, 211, 238, 0.35)',
+                                        transition: 'all 0.3s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '92px'
                                       }}
                                       onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(34, 211, 238, 0.45)';
                                       }}
                                       onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(34, 211, 238, 0.35)';
                                       }}
                                     >
-                                      🎥 참여
+                                      참여
                                     </button>
                                     <button 
                                       onClick={() => handleEndMeeting(meeting._id)}
@@ -1809,8 +1755,11 @@ const Dashboard: React.FC = () => {
                                         background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                                         color: 'white',
                                         boxShadow: '0 4px 12px rgba(245, 87, 108, 0.3)',
-                                        marginRight: '8px',
-                                        transition: 'all 0.3s ease'
+                                        transition: 'all 0.3s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '92px'
                                       }}
                                       onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1821,32 +1770,7 @@ const Dashboard: React.FC = () => {
                                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.3)';
                                       }}
                                     >
-                                      ⛔ 종료
-                                    </button>
-                                    <button 
-                                      onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                                        color: 'white',
-                                        boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)',
-                                        transition: 'all 0.3s ease'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 172, 254, 0.4)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 172, 254, 0.3)';
-                                      }}
-                                    >
-                                      📊 상세
+                                      종료
                                     </button>
                                   </>
                                 )}
@@ -1864,7 +1788,11 @@ const Dashboard: React.FC = () => {
                                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                                         color: 'white',
                                         boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                                        transition: 'all 0.3s ease'
+                                        transition: 'all 0.3s ease',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '92px'
                                       }}
                                       onMouseEnter={(e) => {
                                         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1875,75 +1803,57 @@ const Dashboard: React.FC = () => {
                                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
                                       }}
                                     >
-                                      📊 출석 현황
+                                      출석 현황
                                     </button>
                                   </>
                                 )}
                               </div>
                             </td>
                           </tr>
-                        ))}
+                        );
+                      })}
                       </tbody>
                     </table>
-                      </div>
+                  </div>
+                </div>
 
                       {/* Mobile Card View */}
                       <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
-                        {filteredMeetings.map((meeting, index) => (
-                          <div
-                            key={meeting._id}
-                            style={{
-                              backgroundColor: 'white',
-                              borderRadius: '16px',
-                              padding: '16px',
-                              marginBottom: '12px',
-                              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                              border: '1px solid #e9ecef',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateY(-2px)';
-                              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)';
-                            }}
-                          >
-                                                         {/* Header */}
-                             <div style={{ marginBottom: '12px' }}>
-                               <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>#{index + 1}</div>
-                               <div style={{ fontWeight: '600', fontSize: '16px', color: '#333', marginBottom: '8px' }}>
-                                 {meeting.title}
-                               </div>
-                               <div style={{ fontSize: '13px', color: '#666' }}>
-                                 📅 {meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt)}
-                               </div>
-                             </div>
+                        {filteredMeetings.map((meeting, index) => {
+                          const statusInfo = getStatusBadge(meeting.status);
+                          const meetingDate = meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt);
+                          return (
+                            <div key={meeting._id} className="mobile-meeting-card">
+                              <div className="mobile-meeting-card__header">
+                                <div>
+                                  <div className="mobile-meeting-card__index">#{index + 1}</div>
+                                  <div className="mobile-meeting-card__title">{meeting.title}</div>
+                                </div>
+                                <span className={`${statusInfo.className} chip--tight mobile-meeting-card__badge`}>
+                                  {statusInfo.label}
+                                </span>
+                              </div>
 
-                            {/* Invite Code */}
-                            <div style={{ marginBottom: '12px' }}>
-                              <span 
-                                onClick={() => copyInviteCode(meeting.inviteCode)}
-                                style={{
-                                  padding: '8px 12px',
-                                  borderRadius: '8px',
-                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                  color: 'white',
-                                  fontSize: '12px',
-                                  fontWeight: '600',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '6px'
-                                }}
-                              >
-                                🔑 {meeting.inviteCode}
-                              </span>
-                            </div>
+                              <div className="mobile-meeting-card__meta">
+                                <span>📅 {meetingDate}</span>
+                                {meeting.courseCode && (
+                                  <span className="chip chip--course chip--tight">
+                                    <span className="chip__label">{meeting.courseCode}</span>
+                                  </span>
+                                )}
+                              </div>
 
-                            {/* Action Buttons */}
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <div className="mobile-meeting-card__meta" style={{ gap: '0.6rem' }}>
+                                <button
+                                  type="button"
+                                  className="chip chip--invite chip--tight"
+                                  onClick={() => copyInviteCode(meeting.inviteCode)}
+                                >
+                                  <span className="chip__label">{meeting.inviteCode}</span>
+                                </button>
+                              </div>
+
+                              <div className="mobile-meeting-card__actions">
                               {meeting.status === 'SCHEDULED' && (
                                 <>
                                   <button 
@@ -1961,24 +1871,7 @@ const Dashboard: React.FC = () => {
                                       minWidth: '120px'
                                     }}
                                   >
-                                    ▶️ 시작
-                                  </button>
-                                  <button 
-                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                    style={{
-                                      padding: '8px 16px',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                                      color: 'white',
-                                      flex: 1,
-                                      minWidth: '120px'
-                                    }}
-                                  >
-                                    📊 상세
+                                    시작
                                   </button>
                                 </>
                               )}
@@ -2003,7 +1896,7 @@ const Dashboard: React.FC = () => {
                                       minWidth: '120px'
                                     }}
                                   >
-                                    🎥 참여
+                                    참여
                                   </button>
                                   <button 
                                     onClick={() => handleEndMeeting(meeting._id)}
@@ -2020,24 +1913,7 @@ const Dashboard: React.FC = () => {
                                       minWidth: '120px'
                                     }}
                                   >
-                                    ⛔ 종료
-                                  </button>
-                                  <button 
-                                    onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                    style={{
-                                      padding: '8px 16px',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                                      color: 'white',
-                                      flex: 1,
-                                      minWidth: '120px'
-                                    }}
-                                  >
-                                    📊 상세
+                                    종료
                                   </button>
                                 </>
                               )}
@@ -2051,17 +1927,18 @@ const Dashboard: React.FC = () => {
                                     cursor: 'pointer',
                                     fontSize: '13px',
                                     fontWeight: '600',
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
                                     color: 'white',
                                     width: '100%'
                                   }}
                                 >
-                                  📊 출석 현황
+                                  출석 현황
                                 </button>
                               )}
                             </div>
-                          </div>
-                        ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     </>
                   )}
