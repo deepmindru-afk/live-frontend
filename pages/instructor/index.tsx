@@ -46,6 +46,7 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
+  const [isSchedulePickerActive, setIsSchedulePickerActive] = useState(false);
   const [courseCode, setCourseCode] = useState('');
   const [classMaterialFile, setClassMaterialFile] = useState<File | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -455,7 +456,8 @@ const Dashboard: React.FC = () => {
 
           // Clear form
           setNewMeetingTitle('');
-          setMeetingSchedule('');
+      setMeetingSchedule('');
+      setIsSchedulePickerActive(false);
           setCourseCode('');
 
           
@@ -1295,16 +1297,41 @@ const Dashboard: React.FC = () => {
 
             {/* Schedule Panel */}
             <div className="action-panel schedule">
-              <h3>예약하기</h3>
-              <p>원하는 시간에 회의를 할 수 있습니다</p>
+              <div className="panel-header">
+                <div className="icon-wrapper">
+                  <Image
+                    src="/Icons/dashboard/scheduleMeet.svg"
+                    alt="예약하기"
+                    width={48}
+                    height={48}
+                  />
+                </div>
+                <div className="text-group">
+                  <h3>예약하기</h3>
+                  <p>원하는 시간에 회의를 할 수 있습니다</p>
+                </div>
+              </div>
               <div className="input-group">
                 <input
-                  type="datetime-local"
+                  type={isSchedulePickerActive || meetingSchedule ? 'datetime-local' : 'text'}
+                  lang="ko-KR"
+                  placeholder="연도-월-일  --:--"
                   value={meetingSchedule}
                   onChange={(e) => setMeetingSchedule(e.target.value)}
+                  onFocus={() => setIsSchedulePickerActive(true)}
+                  onBlur={(e) => {
+                    if (!e.target.value) {
+                      setIsSchedulePickerActive(false);
+                    }
+                  }}
                 />
-                <button onClick={handleCreateMeeting}>→</button>
               </div>
+              <button 
+                className="schedule-action-btn"
+                onClick={handleCreateMeeting}
+              >
+                예약하기
+              </button>
             </div>
           </div>
 

@@ -82,6 +82,44 @@
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.2);
 
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+
+      .icon-wrapper {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.22);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 20px rgba(74, 108, 247, 0.25);
+
+        img {
+          width: 32px;
+          height: 32px;
+        }
+      }
+
+      .text-group {
+        display: flex;
+        flex-direction: column;
+
+        h3 {
+          margin-bottom: 0.35rem;
+        }
+
+        p {
+          margin: 0;
+          font-size: 0.95rem;
+          color: rgba(255, 255, 255, 0.85);
+        }
+      }
+    }
+
     h3 {
       color: white;
       margin: 0 0 1rem 0;
@@ -118,20 +156,6 @@
         }
       }
 
-      button {
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        color: white;
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 1.2rem;
-
-        &:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-      }
     }
 
     &.create-room {
@@ -139,7 +163,54 @@
     }
 
     &.schedule {
-      background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(196, 181, 253, 0.3));
+      background: #212121;
+      border: 1px solid #3e3e3e;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+
+      .input-group {
+        input {
+          background: #211f2b;
+          border: 1px solid #3e3e3e;
+          color: #f5f5f5;
+          box-shadow: inset 0 1px 6px rgba(0, 0, 0, 0.35);
+
+          &::placeholder {
+            color: rgba(229, 229, 229, 0.6);
+          }
+
+          &:focus {
+            outline: none;
+            border-color: #6b4bff;
+            box-shadow: 0 0 0 3px rgba(107, 75, 255, 0.25);
+          }
+        }
+      }
+    }
+
+    .schedule-action-btn {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #451b5e 0%, #262a60 100%);
+      color: #f5f5f5;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 12px 24px rgba(38, 42, 96, 0.35);
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 32px rgba(69, 27, 94, 0.45);
+      }
+
+      &:active {
+        transform: translateY(0);
+        box-shadow: 0 10px 20px rgba(38, 42, 96, 0.4);
+      }
     }
   }
 }

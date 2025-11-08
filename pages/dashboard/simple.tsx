@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
@@ -28,6 +29,7 @@ const SimpleDashboard: React.FC = () => {
   const [newMeetingTitle, setNewMeetingTitle] = useState('');
   const [meetingSchedule, setMeetingSchedule] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isSchedulePickerActive, setIsSchedulePickerActive] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -111,6 +113,7 @@ const SimpleDashboard: React.FC = () => {
           setMeetings([...meetings, newMeeting]);
           setNewMeetingTitle('');
           setMeetingSchedule('');
+          setIsSchedulePickerActive(false);
           alert('Meeting created successfully! (Mock Service)');
           return;
         }
@@ -132,6 +135,7 @@ const SimpleDashboard: React.FC = () => {
       setMeetings([...meetings, newMeeting]);
       setNewMeetingTitle('');
       setMeetingSchedule('');
+      setIsSchedulePickerActive(false);
       alert('Meeting created successfully! (Mock Service)');
     } catch (error) {
       alert('Error creating meeting: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -305,16 +309,41 @@ const SimpleDashboard: React.FC = () => {
 
             {/* Schedule Panel */}
             <div className="action-panel schedule">
-              <h3>예약하기</h3>
-              <p>원하는 시간에 회의를 할 수 있습니다</p>
+              <div className="panel-header">
+                <div className="icon-wrapper">
+                  <Image
+                    src="/Icons/dashboard/scheduleMeet.svg"
+                    alt="예약하기"
+                    width={48}
+                    height={48}
+                  />
+                </div>
+                <div className="text-group">
+                  <h3>예약하기</h3>
+                  <p>원하는 시간에 회의를 할 수 있습니다</p>
+                </div>
+              </div>
               <div className="input-group">
                 <input
-                  type="datetime-local"
+                  type={isSchedulePickerActive || meetingSchedule ? 'datetime-local' : 'text'}
+                  lang="ko-KR"
+                  placeholder="연도-월-일  --:--"
                   value={meetingSchedule}
                   onChange={(e) => setMeetingSchedule(e.target.value)}
+                  onFocus={() => setIsSchedulePickerActive(true)}
+                  onBlur={(e) => {
+                    if (!e.target.value) {
+                      setIsSchedulePickerActive(false);
+                    }
+                  }}
                 />
-                <button onClick={handleCreateMeeting}>→</button>
               </div>
+              <button 
+                className="schedule-action-btn"
+                onClick={handleCreateMeeting}
+              >
+                예약하기
+              </button>
             </div>
           </div>
 
