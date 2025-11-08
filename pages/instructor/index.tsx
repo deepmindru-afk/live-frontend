@@ -68,6 +68,8 @@ const Dashboard: React.FC = () => {
   
   // Screen width for responsive design
   const [screenWidth, setScreenWidth] = useState<number>(0);
+  const PAGE_SIZE = 15;
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   useEffect(() => {
     // Set initial width
@@ -939,6 +941,31 @@ const Dashboard: React.FC = () => {
     return statusMatch && searchMatch;
   });
 
+  const totalItems = filteredMeetings.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const baseIndex = totalItems === 0 ? 0 : (safeCurrentPage - 1) * PAGE_SIZE;
+  const pageStart = totalItems === 0 ? 0 : baseIndex + 1;
+  const pageEnd = totalItems === 0 ? 0 : Math.min(totalItems, baseIndex + PAGE_SIZE);
+  const paginatedMeetings = filteredMeetings.slice(baseIndex, baseIndex + PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(prev => {
+      const nextPage = Math.min(Math.max(page, 1), totalPages);
+      return nextPage === prev ? prev : nextPage;
+    });
+  };
+
   const filteredVODs = vods.filter(vod =>
     !searchQuery || vod.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -957,6 +984,48 @@ const Dashboard: React.FC = () => {
         return { label: '종료', className: 'status-badge status-badge--ended' };
     }
   };
+
+  const pagination = totalItems > 0 ? (
+    <div className="pagination-bar">
+      <span className="pagination-info">
+        {pageStart}-{pageEnd} of {totalItems}
+      </span>
+      <div className="pagination-controls">
+        <button
+          type="button"
+          className={`pagination-button ${safeCurrentPage === 1 ? 'disabled' : ''}`}
+          onClick={() => handlePageChange(1)}
+          disabled={safeCurrentPage === 1}
+        >
+          «
+        </button>
+        <button
+          type="button"
+          className={`pagination-button ${safeCurrentPage === 1 ? 'disabled' : ''}`}
+          onClick={() => handlePageChange(safeCurrentPage - 1)}
+          disabled={safeCurrentPage === 1}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className={`pagination-button ${safeCurrentPage === totalPages ? 'disabled' : ''}`}
+          onClick={() => handlePageChange(safeCurrentPage + 1)}
+          disabled={safeCurrentPage === totalPages}
+        >
+          ›
+        </button>
+        <button
+          type="button"
+          className={`pagination-button ${safeCurrentPage === totalPages ? 'disabled' : ''}`}
+          onClick={() => handlePageChange(totalPages)}
+          disabled={safeCurrentPage === totalPages}
+        >
+          »
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   if (loading) {
     return (
@@ -1387,11 +1456,10 @@ const Dashboard: React.FC = () => {
                     fontWeight: '600',
                     transition: 'all 0.2s',
                     backgroundColor: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
-                    color: activeTab === 'LIVE' ? 'white' : '#666',
+                    background: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
+                    color: activeTab === 'LIVE' ? '#ffffff' : '#cbd5f5',
                   }}
                 >
-                  <span>📹</span>
                   <span>진행중</span>
                 </button>
                 <button
@@ -1408,11 +1476,10 @@ const Dashboard: React.FC = () => {
                     fontWeight: '600',
                     transition: 'all 0.2s',
                     backgroundColor: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
-                    color: activeTab === 'SCHEDULED' ? 'white' : '#666',
+                    background: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
+                    color: activeTab === 'SCHEDULED' ? '#ffffff' : '#cbd5f5',
                   }}
                 >
-                  <span>📅</span>
                   <span>예약됨</span>
                 </button>
                 <button
@@ -1429,11 +1496,10 @@ const Dashboard: React.FC = () => {
                     fontWeight: '600',
                     transition: 'all 0.2s',
                     backgroundColor: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
-                    color: activeTab === 'ENDED' ? 'white' : '#666',
+                    background: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
+                    color: activeTab === 'ENDED' ? '#ffffff' : '#cbd5f5',
                   }}
                 >
-                  <span>✅</span>
                   <span>종료됨</span>
                 </button>
                 <button
@@ -1450,11 +1516,10 @@ const Dashboard: React.FC = () => {
                     fontWeight: '600',
                     transition: 'all 0.2s',
                     backgroundColor: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
-                    color: activeTab === 'VOD' ? 'white' : '#666',
+                    background: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
+                    color: activeTab === 'VOD' ? '#ffffff' : '#cbd5f5',
                   }}
                 >
-                  <span>🎬</span>
                   <span>VOD</span>
                 </button>
               </div>
@@ -1518,7 +1583,7 @@ const Dashboard: React.FC = () => {
                   
                   {/* Meetings Table with Recording Status - Responsive */}
                   <div className="meetings-table" style={{ overflowX: 'auto' }}>
-                    {filteredMeetings.length > 0 ? (
+                    {totalItems > 0 ? (
                       <>
                         {/* Desktop Table */}
                         <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'none' : 'block' }}>
@@ -1533,7 +1598,7 @@ const Dashboard: React.FC = () => {
                                 </tr>
                               </thead>
                               <tbody>
-                                {filteredMeetings.map((meeting, index) => {
+                                {paginatedMeetings.map((meeting, index) => {
                                   const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
                                   const recordingClass = vodAccessDenied
                                     ? 'chip chip--muted'
@@ -1545,10 +1610,11 @@ const Dashboard: React.FC = () => {
                                     : hasRecording
                                       ? '기록됨'
                                       : '기록 없음';
+                                  const rowNumber = baseIndex + index + 1;
 
                                   return (
                                     <tr key={meeting._id}>
-                                      <td className="modern-table__cell modern-table__cell--number">{index + 1}</td>
+                                      <td className="modern-table__cell modern-table__cell--number">{rowNumber}</td>
                                       <td className="modern-table__cell modern-table__cell--title">
                                         <span className="meeting-title-text">{meeting.title}</span>
                                       </td>
@@ -1568,7 +1634,7 @@ const Dashboard: React.FC = () => {
 
                         {/* Mobile Card View */}
                         <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
-                          {filteredMeetings.map((meeting, index) => {
+                          {paginatedMeetings.map((meeting, index) => {
                             const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
                             const recordingClass = vodAccessDenied
                               ? 'chip chip--muted chip--tight mobile-meeting-card__badge'
@@ -1580,12 +1646,13 @@ const Dashboard: React.FC = () => {
                               : hasRecording
                                 ? '기록됨'
                                 : '기록 없음';
+                            const rowNumber = baseIndex + index + 1;
 
                             return (
                               <div key={meeting._id} className="mobile-meeting-card">
                                 <div className="mobile-meeting-card__header">
                                   <div>
-                                    <div className="mobile-meeting-card__index">#{index + 1}</div>
+                                    <div className="mobile-meeting-card__index">#{rowNumber}</div>
                                     <div className="mobile-meeting-card__title">{meeting.title}</div>
                                   </div>
                                   <span className={recordingClass}>{recordingLabel}</span>
@@ -1604,12 +1671,13 @@ const Dashboard: React.FC = () => {
                         <p>등록된 회의가 없습니다</p>
                       </div>
                     )}
+                    {pagination}
                   </div>
                 </div>
               ) : (
                 /* Meetings Table - Beautiful Design with SVG Icons */
                 <div className="meetings-table" style={{ overflowX: 'auto' }}>
-                  {filteredMeetings.length === 0 ? (
+                  {totalItems === 0 ? (
                     <div className="empty-state">
                       <div className="empty-icon">✗</div>
                       <p>등록된 회의가 없습니다</p>
@@ -1632,13 +1700,14 @@ const Dashboard: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody>
-                              {filteredMeetings.map((meeting, index) => {
+                              {paginatedMeetings.map((meeting, index) => {
                                 const statusInfo = getStatusBadge(meeting.status);
                                 const meetingDate = meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt);
+                                const rowNumber = baseIndex + index + 1;
 
                                 return (
                                   <tr key={meeting._id}>
-                                    <td className="modern-table__cell modern-table__cell--number">{index + 1}</td>
+                                    <td className="modern-table__cell modern-table__cell--number">{rowNumber}</td>
                                     <td className="modern-table__cell modern-table__cell--title">
                                       <span className="meeting-title-text">{meeting.title}</span>
                                     </td>
@@ -1819,14 +1888,15 @@ const Dashboard: React.FC = () => {
 
                       {/* Mobile Card View */}
                       <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
-                        {filteredMeetings.map((meeting, index) => {
+                        {paginatedMeetings.map((meeting, index) => {
                           const statusInfo = getStatusBadge(meeting.status);
                           const meetingDate = meeting.schedule ? formatDate(meeting.schedule) : formatDate(meeting.createdAt);
+                          const rowNumber = baseIndex + index + 1;
                           return (
                             <div key={meeting._id} className="mobile-meeting-card">
                               <div className="mobile-meeting-card__header">
                                 <div>
-                                  <div className="mobile-meeting-card__index">#{index + 1}</div>
+                                  <div className="mobile-meeting-card__index">#{rowNumber}</div>
                                   <div className="mobile-meeting-card__title">{meeting.title}</div>
                                 </div>
                                 <span className={`${statusInfo.className} chip--tight mobile-meeting-card__badge`}>
@@ -1890,7 +1960,7 @@ const Dashboard: React.FC = () => {
                                       cursor: 'pointer',
                                       fontSize: '13px',
                                       fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                      background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
                                       color: 'white',
                                       flex: 1,
                                       minWidth: '120px'
@@ -1942,6 +2012,7 @@ const Dashboard: React.FC = () => {
                       </div>
                     </>
                   )}
+                  {pagination}
                 </div>
               )}
             </div>
