@@ -1361,32 +1361,69 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     };
   }, [isMobile]);
 
+  const hasShownMobileErrorRef = useRef(false);
+
   // Mobile error handling
   useEffect(() => {
     if (!isMobile) return;
 
+    const ignoredErrorPatterns = [
+      'resizeobserver loop limit exceeded',
+      'script error.',
+      'cancelled animation frame',
+      'the operation was aborted',
+    ];
+
+    const shouldIgnoreError = (message?: string) => {
+      if (!message) return false;
+      const normalized = message.toLowerCase();
+      return ignoredErrorPatterns.some((pattern) => normalized.includes(pattern));
+    };
+
     const handleError = (event: ErrorEvent) => {
-      // Prevent default error handling for mobile
-      event.preventDefault();
+      const message =
+        event?.message ||
+        (event?.error && typeof event.error === 'object' && 'message' in event.error
+          ? String((event.error as Error).message || '')
+          : '') ||
+        '';
       
-      // Only show error alerts in development
+      if (shouldIgnoreError(message) || hasShownMobileErrorRef.current) {
+        return;
+      }
+
+      hasShownMobileErrorRef.current = true;
+      event.preventDefault();
+
       if (process.env.NODE_ENV === 'development') {
         Swal.fire({
           icon: 'error',
-          title: '모바일 오류',
-          text: '페이지를 새로고침하고 다시 시도해주세요. 문제가 계속되면 Chrome 또는 Safari 브라우저를 사용해보세요.',
-          confirmButtonText: '새로고침',
+          title: '모바일 환경 오류',
+          text: '페이지에서 일시적인 오류가 감지되었습니다. 필요하다면 새로고침 후 다시 시도해 주세요.',
+          confirmButtonText: '확인',
           confirmButtonColor: '#4A6CF7'
-        }).then(() => {
-          window.location.reload();
+        }).finally(() => {
+          hasShownMobileErrorRef.current = false;
         });
       } else {
-        // In production, just log the error
+        console.error('[LiveStream][mobile] runtime error', message, event.error);
+        hasShownMobileErrorRef.current = false;
       }
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Prevent default error handling for mobile
+      const reasonMessage =
+        typeof event?.reason === 'string'
+          ? event.reason
+          : event?.reason && typeof event.reason === 'object' && 'message' in event.reason
+          ? String((event.reason as Error).message || '')
+          : '';
+
+      if (shouldIgnoreError(reasonMessage) || hasShownMobileErrorRef.current) {
+        return;
+      }
+
+      hasShownMobileErrorRef.current = true;
       event.preventDefault();
       
       // Only show error alerts in development
@@ -1394,12 +1431,17 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         Swal.fire({
           icon: 'error',
           title: '연결 오류',
-          text: '인터넷 연결을 확인하고 다시 시도해주세요.',
+          text: reasonMessage
+            ? `인터넷 연결을 확인하고 다시 시도해주세요.\n오류: ${reasonMessage}`
+            : '인터넷 연결을 확인하고 다시 시도해주세요.',
           confirmButtonText: '확인',
           confirmButtonColor: '#4A6CF7'
+        }).finally(() => {
+          hasShownMobileErrorRef.current = false;
         });
       } else {
-        // In production, just log the error
+        console.error('[LiveStream][mobile] unhandled rejection', event.reason);
+        hasShownMobileErrorRef.current = false;
       }
     };
 
@@ -2510,6 +2552,55 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
+  const signalVodRefresh = (recordingId?: string | null) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const payload = {
+        meetingId: actualMeetingId,
+        recordingId: recordingId || null,
+        timestamp: Date.now()
+      };
+      window.localStorage.setItem('hrde_vod_sync', JSON.stringify(payload));
+      setTimeout(() => {
+        try {
+          window.localStorage.removeItem('hrde_vod_sync');
+        } catch (cleanupError) {
+        }
+      }, 1500);
+    } catch (error) {
+    }
+  };
+
+  const handleRecordingStarted = () => {
+    setIsRecording(true);
+    setRecordingStartTime(new Date());
+    setRecordingDuration(0);
+    broadcastRecordingAnnouncement('녹화가 시작되었습니다.', 'start');
+  };
+
+  const handleRecordingUploadComplete = (recordingId?: string | null) => {
+    setIsRecording(false);
+    setRecordingStartTime(null);
+    setRecordingDuration(0);
+    broadcastRecordingAnnouncement('녹화가 종료되었습니다.', 'stop');
+    signalVodRefresh(recordingId || null);
+  };
+
+  const handleRecordingError = (errorMessage: string) => {
+    setIsRecording(false);
+    setRecordingStartTime(null);
+    setRecordingDuration(0);
+    signalVodRefresh(null);
+    Swal.fire({
+      icon: 'error',
+      title: '녹화 업로드 실패',
+      text: errorMessage || '녹화 파일 업로드 중 문제가 발생했습니다. 다시 시도해주세요.'
+    });
+  };
+
   // handleRecordingToggle - Disabled for client-side recording
   // const handleRecordingToggle = async () => {
   //   // This function is no longer used - recording is handled by ClientSideRecording component
@@ -3381,8 +3472,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                       userId={currentUser?.id || currentUser?._id || 'unknown'}
                       meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                       meetingStatus={meetingStatus}
-                      onRecordingComplete={() => {}}
-                      onError={() => {}}
+                      onRecordingStart={handleRecordingStarted}
+                      onRecordingComplete={handleRecordingUploadComplete}
+                      onError={handleRecordingError}
                     />
                   </>
                 )}
@@ -3394,8 +3486,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     userId={currentUser?.id || currentUser?._id || 'unknown'}
                     meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                     meetingStatus={meetingStatus}
-                    onRecordingComplete={() => {}}
-                    onError={() => {}}
+                    onRecordingStart={handleRecordingStarted}
+                    onRecordingComplete={handleRecordingUploadComplete}
+                    onError={handleRecordingError}
                   />
                 )}
 
@@ -3562,8 +3655,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                         userId={currentUser?.id || currentUser?._id || 'unknown'}
                         meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                         meetingStatus={meetingStatus}
-                        onRecordingComplete={() => {}}
-                        onError={() => {}}
+                        onRecordingStart={handleRecordingStarted}
+                        onRecordingComplete={handleRecordingUploadComplete}
+                        onError={handleRecordingError}
                       />
                     )}
                   </div>

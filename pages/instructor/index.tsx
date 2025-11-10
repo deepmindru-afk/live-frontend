@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, testAuthStatus, forceLogin, showErrorAlert, getAuthToken } from '../../lib/simple-auth-handlers';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
-import { CREATE_MEETING, START_MEETING, END_MEETING, ROTATE_INVITE_CODE, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
+import { CREATE_MEETING, START_MEETING, END_MEETING, CreateMeetingInput, CreateMeetingResponse } from '../../apollo/meeting/mutations';
 import { GET_TUTOR_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { GET_VODS } from '../../apollo/vod/queries';
 import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_URL } from '../../apollo/vod/mutations';
@@ -29,13 +29,23 @@ interface Meeting {
 interface VOD {
   _id: string;
   title: string;
+  meetingId?: string;
+  source?: string;
+  storageKey?: string;
   size: number;
+  sizeBytes?: number;
   duration?: number;
+  durationSec?: number;
   url?: string;
   filePath?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
   status: 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
+  meeting?: {
+    _id?: string;
+    inviteCode?: string;
+  };
 }
 
 const Dashboard: React.FC = () => {
@@ -170,35 +180,6 @@ const Dashboard: React.FC = () => {
     };
   }, [showVODMenu]);
 
-  // Load VODs when VOD tab is selected
-  useEffect(() => {
-    if (activeTab === 'VOD') {
-      // Define loadVODs inline to avoid dependency issues
-      const fetchVODs = async () => {
-        try {
-          const result = await enhancedMakeGraphQLRequest(GET_VODS, {
-            input: { limit: 50, offset: 0 }
-          });
-          
-          if (result && result.getAllVods && result.getAllVods.vods) {
-            setVods(result.getAllVods.vods);
-          } else {
-            setVods([]);
-          }
-        } catch (error: any) {
-          // Handle role permission error gracefully
-          if (error && (error.message === 'ONLY_SPECIFIC_ROLES_ALLOWED' || error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || error.status === 403)) {
-            setVods([]);
-            setVodAccessDenied(true); // Mark that VOD access is denied
-            return;
-          }
-          setVods([]);
-        }
-      };
-      fetchVODs();
-    }
-  }, [activeTab]);
-
   const testBackendConnection = async () => {
     try {
       
@@ -241,6 +222,7 @@ const Dashboard: React.FC = () => {
       
       if (!token) {
         setMeetings([]);
+        await loadVODs();
         return;
       }
       
@@ -251,6 +233,7 @@ const Dashboard: React.FC = () => {
       
       if (!currentUserId) {
         setMeetings([]);
+        await loadVODs();
         return;
       }
       
@@ -269,6 +252,7 @@ const Dashboard: React.FC = () => {
           // Don't redirect to login - just show empty state
           // The actual GraphQL error handling happens in makeGraphQLRequest
           setMeetings([]);
+          await loadVODs();
           return;
         }
         
@@ -309,6 +293,7 @@ const Dashboard: React.FC = () => {
           });
           
           setMeetings(meetings);
+          await loadVODs();
           return;
         }
       } catch (graphqlError: any) {
@@ -331,11 +316,13 @@ const Dashboard: React.FC = () => {
       
       // If GraphQL fails, show empty state (no mock data to avoid showing all meetings)
       setMeetings([]);
+      await loadVODs();
       
     } catch (error: any) {
       
       // For ALL errors, just show empty state - don't redirect
       setMeetings([]);
+      await loadVODs();
     }
   };
 
@@ -717,43 +704,158 @@ const Dashboard: React.FC = () => {
   };
 
   // VOD Functions
-  const loadVODs = async () => {
+  const loadVODs = useCallback(async () => {
     try {
       const result = await enhancedMakeGraphQLRequest(GET_VODS, {
         input: { limit: 50, offset: 0 }
       });
-      
-      if (result && result.getAllVods && result.getAllVods.vods) {
+
+      if (result && result.getAllVods && Array.isArray(result.getAllVods.vods)) {
+        setVodAccessDenied(false);
         setVods(result.getAllVods.vods);
       } else {
+        setVodAccessDenied(false);
         setVods([]);
       }
     } catch (error: any) {
-      
-      // Check if it's a role permission error
-      if (error && (error.message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') || 
-                    error.message?.includes('Authentication') ||
-                    error.message?.includes('TOKEN_NOT_EXIST') ||
-                    error.status === 403)) {
-        setVods([]);
-        return; // Don't show error for permission issues
-      }
-      
-      // Check for 400 errors
-      if (error && error.status === 400) {
-        setVods([]);
-        return;
-      }
-      
-      // Check for 500 server errors
-      if (error && error.status === 500) {
+      const message: string | undefined = error?.message;
+      const status: number | undefined = error?.status;
+
+      if (
+        message?.includes('ONLY_SPECIFIC_ROLES_ALLOWED') ||
+        message?.includes('Only the meeting host can view recording info') ||
+        message?.includes('Authentication') ||
+        message?.includes('TOKEN_NOT_EXIST') ||
+        status === 403
+      ) {
+        setVodAccessDenied(true);
         setVods([]);
         return;
       }
-      
-      // For other errors, just show empty state
+
+      if (status === 400 || status === 500) {
+        setVodAccessDenied(false);
+        setVods([]);
+        return;
+      }
+
+      setVodAccessDenied(false);
       setVods([]);
     }
+  }, []);
+
+  // Load VODs when VOD tab is selected
+  useEffect(() => {
+    if (activeTab === 'VOD') {
+      loadVODs();
+    }
+  }, [activeTab, loadVODs]);
+
+  // Refresh VODs when recording completes (triggered via localStorage flag)
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const STORAGE_KEY = 'hrde_vod_sync';
+
+    const refreshFromStorage = () => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          return;
+        }
+
+        // Remove flag immediately to avoid duplicate reloads
+        window.localStorage.removeItem(STORAGE_KEY);
+
+        // Fire-and-forget refresh; await is unnecessary in event handler
+        loadVODs();
+      } catch (error) {
+      }
+    };
+
+    // Check immediately on mount (handles same-tab navigation return)
+    refreshFromStorage();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && event.newValue) {
+        refreshFromStorage();
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [loadVODs]);
+
+  const normalizeId = (id: unknown): string => {
+    if (id === null || id === undefined) return '';
+    if (typeof id === 'string') return id.trim();
+    return String(id).trim();
+  };
+
+  const getVodsForMeeting = (meetingId: string) => {
+    const normalizedMeetingId = normalizeId(meetingId);
+    if (!normalizedMeetingId) return [];
+
+    return vods.filter((vod) => {
+      const candidateIds = [
+        normalizeId(vod.meetingId),
+        normalizeId((vod as any)?.meeting_id),
+        normalizeId((vod as any)?.meetingID),
+        normalizeId(vod.meeting?._id),
+        normalizeId((vod as any)?.meeting?._id),
+        normalizeId((vod as any)?.meeting?.id),
+        normalizeId((vod as any)?.meeting?.meetingId),
+      ];
+      return candidateIds.some(
+        (candidateId) => candidateId && candidateId === normalizedMeetingId
+      );
+    });
+  };
+
+  const getRecordingBadge = (meetingId: string) => {
+    if (vodAccessDenied) {
+      return {
+        className: 'chip chip--muted',
+        label: '확인 불가'
+      };
+    }
+
+    const matchedVods = getVodsForMeeting(meetingId);
+
+    if (matchedVods.length === 0) {
+      return {
+        className: 'chip chip--danger',
+        label: '기록 없음'
+      };
+    }
+
+    const hasReadyVod = matchedVods.some((vod) => vod.status === 'READY');
+    const hasProcessingVod = matchedVods.some(
+      (vod) => vod.status === 'UPLOADING' || vod.status === 'PROCESSING'
+    );
+
+    if (hasReadyVod) {
+      return {
+        className: 'chip chip--success',
+        label: '기록됨'
+      };
+    }
+
+    if (hasProcessingVod) {
+      return {
+        className: 'chip chip--muted',
+        label: '처리중'
+      };
+    }
+
+    return {
+      className: 'chip chip--success',
+      label: '기록됨'
+    };
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1599,17 +1701,7 @@ const Dashboard: React.FC = () => {
                               </thead>
                               <tbody>
                                 {paginatedMeetings.map((meeting, index) => {
-                                  const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
-                                  const recordingClass = vodAccessDenied
-                                    ? 'chip chip--muted'
-                                    : hasRecording
-                                      ? 'chip chip--success'
-                                      : 'chip chip--danger';
-                                  const recordingLabel = vodAccessDenied
-                                    ? '확인 불가'
-                                    : hasRecording
-                                      ? '기록됨'
-                                      : '기록 없음';
+                                  const { className: recordingClass, label: recordingLabel } = getRecordingBadge(meeting._id);
                                   const rowNumber = baseIndex + index + 1;
 
                                   return (
@@ -1635,17 +1727,9 @@ const Dashboard: React.FC = () => {
                         {/* Mobile Card View */}
                         <div style={{ display: screenWidth <= 768 && screenWidth > 0 ? 'block' : 'none' }}>
                           {paginatedMeetings.map((meeting, index) => {
-                            const hasRecording = vods.some(vod => vod.meetingId === meeting._id);
-                            const recordingClass = vodAccessDenied
-                              ? 'chip chip--muted chip--tight mobile-meeting-card__badge'
-                              : hasRecording
-                                ? 'chip chip--success chip--tight mobile-meeting-card__badge'
-                                : 'chip chip--danger chip--tight mobile-meeting-card__badge';
-                            const recordingLabel = vodAccessDenied
-                              ? '확인 불가'
-                              : hasRecording
-                                ? '기록됨'
-                                : '기록 없음';
+                            const { className, label } = getRecordingBadge(meeting._id);
+                            const recordingClass = `${className} chip--tight mobile-meeting-card__badge`;
+                            const recordingLabel = label;
                             const rowNumber = baseIndex + index + 1;
 
                             return (

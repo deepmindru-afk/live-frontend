@@ -5,6 +5,7 @@ interface ClientSideRecordingProps {
   userId: string;
   meetingName?: string;
   meetingStatus?: string;
+  onRecordingStart?: () => void;
   onRecordingComplete?: (recordingUrl: string) => void;
   onError?: (error: string) => void;
 }
@@ -14,6 +15,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   userId,
   meetingName,
   meetingStatus,
+  onRecordingStart,
   onRecordingComplete,
   onError,
 }) => {
@@ -147,6 +149,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
 
       mediaRecorder.start(1000);
       setIsRecording(true);
+      onRecordingStart?.();
 
       combinedStream.getVideoTracks()[0].onended = () => {
         stopRecording();

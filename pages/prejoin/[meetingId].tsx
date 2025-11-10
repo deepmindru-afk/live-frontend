@@ -7,6 +7,7 @@ import { CREATE_MEETING, START_MEETING, JOIN_MEETING } from '../../apollo/meetin
 import { CreateMeetingInput, JoinParticipantInput } from '../../types/meeting';
 import { isValidObjectId, getInvalidIdErrorMessage } from '../../lib/validation';
 import styles from '../../styles/prejoin.module.css';
+import PrejoinMobile from '../../components/prejoin/PrejoinMobile';
 
 interface MeetingInfo {
   _id: string;
@@ -44,6 +45,7 @@ const PrejoinPage = () => {
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
   const [selectedSpeaker, setSelectedSpeaker] = useState<string>('');
+  const [isMobile, setIsMobile] = useState(false);
   
   // Media refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -52,6 +54,21 @@ const PrejoinPage = () => {
 
   useEffect(() => {
   }, [meetingId, isLoading, meetingInfo]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   // Load available devices
   const loadAvailableDevices = async () => {
@@ -289,6 +306,25 @@ const PrejoinPage = () => {
       }
     };
   }, [localStream]);
+
+  const handleCameraSelect = (deviceId: string) => {
+    setSelectedCamera(deviceId);
+    if (localStream) {
+      switchCamera(deviceId);
+    }
+  };
+
+  const handleMicrophoneSelect = (deviceId: string) => {
+    setSelectedMicrophone(deviceId);
+    if (localStream) {
+      switchMicrophone(deviceId);
+    }
+  };
+
+  const handleSpeakerSelect = (deviceId: string) => {
+    setSelectedSpeaker(deviceId);
+    switchSpeaker(deviceId);
+  };
 
   // Ensure video element is properly set up
   useEffect(() => {
@@ -750,6 +786,41 @@ const PrejoinPage = () => {
     );
   }
 
+  const resolvedMeetingId = Array.isArray(meetingId) ? meetingId[0] : meetingId ?? '';
+
+  if (isMobile) {
+    return (
+      <>
+        <PrejoinMobile
+          meetingTitle={meetingInfo.title}
+          meetingId={resolvedMeetingId}
+          inviteCode={meetingInfo.inviteCode}
+          isVideoOn={isVideoOn}
+          isMicOn={isMicOn}
+          isSpeakerOn={isSpeakerOn}
+          isTestingDevices={isTestingDevices}
+          isJoining={isJoining}
+          deviceError={deviceError}
+          joinError={joinError}
+          localStream={localStream}
+          availableDevices={availableDevices}
+          selectedCamera={selectedCamera}
+          selectedMicrophone={selectedMicrophone}
+          selectedSpeaker={selectedSpeaker}
+          videoRef={videoRef}
+          onToggleVideo={toggleVideo}
+          onToggleMic={toggleMic}
+          onRefresh={handleRefresh}
+          onJoin={handleJoinMeeting}
+          onSelectCamera={handleCameraSelect}
+          onSelectMicrophone={handleMicrophoneSelect}
+          onSelectSpeaker={handleSpeakerSelect}
+        />
+        <audio ref={audioRef} style={{ display: 'none' }} />
+      </>
+    );
+  }
+
   return (
     <div className={styles.prejoinPage}>
       <div className={styles.backgroundBlur} />
@@ -860,13 +931,7 @@ const PrejoinPage = () => {
                   <span className={styles.deviceLabel}>카메라</span>
                   <select
                     value={selectedCamera}
-                    onChange={(e) => {
-                      const deviceId = e.target.value;
-                      setSelectedCamera(deviceId);
-                      if (localStream) {
-                        switchCamera(deviceId);
-                      }
-                    }}
+                    onChange={(e) => handleCameraSelect(e.target.value)}
                     className={styles.deviceSelect}
                   >
                     {availableDevices.cameras.map((camera, index) => (
@@ -883,13 +948,7 @@ const PrejoinPage = () => {
                   <span className={styles.deviceLabel}>마이크</span>
                   <select
                     value={selectedMicrophone}
-                    onChange={(e) => {
-                      const deviceId = e.target.value;
-                      setSelectedMicrophone(deviceId);
-                      if (localStream) {
-                        switchMicrophone(deviceId);
-                      }
-                    }}
+                    onChange={(e) => handleMicrophoneSelect(e.target.value)}
                     className={styles.deviceSelect}
                   >
                     {availableDevices.microphones.map((mic, index) => (
@@ -906,10 +965,7 @@ const PrejoinPage = () => {
                   <span className={styles.deviceLabel}>스피커</span>
                   <select
                     value={selectedSpeaker}
-                    onChange={(e) => {
-                      const deviceId = e.target.value;
-                      switchSpeaker(deviceId);
-                    }}
+                    onChange={(e) => handleSpeakerSelect(e.target.value)}
                     className={styles.deviceSelect}
                   >
                     {availableDevices.speakers.map((speaker, index) => (

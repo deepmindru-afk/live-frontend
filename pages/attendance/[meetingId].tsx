@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
@@ -36,6 +36,11 @@ interface ParticipantAttendance {
           durationSec: number;
         }>;
 }
+
+type AggregatedParticipantAttendance = ParticipantAttendance & {
+  aggregatedDurationSec: number;
+  aggregatedRecords: ParticipantAttendance[];
+};
 
 interface MeetingAttendance {
   meetingId: string;
@@ -210,6 +215,10 @@ const AttendancePage: React.FC = () => {
   // ✅ Calculate actual attendance duration from joinedAt and leftAt times
   // CRITICAL: Always calculate from participant's joinedAt/leftAt ONLY - never use sessions or totalTime
   const calculateParticipantDuration = (participant: ParticipantAttendance): number => {
+    const aggregatedDuration = (participant as Partial<AggregatedParticipantAttendance>).aggregatedDurationSec;
+    if (typeof aggregatedDuration === 'number' && aggregatedDuration >= 0) {
+      return aggregatedDuration;
+    }
     // ENFORCE: We ONLY use participant.joinedAt and participant.leftAt - nothing else!
     // Sessions and totalTime are often incorrect, so we completely ignore them
     
@@ -375,9 +384,150 @@ const AttendancePage: React.FC = () => {
     return 0;
   };
 
-  const filteredParticipants = attendance?.participants.filter(participant =>
+  const aggregatedParticipants = useMemo(() => {
+    if (!attendance?.participants || attendance.participants.length === 0) {
+      return [] as AggregatedParticipantAttendance[];
+    }
+
+    const parseDateTime = (
+      value: ParticipantAttendance['joinedAt'] | ParticipantAttendance['leftAt'] | Date | number | string | null | undefined
+    ) => {
+      if (value === null || value === undefined) return null;
+      const rawValue = value as unknown;
+      if (typeof rawValue === 'number') return rawValue;
+      if (typeof rawValue === 'string') {
+        if (/^\d+$/.test(rawValue)) {
+          const parsed = parseInt(rawValue, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        const parsed = new Date(rawValue).getTime();
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      if (rawValue instanceof Date) {
+        return rawValue.getTime();
+      }
+      const parsed = new Date(rawValue as any).getTime();
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getAggregationKey = (participant: ParticipantAttendance) => {
+      if ((participant as any).userId) {
+        return String((participant as any).userId);
+      }
+      const email = participant.email;
+      if (email) {
+        return email.toLowerCase();
+      }
+      if (participant.firstName || participant.lastName) {
+        return `${(participant.firstName || '').toLowerCase()}|${(participant.lastName || '').toLowerCase()}`;
+      }
+      return participant.displayName.toLowerCase();
+    };
+
+    const aggregator = new Map<string, AggregatedParticipantAttendance>();
+
+    attendance.participants.forEach((participant) => {
+      const key = getAggregationKey(participant);
+      const sessionDuration = calculateParticipantDuration(participant);
+      const participantSessions = participant.sessions ? [...participant.sessions] : [];
+
+      if (!aggregator.has(key)) {
+        const initialEntry: AggregatedParticipantAttendance = {
+          ...participant,
+          aggregatedDurationSec: Math.max(sessionDuration, 0),
+          aggregatedRecords: [participant],
+          totalTime: Math.max(sessionDuration, 0),
+          sessionCount: 1,
+          sessions: participantSessions,
+        };
+        aggregator.set(key, initialEntry);
+        return;
+      }
+
+      const existing = aggregator.get(key)!;
+      existing.aggregatedDurationSec = Math.max(existing.aggregatedDurationSec + Math.max(sessionDuration, 0), 0);
+      existing.totalTime = Math.max((existing.totalTime || 0) + Math.max(sessionDuration, 0), 0);
+      existing.aggregatedRecords = [...existing.aggregatedRecords, participant];
+      existing.sessions = participantSessions.length
+        ? [...(existing.sessions || []), ...participantSessions]
+        : existing.sessions;
+    });
+
+    const statusPriority: Record<string, number> = {
+      ONLINE: 3,
+      PRESENT: 2,
+      LEFT: 1,
+    };
+    const meetingEndedTimestamp = parseDateTime(meeting?.endedAt);
+
+    return Array.from(aggregator.values()).map((aggregatedParticipant) => {
+      const earliestJoin = aggregatedParticipant.aggregatedRecords.reduce<{
+        timestamp: number;
+        original: ParticipantAttendance['joinedAt'];
+      } | null>((acc, record) => {
+        const joinTs = parseDateTime(record.joinedAt);
+        if (joinTs === null) return acc;
+        if (!acc || joinTs < acc.timestamp) {
+          return { timestamp: joinTs, original: record.joinedAt };
+        }
+        return acc;
+      }, null);
+
+      const latestLeft = aggregatedParticipant.aggregatedRecords.reduce<{
+        timestamp: number;
+        original: ParticipantAttendance['leftAt'];
+      } | null>((acc, record) => {
+        const leftTs = parseDateTime(record.leftAt);
+        if (leftTs === null) return acc;
+        if (!acc || leftTs > acc.timestamp) {
+          return { timestamp: leftTs, original: record.leftAt };
+        }
+        return acc;
+      }, null);
+
+      const anyOnline = aggregatedParticipant.aggregatedRecords.some(record => record.isCurrentlyOnline);
+      const resolvedStatus = aggregatedParticipant.aggregatedRecords.reduce<string | undefined>((current, record) => {
+        if (!record.status) return current;
+        if (!current) return record.status;
+        const currentPriority = statusPriority[current] ?? 0;
+        const recordPriority = statusPriority[record.status] ?? 0;
+        return recordPriority >= currentPriority ? record.status : current;
+      }, aggregatedParticipant.status);
+
+      const resolvedAvatar = aggregatedParticipant.aggregatedRecords.find(record => record.avatarUrl)?.avatarUrl ?? aggregatedParticipant.avatarUrl;
+      const resolvedOrganization = aggregatedParticipant.aggregatedRecords.find(record => record.organization)?.organization ?? aggregatedParticipant.organization;
+      const resolvedDepartment = aggregatedParticipant.aggregatedRecords.find(record => record.department)?.department ?? aggregatedParticipant.department;
+      const resolvedMicState = aggregatedParticipant.aggregatedRecords.find(record => record.micState)?.micState ?? aggregatedParticipant.micState;
+      const resolvedCameraState = aggregatedParticipant.aggregatedRecords.find(record => record.cameraState)?.cameraState ?? aggregatedParticipant.cameraState;
+      const handRaised = aggregatedParticipant.aggregatedRecords.some(record => record.hasHandRaised);
+      const finalStatus = anyOnline ? 'ONLINE' : (resolvedStatus ?? aggregatedParticipant.status ?? 'LEFT');
+      const resolvedLeftAt =
+        anyOnline
+          ? undefined
+          : latestLeft?.original ??
+            aggregatedParticipant.leftAt ??
+            (meetingEndedTimestamp !== null ? meeting?.endedAt : undefined);
+
+      return {
+        ...aggregatedParticipant,
+        joinedAt: earliestJoin?.original ?? aggregatedParticipant.joinedAt,
+        leftAt: resolvedLeftAt,
+        isCurrentlyOnline: anyOnline,
+        status: finalStatus,
+        sessionCount: aggregatedParticipant.aggregatedRecords.length,
+        avatarUrl: resolvedAvatar,
+        organization: resolvedOrganization,
+        department: resolvedDepartment,
+        micState: resolvedMicState,
+        cameraState: resolvedCameraState,
+        hasHandRaised: handRaised,
+      } as AggregatedParticipantAttendance;
+    });
+  }, [attendance, meeting]);
+
+  const filteredParticipants = aggregatedParticipants.filter(participant =>
     participant.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  );
 
   const totalMeetingDurationSeconds = getTotalMeetingDuration();
   const totalMeetingMinutes = totalMeetingDurationSeconds > 0 ? Math.round(totalMeetingDurationSeconds / 60) : 0;
@@ -385,7 +535,7 @@ const AttendancePage: React.FC = () => {
   const attendanceRate = Math.min(Math.max(rawAttendanceRate, 0), 100);
   const presentCount = attendance?.presentParticipants ?? 0;
   const absentCount = attendance?.absentParticipants ?? 0;
-  const totalParticipants = attendance?.totalParticipants ?? attendance?.participants.length ?? 0;
+  const totalParticipants = attendance?.totalParticipants ?? aggregatedParticipants.length ?? 0;
   const scheduleStart = meeting?.actualStartAt || meeting?.scheduledFor || meeting?.createdAt;
   const scheduleEnd = meeting?.endedAt;
   const averageAttendanceLabel = formatDurationShort(attendance?.averageAttendanceTime ?? 0);
@@ -439,7 +589,7 @@ const AttendancePage: React.FC = () => {
     
     const csvContent = [
       ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '손들기'],
-      ...attendance.participants.map((participant, index) => {
+      ...aggregatedParticipants.map((participant, index) => {
         // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
         const actualDuration = calculateParticipantDuration(participant);
         const cappedTime = getCappedAttendanceTime(actualDuration, totalMeetingDuration);
@@ -850,7 +1000,7 @@ const AttendancePage: React.FC = () => {
                     <strong>총 참여 시간:</strong> {formatDuration(selectedCappedTime)}
                   </div>
                   <div style={{ marginBottom: '10px' }}>
-                    <strong>재접속 횟수:</strong> {selectedParticipant.sessionCount}회
+                    <strong>재접속 횟수:</strong> {Math.max((selectedParticipant.sessionCount ?? 1) - 1, 0)}회
                   </div>
                   <div style={{ marginBottom: '10px' }}>
                     <strong>출석률:</strong> 

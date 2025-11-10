@@ -468,10 +468,19 @@ const MemberDashboard: React.FC = () => {
   const fetchParticipantAttendance = async (meetingId: string) => {
     try {
       setLoadingAttendance(true);
-      const result = await makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
-        meetingId: meetingId
+      const [participantResult, meetingResult] = await Promise.all([
+        makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
+          meetingId: meetingId
+        }),
+        makeGraphQLRequest(GET_MEETING_BY_ID, {
+          meetingId: meetingId
+        })
+      ]);
+
+      setParticipantData({
+        participant: participantResult?.getParticipantByUserAndMeeting ?? null,
+        meeting: meetingResult?.getMeetingById ?? null
       });
-      setParticipantData(result);
     } catch (error: any) {
       await showErrorAlert('Error', 'Failed to load attendance data');
     } finally {
@@ -1158,11 +1167,91 @@ const MemberDashboard: React.FC = () => {
                   <div className="attendance-loading-icon">⏳</div>
                   <p className="attendance-loading-text">출석 정보를 불러오는 중...</p>
                 </div>
-              ) : participantData?.getParticipantByUserAndMeeting ? (() => {
-                const participantTime = participantData.getParticipantByUserAndMeeting.loginInfo?.totalDurationMinutes || 0;
-                const meetingDuration = selectedMeeting.duration || 60;
-                const attendancePercentage = meetingDuration > 0 ? Math.min(Math.round((participantTime / meetingDuration) * 100), 100) : 0;
-                const meetingDate = selectedMeeting.schedule || selectedMeeting.createdAt;
+              ) : participantData?.participant ? (() => {
+                const participantInfo = participantData.participant;
+                const meetingInfo = participantData.meeting || selectedMeeting;
+
+                const parseDateTime = (value: any): number | null => {
+                  if (value === null || value === undefined) return null;
+                  if (typeof value === 'number') return value;
+                  if (typeof value === 'string') {
+                    if (/^\d+$/.test(value)) {
+                      const numeric = parseInt(value, 10);
+                      return Number.isFinite(numeric) ? numeric : null;
+                    }
+                    const parsed = new Date(value).getTime();
+                    return Number.isFinite(parsed) ? parsed : null;
+                  }
+                  if (value instanceof Date) {
+                    return value.getTime();
+                  }
+                  const parsed = new Date(value as any).getTime();
+                  return Number.isFinite(parsed) ? parsed : null;
+                };
+
+                const calculateMeetingDurationSeconds = () => {
+                  if (!meetingInfo) return 0;
+                  const start = parseDateTime(meetingInfo.actualStartAt);
+                  const end = parseDateTime(meetingInfo.endedAt);
+                  if (start !== null && end !== null && end > start) {
+                    return Math.floor((end - start) / 1000);
+                  }
+                  const scheduledMinutes = meetingInfo.durationMin || meetingInfo.duration || selectedMeeting.duration;
+                  if (scheduledMinutes) {
+                    return Math.max(Math.floor(scheduledMinutes * 60), 0);
+                  }
+                  return 0;
+                };
+
+                const calculateParticipantDurationSeconds = () => {
+                  const sessions = participantInfo?.loginInfo?.sessions || [];
+                  if (!Array.isArray(sessions) || sessions.length === 0) {
+                    const fallbackMinutes = participantInfo?.loginInfo?.totalDurationMinutes || 0;
+                    return Math.max(Math.floor(fallbackMinutes * 60), 0);
+                  }
+
+                  const meetingEndedAt = parseDateTime(meetingInfo?.endedAt);
+                  const meetingStatus = meetingInfo?.status || selectedMeeting.status;
+                  let totalSeconds = 0;
+
+                  sessions.forEach((session: any) => {
+                    const joined = parseDateTime(session?.joinedAt);
+                    if (joined === null) return;
+
+                    let left = parseDateTime(session?.leftAt);
+                    if (left === null) {
+                      if (meetingEndedAt !== null) {
+                        left = meetingEndedAt;
+                      } else if (meetingStatus !== 'ENDED') {
+                        left = Date.now();
+                      }
+                    }
+
+                    if (left !== null && left > joined) {
+                      const duration = Math.floor((left - joined) / 1000);
+                      if (duration > 0 && duration < 86400) {
+                        totalSeconds += duration;
+                      }
+                    }
+                  });
+
+                  if (totalSeconds === 0) {
+                    const fallbackMinutes = participantInfo?.loginInfo?.totalDurationMinutes || 0;
+                    totalSeconds = Math.max(Math.floor(fallbackMinutes * 60), 0);
+                  }
+
+                  return totalSeconds;
+                };
+
+                const meetingDurationSeconds = calculateMeetingDurationSeconds();
+                const participantDurationSeconds = calculateParticipantDurationSeconds();
+                const fallbackMeetingSeconds = selectedMeeting.duration ? selectedMeeting.duration * 60 : 0;
+                const safeMeetingDurationSeconds = meetingDurationSeconds > 0 ? meetingDurationSeconds : fallbackMeetingSeconds;
+                const attendancePercentage = safeMeetingDurationSeconds > 0
+                  ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
+                  : 0;
+
+                const meetingDate = (meetingInfo && (meetingInfo.actualStartAt || meetingInfo.scheduledFor)) || selectedMeeting.schedule || selectedMeeting.createdAt;
 
                 return (
                   <div className="attendance-card">
@@ -1173,11 +1262,11 @@ const MemberDashboard: React.FC = () => {
                     <div className="attendance-stats">
                       <div className="attendance-row">
                         <span>총 미팅시간</span>
-                        <strong>{meetingDuration} 분</strong>
+                        <strong>{formatDuration(safeMeetingDurationSeconds)}</strong>
                       </div>
                       <div className="attendance-row">
                         <span>참석시간</span>
-                        <strong>{participantTime} 분</strong>
+                        <strong>{formatDuration(participantDurationSeconds)}</strong>
                       </div>
                       <div className="attendance-row">
                         <span>출석률</span>
