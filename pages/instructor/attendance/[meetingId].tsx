@@ -297,10 +297,12 @@ const MeetingAttendanceDetail: React.FC = () => {
     }
   };
 
-  const calculateAttendancePercentage = (participantTime: number, totalMeetingTime: number) => {
-    if (totalMeetingTime <= 0) return 0;
-    return Math.round((participantTime / totalMeetingTime) * 100);
-  };
+const calculateAttendancePercentage = (participantTime: number, totalMeetingTime: number) => {
+  if (totalMeetingTime <= 0) return 0;
+  const safeParticipantTime = Math.max(0, participantTime);
+  const percentage = Math.round((safeParticipantTime / totalMeetingTime) * 100);
+  return Math.min(percentage, 100);
+};
 
   const getTotalMeetingDuration = () => {
     if (!meeting) return 0;
@@ -320,6 +322,82 @@ const MeetingAttendanceDetail: React.FC = () => {
     return 0;
   };
 
+const parseDateTime = (value: string | number | Date | null | undefined): number | null => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  if (typeof value === 'string') {
+    if (/^\d+$/.test(value)) {
+      const numeric = parseInt(value, 10);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  const fallback = Date.parse(value as unknown as string);
+  return Number.isNaN(fallback) ? null : fallback;
+};
+
+const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, totalMeetingTime: number) => {
+  const joinedAtMs = parseDateTime(participant.joinedAt);
+
+  let leftAtMs = parseDateTime(participant.leftAt);
+
+  if (!leftAtMs) {
+    if (meeting?.status === 'ENDED' || meeting?.status === 'END') {
+      leftAtMs = parseDateTime(meeting?.endedAt);
+    } else if (meeting?.status === 'LIVE' || meeting?.status === 'STARTED') {
+      leftAtMs = Date.now();
+    }
+  }
+
+  let durationFromTimeline = 0;
+  if (joinedAtMs && leftAtMs && leftAtMs > joinedAtMs) {
+    durationFromTimeline = Math.floor((leftAtMs - joinedAtMs) / 1000);
+  }
+
+  const sessionsDuration = Array.isArray(participant.sessions)
+    ? participant.sessions.reduce((acc, session) => {
+        if (!session) return acc;
+
+        if (typeof session.durationSec === 'number' && session.durationSec > 0) {
+          return acc + session.durationSec;
+        }
+
+        const sessionJoin = parseDateTime(session.joinedAt);
+        const sessionLeft = parseDateTime(session.leftAt);
+
+        if (sessionJoin && sessionLeft && sessionLeft > sessionJoin) {
+          return acc + Math.floor((sessionLeft - sessionJoin) / 1000);
+        }
+
+        return acc;
+      }, 0)
+    : 0;
+
+  const reportedTotal = typeof participant.totalTime === 'number' && participant.totalTime > 0
+    ? participant.totalTime
+    : 0;
+
+  let resolved = Math.max(reportedTotal, sessionsDuration, durationFromTimeline);
+
+  if (totalMeetingTime > 0) {
+    resolved = Math.min(resolved, totalMeetingTime);
+  }
+
+  return Math.max(0, resolved);
+};
+
   const filteredParticipants = attendance?.participants.filter(participant =>
     participant.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (participant.email && participant.email.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -338,7 +416,8 @@ const MeetingAttendanceDetail: React.FC = () => {
     const csvContent = [
       ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
       ...attendance.participants.map((participant, index) => {
-        const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+        const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
+        const attendancePercentage = calculateAttendancePercentage(attendanceSeconds, totalMeetingDuration);
         return [
           index + 1,
           participant.displayName,
@@ -348,7 +427,7 @@ const MeetingAttendanceDetail: React.FC = () => {
           participant.systemRole || '',
           formatTime(participant.joinedAt),
           participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
-          formatDuration(participant.totalTime),
+          formatDuration(attendanceSeconds),
           participant.sessionCount,
           attendancePercentage,
           participant.status === 'ONLINE' ? '온라인' : 
@@ -665,7 +744,8 @@ const MeetingAttendanceDetail: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredParticipants.map((participant, index) => {
-                    const attendancePercentage = calculateAttendancePercentage(participant.totalTime, totalMeetingDuration);
+                    const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
+                    const attendancePercentage = calculateAttendancePercentage(attendanceSeconds, totalMeetingDuration);
                     
                     return (
                       <motion.tr 
@@ -721,7 +801,7 @@ const MeetingAttendanceDetail: React.FC = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDuration(participant.totalTime)}
+                          {formatDuration(attendanceSeconds)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">

@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert } from '../../lib/simple-auth-handlers';
-import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
+import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert, getAuthToken, makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS, GET_ALL_MEETINGS } from '../../apollo/meeting/queries';
 import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
 import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING } from '../../apollo/livestream/queries';
@@ -53,6 +52,7 @@ const MemberDashboard: React.FC = () => {
   const [showAttendancePopup, setShowAttendancePopup] = useState(false);
   const [participantData, setParticipantData] = useState<any>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [downloadingMeetingId, setDownloadingMeetingId] = useState<string | null>(null);
 
   const heroSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -494,6 +494,89 @@ const MemberDashboard: React.FC = () => {
     await fetchParticipantAttendance(meeting._id);
   };
 
+  const sanitizeFileName = (name: string) => {
+    return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'meeting';
+  };
+
+  const getFileNameFromHeaders = (contentDisposition: string | null, fallback: string) => {
+    if (!contentDisposition) {
+      return fallback;
+    }
+
+    try {
+      const filenameStarMatch = contentDisposition.match(/filename\*\s*=\s*[^']*'[^']*'([^;]+)/i);
+      if (filenameStarMatch && filenameStarMatch[1]) {
+        return sanitizeFileName(decodeURIComponent(filenameStarMatch[1]));
+      }
+
+      const filenameMatch = contentDisposition.match(/filename\s*=\s*"?(?:UTF-8'')?([^";]+)"?/i);
+      if (filenameMatch && filenameMatch[1]) {
+        return sanitizeFileName(decodeURIComponent(filenameMatch[1]));
+      }
+    } catch (error) {
+    }
+
+    return fallback;
+  };
+
+  const handleDownloadMeetingFile = async (meeting: Meeting) => {
+    if (downloadingMeetingId) {
+      return;
+    }
+
+    setDownloadingMeetingId(meeting._id);
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${baseUrl}/meeting-materials/${meeting._id}`, {
+        method: 'GET',
+        headers
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          await Swal.fire({
+            icon: 'info',
+            title: '자료 없음',
+            text: '이 미팅에 업로드된 자료가 없습니다.',
+            confirmButtonText: '확인'
+          });
+          return;
+        }
+
+        throw new Error(`Failed to download material (status ${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const contentDisposition = response.headers.get('Content-Disposition') || response.headers.get('content-disposition');
+      const inferredFileName = getFileNameFromHeaders(contentDisposition, `${sanitizeFileName(meeting.title)}_자료`);
+
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = inferredFileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      await Swal.fire({
+        icon: 'error',
+        title: '다운로드 실패',
+        text: '미팅 자료를 다운로드하는 중 오류가 발생했습니다.',
+        confirmButtonText: '확인'
+      });
+    } finally {
+      setDownloadingMeetingId(null);
+    }
+  };
+
   const closeAttendancePopup = () => {
     setShowAttendancePopup(false);
     setSelectedMeeting(null);
@@ -716,11 +799,13 @@ const MemberDashboard: React.FC = () => {
                           {meeting.status === 'STARTED' ? '진행중' : 
                            meeting.status === 'SCHEDULED' ? '예약' : '종료'}
                         </span>
-                        {meeting.status === 'SCHEDULED' && (
+                        {(meeting.status === 'SCHEDULED' || meeting.status === 'STARTED') && (
                           <button
                             type="button"
                             className="card-icon-button"
                             aria-label="미팅 자료 다운로드"
+                            onClick={() => handleDownloadMeetingFile(meeting)}
+                            disabled={downloadingMeetingId === meeting._id}
                           >
                             <svg
                               width="18"
