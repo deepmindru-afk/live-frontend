@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Swal from 'sweetalert2';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
@@ -15,6 +15,12 @@ interface MeetingInfo {
   status: string;
   inviteCode: string;
 }
+
+type DeviceCollections = {
+  cameras: MediaDeviceInfo[];
+  microphones: MediaDeviceInfo[];
+  speakers: MediaDeviceInfo[];
+};
 
 const PrejoinPage = () => {
   const router = useRouter();
@@ -33,11 +39,7 @@ const PrejoinPage = () => {
   const [isTestingDevices, setIsTestingDevices] = useState(false);
   
   // Device selection states
-  const [availableDevices, setAvailableDevices] = useState<{
-    cameras: MediaDeviceInfo[];
-    microphones: MediaDeviceInfo[];
-    speakers: MediaDeviceInfo[];
-  }>({
+  const [availableDevices, setAvailableDevices] = useState<DeviceCollections>({
     cameras: [],
     microphones: [],
     speakers: []
@@ -46,11 +48,79 @@ const PrejoinPage = () => {
   const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
   const [selectedSpeaker, setSelectedSpeaker] = useState<string>('');
   const [isMobile, setIsMobile] = useState(false);
+  const [hasRequestedDevices, setHasRequestedDevices] = useState(false);
+  const [cachedDeviceLabels, setCachedDeviceLabels] = useState<{
+    camera: string;
+    microphone: string;
+    speaker: string;
+  }>({
+    camera: '',
+    microphone: '',
+    speaker: ''
+  });
   
   // Media refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
+  const createMockDevice = (deviceId: string, label: string, kind: MediaDeviceKind): MediaDeviceInfo => ({
+    deviceId,
+    groupId: '',
+    kind,
+    label,
+    toJSON: () => ({
+      deviceId,
+      groupId: '',
+      kind,
+      label
+    })
+  } as MediaDeviceInfo);
+
+  const syncSelectionWithStorage = useCallback((
+    key: 'camera' | 'microphone' | 'speaker',
+    list: MediaDeviceInfo[],
+    currentId: string,
+    setSelection: React.Dispatch<React.SetStateAction<string>>
+  ): string => {
+    if (typeof window === 'undefined') {
+      return currentId;
+    }
+
+    if (list.length === 0) {
+      sessionStorage.removeItem(`prejoin_${key}_device_id`);
+      sessionStorage.removeItem(`prejoin_${key}_label`);
+      setCachedDeviceLabels(prev => ({
+        ...prev,
+        [key]: ''
+      }));
+      return '';
+    }
+
+    let resolvedId = currentId;
+
+    if (!resolvedId || !list.some(device => device.deviceId === resolvedId)) {
+      resolvedId = list[0].deviceId;
+      setSelection(resolvedId);
+    }
+
+    const resolvedDevice =
+      list.find(device => device.deviceId === resolvedId) ?? list[0];
+    const fallbackPrefix =
+      key === 'camera' ? 'Camera' : key === 'microphone' ? 'Microphone' : 'Speaker';
+    const resolvedLabel =
+      resolvedDevice.label ||
+      `${fallbackPrefix} ${list.findIndex(device => device.deviceId === resolvedDevice.deviceId) + 1}`;
+
+    sessionStorage.setItem(`prejoin_${key}_device_id`, resolvedId);
+    sessionStorage.setItem(`prejoin_${key}_label`, resolvedLabel);
+    setCachedDeviceLabels(prev => ({
+      ...prev,
+      [key]: resolvedLabel
+    }));
+
+    return resolvedId;
+  }, [setCachedDeviceLabels]);
 
   useEffect(() => {
   }, [meetingId, isLoading, meetingInfo]);
@@ -70,34 +140,85 @@ const PrejoinPage = () => {
     };
   }, []);
 
-  // Load available devices
-  const loadAvailableDevices = async () => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedCameraId = sessionStorage.getItem('prejoin_camera_device_id');
+    const storedMicrophoneId = sessionStorage.getItem('prejoin_microphone_device_id');
+    const storedSpeakerId = sessionStorage.getItem('prejoin_speaker_device_id');
+
+    const storedCameraLabel = sessionStorage.getItem('prejoin_camera_label') || '';
+    const storedMicrophoneLabel = sessionStorage.getItem('prejoin_microphone_label') || '';
+    const storedSpeakerLabel = sessionStorage.getItem('prejoin_speaker_label') || '';
+
+    setCachedDeviceLabels({
+      camera: storedCameraLabel,
+      microphone: storedMicrophoneLabel,
+      speaker: storedSpeakerLabel
+    });
+
+    if (storedCameraId) {
+      setSelectedCamera(storedCameraId);
+    }
+    if (storedMicrophoneId) {
+      setSelectedMicrophone(storedMicrophoneId);
+    }
+    if (storedSpeakerId) {
+      setSelectedSpeaker(storedSpeakerId);
+    }
+
+    const cachedCameras =
+      storedCameraId && storedCameraLabel
+        ? [createMockDevice(storedCameraId, storedCameraLabel, 'videoinput')]
+        : [];
+    const cachedMicrophones =
+      storedMicrophoneId && storedMicrophoneLabel
+        ? [createMockDevice(storedMicrophoneId, storedMicrophoneLabel, 'audioinput')]
+        : [];
+    const cachedSpeakers =
+      storedSpeakerId && storedSpeakerLabel
+        ? [createMockDevice(storedSpeakerId, storedSpeakerLabel, 'audiooutput')]
+        : [];
+
+    if (cachedCameras.length || cachedMicrophones.length || cachedSpeakers.length) {
+      setAvailableDevices({
+        cameras: cachedCameras,
+        microphones: cachedMicrophones,
+        speakers: cachedSpeakers
+      });
+    }
+  }, []);
+
+  // Load available devices only after explicit user action
+  const loadAvailableDevices = useCallback(async (): Promise<DeviceCollections> => {
+    const empty: DeviceCollections = { cameras: [], microphones: [], speakers: [] };
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return empty;
+    }
+
     try {
-      // First request permission to get device labels
       const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       tempStream.getTracks().forEach(track => track.stop());
-      
+
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cameras = devices.filter(device => device.kind === 'videoinput');
       const microphones = devices.filter(device => device.kind === 'audioinput');
       const speakers = devices.filter(device => device.kind === 'audiooutput');
-      
+
       setAvailableDevices({ cameras, microphones, speakers });
-      
-      // Set default selections if not already set
-      if (!selectedCamera && cameras.length > 0) {
-        setSelectedCamera(cameras[0].deviceId);
-      }
-      if (!selectedMicrophone && microphones.length > 0) {
-        setSelectedMicrophone(microphones[0].deviceId);
-      }
-      if (!selectedSpeaker && speakers.length > 0) {
-        setSelectedSpeaker(speakers[0].deviceId);
-      }
+      setHasRequestedDevices(true);
+
+      syncSelectionWithStorage('camera', cameras, selectedCamera, setSelectedCamera);
+      syncSelectionWithStorage('microphone', microphones, selectedMicrophone, setSelectedMicrophone);
+      syncSelectionWithStorage('speaker', speakers, selectedSpeaker, setSelectedSpeaker);
+
+      return { cameras, microphones, speakers };
     } catch (error) {
       console.error('Error loading devices:', error);
+      return empty;
     }
-  };
+  }, [selectedCamera, selectedMicrophone, selectedSpeaker, syncSelectionWithStorage]);
 
   // Device testing functions
   const testDevices = async () => {
@@ -105,11 +226,6 @@ const PrejoinPage = () => {
     setDeviceError(null);
     
     try {
-      // Load devices if not already loaded
-      if (availableDevices.cameras.length === 0) {
-        await loadAvailableDevices();
-      }
-      
       // First, check what devices are available
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
@@ -130,6 +246,17 @@ const PrejoinPage = () => {
         setIsTestingDevices(false);
         return;
       }
+
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      const microphones = devices.filter(device => device.kind === 'audioinput');
+      const speakers = devices.filter(device => device.kind === 'audiooutput');
+
+      setAvailableDevices({ cameras, microphones, speakers });
+      setHasRequestedDevices(true);
+
+      syncSelectionWithStorage('camera', cameras, selectedCamera, setSelectedCamera);
+      syncSelectionWithStorage('microphone', microphones, selectedMicrophone, setSelectedMicrophone);
+      syncSelectionWithStorage('speaker', speakers, selectedSpeaker, setSelectedSpeaker);
       
       // Request camera and microphone access with selected devices
       const constraints: MediaStreamConstraints = {
@@ -308,22 +435,24 @@ const PrejoinPage = () => {
   }, [localStream]);
 
   const handleCameraSelect = (deviceId: string) => {
-    setSelectedCamera(deviceId);
-    if (localStream) {
-      switchCamera(deviceId);
+    const resolvedId = syncSelectionWithStorage('camera', availableDevices.cameras, deviceId, setSelectedCamera);
+    if (localStream && resolvedId) {
+      switchCamera(resolvedId);
     }
   };
 
   const handleMicrophoneSelect = (deviceId: string) => {
-    setSelectedMicrophone(deviceId);
-    if (localStream) {
-      switchMicrophone(deviceId);
+    const resolvedId = syncSelectionWithStorage('microphone', availableDevices.microphones, deviceId, setSelectedMicrophone);
+    if (localStream && resolvedId) {
+      switchMicrophone(resolvedId);
     }
   };
 
   const handleSpeakerSelect = (deviceId: string) => {
-    setSelectedSpeaker(deviceId);
-    switchSpeaker(deviceId);
+    const resolvedId = syncSelectionWithStorage('speaker', availableDevices.speakers, deviceId, setSelectedSpeaker);
+    if (resolvedId) {
+      switchSpeaker(resolvedId);
+    }
   };
 
   // Ensure video element is properly set up
@@ -409,41 +538,21 @@ const PrejoinPage = () => {
     }
   };
 
-  // Check device availability on component mount
+  // Refresh device list only after the user has explicitly requested it
   useEffect(() => {
-    const checkDeviceAvailability = async () => {
-      try {
-        await loadAvailableDevices();
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter(device => device.kind === 'audioinput');
-        const videoInputs = devices.filter(device => device.kind === 'videoinput');
-        
-        
-        // Show warning if no devices are detected
-        if (videoInputs.length === 0 && audioInputs.length === 0) {
-          setDeviceError('카메라와 마이크를 찾을 수 없습니다. 미팅에 참여하기 전에 장치를 연결해 주세요.');
-        } else if (videoInputs.length === 0) {
-          setDeviceError('카메라를 찾을 수 없습니다. 오디오만으로 참여할 수 있습니다.');
-        } else if (audioInputs.length === 0) {
-          setDeviceError('마이크를 찾을 수 없습니다. 비디오만으로 참여할 수 있습니다.');
-        }
-      } catch (error) {
-      }
-    };
-    
-    checkDeviceAvailability();
+    if (!hasRequestedDevices) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) return;
 
-    // Listen for device changes
     const handleDeviceChange = () => {
       loadAvailableDevices();
     };
-    
+
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-    
+
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
     };
-  }, []);
+  }, [hasRequestedDevices, loadAvailableDevices]);
 
   const fetchMeetingInfo = async () => {
     try {
@@ -788,6 +897,75 @@ const PrejoinPage = () => {
 
   const resolvedMeetingId = Array.isArray(meetingId) ? meetingId[0] : meetingId ?? '';
 
+  const cameraOptionsDesktop =
+    availableDevices.cameras.length > 0
+      ? availableDevices.cameras.map((camera, index) => ({
+          deviceId: camera.deviceId,
+          label: camera.label || `Camera ${index + 1}`
+        }))
+      : cachedDeviceLabels.camera
+      ? [
+          {
+            deviceId: selectedCamera || 'cached-camera',
+            label: cachedDeviceLabels.camera
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-camera',
+            label: '장치 확인 버튼을 눌러 카메라를 불러오세요'
+          }
+        ];
+
+  const microphoneOptionsDesktop =
+    availableDevices.microphones.length > 0
+      ? availableDevices.microphones.map((mic, index) => ({
+          deviceId: mic.deviceId,
+          label: mic.label || `Microphone ${index + 1}`
+        }))
+      : cachedDeviceLabels.microphone
+      ? [
+          {
+            deviceId: selectedMicrophone || 'cached-microphone',
+            label: cachedDeviceLabels.microphone
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-microphone',
+            label: '장치 확인 버튼을 눌러 마이크를 불러오세요'
+          }
+        ];
+
+  const speakerOptionsDesktop =
+    availableDevices.speakers.length > 0
+      ? availableDevices.speakers.map((speaker, index) => ({
+          deviceId: speaker.deviceId,
+          label: speaker.label || `Speaker ${index + 1}`
+        }))
+      : cachedDeviceLabels.speaker
+      ? [
+          {
+            deviceId: selectedSpeaker || 'cached-speaker',
+            label: cachedDeviceLabels.speaker
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-speaker',
+            label: '장치 확인 버튼을 눌러 스피커를 불러오세요'
+          }
+        ];
+
+  const cameraValueDesktop = selectedCamera || (cameraOptionsDesktop[0]?.deviceId ?? '');
+  const microphoneValueDesktop =
+    selectedMicrophone || (microphoneOptionsDesktop[0]?.deviceId ?? '');
+  const speakerValueDesktop = selectedSpeaker || (speakerOptionsDesktop[0]?.deviceId ?? '');
+
+  const cameraSelectableDesktop = hasRequestedDevices && availableDevices.cameras.length > 0;
+  const microphoneSelectableDesktop = hasRequestedDevices && availableDevices.microphones.length > 0;
+  const speakerSelectableDesktop = hasRequestedDevices && availableDevices.speakers.length > 0;
+
   if (isMobile) {
     return (
       <>
@@ -807,7 +985,7 @@ const PrejoinPage = () => {
           selectedCamera={selectedCamera}
           selectedMicrophone={selectedMicrophone}
           selectedSpeaker={selectedSpeaker}
-          videoRef={videoRef}
+          videoRef={videoRef as React.RefObject<HTMLVideoElement>}
           onToggleVideo={toggleVideo}
           onToggleMic={toggleMic}
           onRefresh={handleRefresh}
@@ -815,6 +993,8 @@ const PrejoinPage = () => {
           onSelectCamera={handleCameraSelect}
           onSelectMicrophone={handleMicrophoneSelect}
           onSelectSpeaker={handleSpeakerSelect}
+          cachedDeviceLabels={cachedDeviceLabels}
+          hasRequestedDevices={hasRequestedDevices}
         />
         <audio ref={audioRef} style={{ display: 'none' }} />
       </>
@@ -926,56 +1106,53 @@ const PrejoinPage = () => {
             </div>
 
             <div className={styles.deviceSelectGroup}>
-              {availableDevices.cameras.length > 0 && (
-                <label className={styles.deviceField}>
-                  <span className={styles.deviceLabel}>카메라</span>
-                  <select
-                    value={selectedCamera}
-                    onChange={(e) => handleCameraSelect(e.target.value)}
-                    className={styles.deviceSelect}
-                  >
-                    {availableDevices.cameras.map((camera, index) => (
-                      <option key={camera.deviceId} value={camera.deviceId}>
-                        {camera.label || `Camera ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={styles.deviceField}>
+                <span className={styles.deviceLabel}>카메라</span>
+                <select
+                  value={cameraValueDesktop}
+                  onChange={(e) => handleCameraSelect(e.target.value)}
+                  className={styles.deviceSelect}
+                  disabled={!cameraSelectableDesktop}
+                >
+                  {cameraOptionsDesktop.map((camera) => (
+                    <option key={camera.deviceId} value={camera.deviceId}>
+                      {camera.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              {availableDevices.microphones.length > 0 && (
-                <label className={styles.deviceField}>
-                  <span className={styles.deviceLabel}>마이크</span>
-                  <select
-                    value={selectedMicrophone}
-                    onChange={(e) => handleMicrophoneSelect(e.target.value)}
-                    className={styles.deviceSelect}
-                  >
-                    {availableDevices.microphones.map((mic, index) => (
-                      <option key={mic.deviceId} value={mic.deviceId}>
-                        {mic.label || `Microphone ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={styles.deviceField}>
+                <span className={styles.deviceLabel}>마이크</span>
+                <select
+                  value={microphoneValueDesktop}
+                  onChange={(e) => handleMicrophoneSelect(e.target.value)}
+                  className={styles.deviceSelect}
+                  disabled={!microphoneSelectableDesktop}
+                >
+                  {microphoneOptionsDesktop.map((mic) => (
+                    <option key={mic.deviceId} value={mic.deviceId}>
+                      {mic.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              {availableDevices.speakers.length > 0 && (
-                <label className={styles.deviceField}>
-                  <span className={styles.deviceLabel}>스피커</span>
-                  <select
-                    value={selectedSpeaker}
-                    onChange={(e) => handleSpeakerSelect(e.target.value)}
-                    className={styles.deviceSelect}
-                  >
-                    {availableDevices.speakers.map((speaker, index) => (
-                      <option key={speaker.deviceId} value={speaker.deviceId}>
-                        {speaker.label || `Speaker ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={styles.deviceField}>
+                <span className={styles.deviceLabel}>스피커</span>
+                <select
+                  value={speakerValueDesktop}
+                  onChange={(e) => handleSpeakerSelect(e.target.value)}
+                  className={styles.deviceSelect}
+                  disabled={!speakerSelectableDesktop}
+                >
+                  {speakerOptionsDesktop.map((speaker) => (
+                    <option key={speaker.deviceId} value={speaker.deviceId}>
+                      {speaker.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <button
@@ -986,6 +1163,12 @@ const PrejoinPage = () => {
             >
               확인하기
             </button>
+
+            {!hasRequestedDevices && (
+              <p className={styles.subtleText}>
+                확인하기를 눌러 장치를 탐색한 뒤 선택할 수 있습니다.
+              </p>
+            )}
 
             <div className={styles.statusPanel}>
               <div className={styles.statusPanelTitle}>상태 확인</div>

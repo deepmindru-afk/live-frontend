@@ -28,7 +28,7 @@ interface PrejoinMobileProps {
   selectedCamera: string;
   selectedMicrophone: string;
   selectedSpeaker: string;
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement> | React.MutableRefObject<HTMLVideoElement | null>;
   onToggleVideo: () => void;
   onToggleMic: () => void;
   onRefresh: () => void;
@@ -36,6 +36,12 @@ interface PrejoinMobileProps {
   onSelectCamera: (deviceId: string) => void;
   onSelectMicrophone: (deviceId: string) => void;
   onSelectSpeaker: (deviceId: string) => void;
+  cachedDeviceLabels: {
+    camera?: string;
+    microphone?: string;
+    speaker?: string;
+  };
+  hasRequestedDevices: boolean;
 }
 
 const PrejoinMobile: React.FC<PrejoinMobileProps> = ({
@@ -61,13 +67,75 @@ const PrejoinMobile: React.FC<PrejoinMobileProps> = ({
   onJoin,
   onSelectCamera,
   onSelectMicrophone,
-  onSelectSpeaker
+  onSelectSpeaker,
+  cachedDeviceLabels,
+  hasRequestedDevices
 }) => {
   const renderDeviceOptions = (devices: MediaDeviceInfo[], fallbackPrefix: string): DeviceOption[] =>
     devices.map((device, index) => ({
       deviceId: device.deviceId,
       label: device.label || `${fallbackPrefix} ${index + 1}`
     }));
+
+  const cameraOptions =
+    availableDevices.cameras.length > 0
+      ? renderDeviceOptions(availableDevices.cameras, 'Camera')
+      : cachedDeviceLabels.camera
+      ? [
+          {
+            deviceId: selectedCamera || 'cached-camera',
+            label: cachedDeviceLabels.camera
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-camera',
+            label: '장치 확인 버튼을 눌러 카메라를 불러오세요'
+          }
+        ];
+
+  const microphoneOptions =
+    availableDevices.microphones.length > 0
+      ? renderDeviceOptions(availableDevices.microphones, 'Microphone')
+      : cachedDeviceLabels.microphone
+      ? [
+          {
+            deviceId: selectedMicrophone || 'cached-microphone',
+            label: cachedDeviceLabels.microphone
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-microphone',
+            label: '장치 확인 버튼을 눌러 마이크를 불러오세요'
+          }
+        ];
+
+  const speakerOptions =
+    availableDevices.speakers.length > 0
+      ? renderDeviceOptions(availableDevices.speakers, 'Speaker')
+      : cachedDeviceLabels.speaker
+      ? [
+          {
+            deviceId: selectedSpeaker || 'cached-speaker',
+            label: cachedDeviceLabels.speaker
+          }
+        ]
+      : [
+          {
+            deviceId: 'placeholder-speaker',
+            label: '장치 확인 버튼을 눌러 스피커를 불러오세요'
+          }
+        ];
+
+  const cameraValue = selectedCamera || (cameraOptions.length > 0 ? cameraOptions[0].deviceId : '');
+  const microphoneValue =
+    selectedMicrophone || (microphoneOptions.length > 0 ? microphoneOptions[0].deviceId : '');
+  const speakerValue = selectedSpeaker || (speakerOptions.length > 0 ? speakerOptions[0].deviceId : '');
+
+  const cameraSelectable = hasRequestedDevices && availableDevices.cameras.length > 0;
+  const microphoneSelectable = hasRequestedDevices && availableDevices.microphones.length > 0;
+  const speakerSelectable = hasRequestedDevices && availableDevices.speakers.length > 0;
 
   return (
     <div className={mobileStyles.mobilePage}>
@@ -157,56 +225,53 @@ const PrejoinMobile: React.FC<PrejoinMobileProps> = ({
             </div>
 
             <div className={mobileStyles.deviceGroup}>
-              {availableDevices.cameras.length > 0 && (
-                <label className={mobileStyles.deviceField}>
-                  <span className={mobileStyles.deviceLabel}>카메라</span>
-                  <select
-                    value={selectedCamera}
-                    onChange={(event) => onSelectCamera(event.target.value)}
-                    className={mobileStyles.deviceSelect}
-                  >
-                    {renderDeviceOptions(availableDevices.cameras, 'Camera').map((camera) => (
-                      <option key={camera.deviceId} value={camera.deviceId}>
-                        {camera.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={mobileStyles.deviceField}>
+                <span className={mobileStyles.deviceLabel}>카메라</span>
+                <select
+                  value={cameraValue}
+                  onChange={(event) => onSelectCamera(event.target.value)}
+                  className={mobileStyles.deviceSelect}
+                  disabled={!cameraSelectable}
+                >
+                  {cameraOptions.map((camera) => (
+                    <option key={camera.deviceId} value={camera.deviceId}>
+                      {camera.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              {availableDevices.microphones.length > 0 && (
-                <label className={mobileStyles.deviceField}>
-                  <span className={mobileStyles.deviceLabel}>마이크</span>
-                  <select
-                    value={selectedMicrophone}
-                    onChange={(event) => onSelectMicrophone(event.target.value)}
-                    className={mobileStyles.deviceSelect}
-                  >
-                    {renderDeviceOptions(availableDevices.microphones, 'Microphone').map((microphone) => (
-                      <option key={microphone.deviceId} value={microphone.deviceId}>
-                        {microphone.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={mobileStyles.deviceField}>
+                <span className={mobileStyles.deviceLabel}>마이크</span>
+                <select
+                  value={microphoneValue}
+                  onChange={(event) => onSelectMicrophone(event.target.value)}
+                  className={mobileStyles.deviceSelect}
+                  disabled={!microphoneSelectable}
+                >
+                  {microphoneOptions.map((microphone) => (
+                    <option key={microphone.deviceId} value={microphone.deviceId}>
+                      {microphone.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-              {availableDevices.speakers.length > 0 && (
-                <label className={mobileStyles.deviceField}>
-                  <span className={mobileStyles.deviceLabel}>스피커</span>
-                  <select
-                    value={selectedSpeaker}
-                    onChange={(event) => onSelectSpeaker(event.target.value)}
-                    className={mobileStyles.deviceSelect}
-                  >
-                    {renderDeviceOptions(availableDevices.speakers, 'Speaker').map((speaker) => (
-                      <option key={speaker.deviceId} value={speaker.deviceId}>
-                        {speaker.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={mobileStyles.deviceField}>
+                <span className={mobileStyles.deviceLabel}>스피커</span>
+                <select
+                  value={speakerValue}
+                  onChange={(event) => onSelectSpeaker(event.target.value)}
+                  className={mobileStyles.deviceSelect}
+                  disabled={!speakerSelectable}
+                >
+                  {speakerOptions.map((speaker) => (
+                    <option key={speaker.deviceId} value={speaker.deviceId}>
+                      {speaker.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <button
@@ -217,6 +282,12 @@ const PrejoinMobile: React.FC<PrejoinMobileProps> = ({
             >
               확인하기
             </button>
+
+            {!hasRequestedDevices && (
+              <p className={mobileStyles.subtleText}>
+                확인하기를 눌러 장치 목록을 불러온 뒤 선택할 수 있습니다.
+              </p>
+            )}
           </section>
 
           <section className={mobileStyles.statusCard}>
