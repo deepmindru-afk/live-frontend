@@ -259,8 +259,12 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = async (
+    e?: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    if (e) {
+      e.preventDefault();
+    }
     if (!newMessage.trim()) return;
 
     const messageText = newMessage.trim();
@@ -540,6 +544,11 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
             <textarea
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  handleSendMessage(e);
+                }
+              }}
               placeholder="메시지를 입력하세요..."
               style={{
                 width: '100%',

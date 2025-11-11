@@ -74,7 +74,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
     }
   }, [newMessage, isConnected, sendMessage, participants.length]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -360,7 +360,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
           <textarea
             value={newMessage}
             onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder={isConnected ? "Type your message..." : "Connecting..."}
             disabled={!isConnected}
             style={{
