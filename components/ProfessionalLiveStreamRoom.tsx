@@ -153,6 +153,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [waitingParticipants, setWaitingParticipants] = useState<any[]>([]);
   const [meetingStatus, setMeetingStatus] = useState<string>('CREATED');
   const [pendingHostTransferExit, setPendingHostTransferExit] = useState(false);
+  const [pendingHostTransferUserId, setPendingHostTransferUserId] = useState<string | null>(null);
   
   // --- HAND RAISE: host notifications + state ---
   const [raisedHandNotices, setRaisedHandNotices] = useState<Array<{id:string;name:string;at:number}>>([]);
@@ -692,6 +693,83 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     fetchPolicy: 'cache-first', // PERFORMANCE FIX: Changed to reduce redundant requests
     notifyOnNetworkStatusChange: false
   });
+
+const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
+// Strict host check - must be actual meeting host, not just system admin/tutor
+// Only show Active Students to actual meeting hosts
+const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
+
+// For recording, ONLY allow the actual meeting host (not system admins)
+const isMeetingHost = currentParticipant?.role === 'HOST';
+
+// Whiteboard state and hook
+const [isWhiteboardMode, setIsWhiteboardMode] = useState(false);
+const {
+  isWhiteboardActive,
+  isStreaming: isWhiteboardStreaming,
+  startWhiteboard,
+  stopWhiteboard,
+  error: whiteboardError,
+} = useWhiteboard({
+  meetingId: actualMeetingId,
+  isHost: isHost || currentParticipant?.role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN',
+  liveKitService,
+  onStreamReady: (stream) => {
+    // 화이트보드 스트림이 준비되면 큐 화면 공유 모드 시작
+    // 중요 수정: participant._id 대신 currentUser._id (LiveKit identity) 사용
+    const whiteboardHostId = currentUser?._id || currentParticipant?.user?._id || currentParticipant?._id;
+    if (whiteboardHostId) {
+      startQueueScreenShare(whiteboardHostId);
+      setIsWhiteboardMode(true);
+    } else {
+      console.error('[Whiteboard] 유효한 참가자 ID를 찾을 수 없어 화면 공유를 시작할 수 없음');
+    }
+  },
+  onStreamStopped: () => {
+    stopQueueScreenShare();
+    setIsWhiteboardMode(false);
+  },
+  onWhiteboardStateChange: (active) => {
+    setIsWhiteboardMode(active);
+  },
+});
+
+// 재초기화 루프 방지를 위해 화이트보드 콜백 메모이제이션
+const handleWhiteboardStreamReady = useCallback((stream: MediaStream) => {
+  startWhiteboard(stream);
+}, [startWhiteboard]);
+
+const handleWhiteboardStreamStopped = useCallback(() => {
+  stopWhiteboard();
+}, [stopWhiteboard]);
+
+// 화이트보드 토글 핸들러 - 즉각적인 응답을 위해 최적화
+const handleWhiteboardToggle = useCallback(() => {
+  if (isWhiteboardActive) {
+    // 화이트보드 중지 - await하지 않고 백그라운드에서 비동기로 실행
+    stopWhiteboard().then(() => {
+      setIsWhiteboardMode(false);
+    }).catch(err => {
+      console.error('[WhiteboardToggle] 화이트보드 중지 오류:', err);
+      setIsWhiteboardMode(false); // 중지가 실패해도 UI 업데이트
+    });
+  } else {
+    const isScreenShareRunning = liveKitIsScreenSharing || queueState.screenShareMode;
+    if (isScreenShareRunning) {
+      Swal.fire({
+        icon: 'warning',
+        title: '펜 도구를 열 수 없습니다',
+        text: '현재 화면 공유가 진행 중입니다. 화면 공유를 종료한 뒤 펜 도구를 사용해주세요.',
+        confirmButtonText: '확인'
+      });
+      return;
+    }
+    // 화이트보드 시작 - 즉시 UI 업데이트
+    setIsWhiteboardMode(true);
+    // WhiteboardComponent가 스트림 생성을 처리하고 onStreamReady를 호출함
+    // 그러면 startWhiteboard(stream)이 호출됨
+  }
+}, [isWhiteboardActive, stopWhiteboard, liveKitIsScreenSharing, queueState.screenShareMode]);
 
   // GraphQL Mutations
   const [startMeeting] = useMutation(START_MEETING);
@@ -1779,6 +1857,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const completeHostTransferExit = useCallback(async () => {
     if (!currentParticipant?._id) {
       setPendingHostTransferExit(false);
+      setPendingHostTransferUserId(null);
       redirectToDashboard();
       return;
     }
@@ -1794,6 +1873,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     } catch (error) {
     } finally {
       setPendingHostTransferExit(false);
+      setPendingHostTransferUserId(null);
       setTimeout(() => {
         redirectToDashboard();
       }, 500);
@@ -1805,23 +1885,90 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       return;
     }
 
-    const hasReplacementHost = participants.some((participant: any) => {
-      if (participant.role !== 'HOST') return false;
-      const participantId = participant._id || participant.userId || participant?.user?._id;
-      const currentId = currentParticipant?._id || currentParticipant?.userId || currentParticipant?.user?._id;
-      return participantId && currentId && participantId !== currentId;
-    });
+    const currentHostUserId =
+      pendingHostTransferUserId ||
+      currentParticipant?.user?._id ||
+      currentParticipant?.userId ||
+      currentParticipant?._id ||
+      null;
 
-    if (!hasReplacementHost) {
+    if (!currentHostUserId) {
+      completeHostTransferExit();
       return;
     }
 
-    const timer = setTimeout(() => {
-      completeHostTransferExit();
-    }, 1500);
+    let cancelled = false;
+    let intervalId: NodeJS.Timeout | null = null;
 
-    return () => clearTimeout(timer);
-  }, [pendingHostTransferExit, participants, currentParticipant, completeHostTransferExit]);
+    const hasHostChanged = (snapshot?: any) => {
+      const hostId =
+        snapshot?.currentHostId ??
+        snapshot?.hostId ??
+        meeting?.currentHostId ??
+        meeting?.hostId;
+
+      if (!hostId) {
+        return false;
+      }
+
+      return hostId !== currentHostUserId;
+    };
+
+    const attemptCompletion = async (snapshot?: any) => {
+      if (cancelled) {
+        return true;
+      }
+
+      if (hasHostChanged(snapshot)) {
+        await completeHostTransferExit();
+        return true;
+      }
+
+      return false;
+    };
+
+    const startPolling = () => {
+      intervalId = setInterval(async () => {
+        if (cancelled) {
+          return;
+        }
+
+        try {
+          const refreshed = await refetchMeeting();
+          const refreshedMeeting = (refreshed.data as any)?.getMeetingById;
+          if (await attemptCompletion(refreshedMeeting)) {
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+          }
+        } catch (error) {
+        }
+      }, 1000);
+    };
+
+    (async () => {
+      const completedImmediately = await attemptCompletion();
+      if (!completedImmediately && !cancelled) {
+        startPolling();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [
+    pendingHostTransferExit,
+    pendingHostTransferUserId,
+    meeting?.currentHostId,
+    meeting?.hostId,
+    completeHostTransferExit,
+    refetchMeeting,
+    currentParticipant
+  ]);
 
   // Handle leaving meeting from PiP
   const handleLeaveMeetingFromPiP = useCallback(async () => {
@@ -2207,83 +2354,6 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
     }
   };
 
-  const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
-  // Strict host check - must be actual meeting host, not just system admin/tutor
-  // Only show Active Students to actual meeting hosts
-  const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
-  
-  // For recording, ONLY allow the actual meeting host (not system admins)
-  const isMeetingHost = currentParticipant?.role === 'HOST';
-
-  // Whiteboard state and hook
-  const [isWhiteboardMode, setIsWhiteboardMode] = useState(false);
-  const {
-    isWhiteboardActive,
-    isStreaming: isWhiteboardStreaming,
-    startWhiteboard,
-    stopWhiteboard,
-    error: whiteboardError,
-  } = useWhiteboard({
-    meetingId: actualMeetingId,
-    isHost: isHost || currentParticipant?.role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN',
-    liveKitService,
-    onStreamReady: (stream) => {
-      // 화이트보드 스트림이 준비되면 큐 화면 공유 모드 시작
-      // 중요 수정: participant._id 대신 currentUser._id (LiveKit identity) 사용
-      const whiteboardHostId = currentUser?._id || currentParticipant?.user?._id || currentParticipant?._id;
-      if (whiteboardHostId) {
-        startQueueScreenShare(whiteboardHostId);
-        setIsWhiteboardMode(true);
-      } else {
-        console.error('[Whiteboard] 유효한 참가자 ID를 찾을 수 없어 화면 공유를 시작할 수 없음');
-      }
-    },
-    onStreamStopped: () => {
-      stopQueueScreenShare();
-      setIsWhiteboardMode(false);
-    },
-    onWhiteboardStateChange: (active) => {
-      setIsWhiteboardMode(active);
-    },
-  });
-
-  // 재초기화 루프 방지를 위해 화이트보드 콜백 메모이제이션
-  const handleWhiteboardStreamReady = useCallback((stream: MediaStream) => {
-    startWhiteboard(stream);
-  }, [startWhiteboard]);
-
-  const handleWhiteboardStreamStopped = useCallback(() => {
-    stopWhiteboard();
-  }, [stopWhiteboard]);
-
-  // 화이트보드 토글 핸들러 - 즉각적인 응답을 위해 최적화
-  const handleWhiteboardToggle = useCallback(() => {
-    if (isWhiteboardActive) {
-      // 화이트보드 중지 - await하지 않고 백그라운드에서 비동기로 실행
-      stopWhiteboard().then(() => {
-        setIsWhiteboardMode(false);
-      }).catch(err => {
-        console.error('[WhiteboardToggle] 화이트보드 중지 오류:', err);
-        setIsWhiteboardMode(false); // 중지가 실패해도 UI 업데이트
-      });
-    } else {
-      const isScreenShareRunning = liveKitIsScreenSharing || queueState.screenShareMode;
-      if (isScreenShareRunning) {
-        Swal.fire({
-          icon: 'warning',
-          title: '펜 도구를 열 수 없습니다',
-          text: '현재 화면 공유가 진행 중입니다. 화면 공유를 종료한 뒤 펜 도구를 사용해주세요.',
-          confirmButtonText: '확인'
-        });
-        return;
-      }
-      // 화이트보드 시작 - 즉시 UI 업데이트
-      setIsWhiteboardMode(true);
-      // WhiteboardComponent가 스트림 생성을 처리하고 onStreamReady를 호출함
-      // 그러면 startWhiteboard(stream)이 호출됨
-    }
-  }, [isWhiteboardActive, stopWhiteboard]);
-
   const disableHostFeatures = useCallback(async (): Promise<boolean> => {
     const activeFeatures: string[] = [];
 
@@ -2422,6 +2492,12 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         const selectedParticipant = nonHostParticipants.find(p => p._id === selectedParticipantId);
         
         if (selectedParticipant) {
+          const currentHostUserId =
+            currentParticipant?.user?._id ||
+            currentParticipant?.userId ||
+            currentParticipant?._id ||
+            null;
+
           // First transfer the host role
           const result = await transferHost({
               variables: {
@@ -2441,11 +2517,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           // Refetch data to update host status
           await Promise.all([
             refetchCurrentParticipant(),
-            refetchParticipants()
+            refetchParticipants(),
+            refetchMeeting()
           ]);
 
           // Wait for backend role update before leaving
           setPendingHostTransferExit(true);
+          setPendingHostTransferUserId(currentHostUserId);
           
           Swal.fire({
             icon: 'success',
