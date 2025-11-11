@@ -63,7 +63,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
   };
 
   const handleLowerAllHands = () => {
-    if (window.confirm('Are you sure you want to lower all raised hands?')) {
+    if (window.confirm('모든 손을 내리시겠습니까?')) {
       lowerAllHands();
     }
   };
@@ -77,7 +77,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-800">
-            Raised Hands ({raisedHands.length})
+            손 든 참가자 ({raisedHands.length})
           </h3>
           {raisedHands.length > 0 && (
             <button
@@ -85,7 +85,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
               disabled={isLoading || !isConnected}
               className="px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50"
             >
-              Lower All
+              모두 내리기
             </button>
           )}
         </div>
@@ -94,7 +94,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
       <div className="max-h-64 overflow-y-auto">
         {raisedHands.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            No hands raised
+            손을 든 참가자가 없습니다.
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
@@ -113,7 +113,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
                         </p>
                       )}
                       <p className="text-xs text-gray-500">
-                        Raised {new Date(hand.raisedAt).toLocaleTimeString()}
+                        손 든 시각: {new Date(hand.raisedAt).toLocaleTimeString()}
                       </p>
                     </div>
                   </div>
@@ -122,7 +122,7 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
                     disabled={isLoading || !isConnected}
                     className="px-3 py-1 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
-                    Lower
+                    손 내리기
                   </button>
                 </div>
               </div>
@@ -135,14 +135,14 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
       {showLowerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Lower Hand</h3>
+            <h3 className="text-lg font-semibold mb-4">손 내리기</h3>
             <p className="text-gray-600 mb-4">
-              Would you like to provide a reason for lowering this hand? (Optional)
+              손을 내리는 이유를 입력하시겠습니까? (선택 사항)
             </p>
             <textarea
               value={lowerReason}
               onChange={(e) => setLowerReason(e.target.value)}
-              placeholder="Enter reason (optional)..."
+              placeholder="이유를 입력하세요 (선택 사항)..."
               className="w-full p-3 border border-gray-300 rounded-lg resize-none"
               rows={3}
               maxLength={200}
@@ -152,13 +152,13 @@ export const RaisedHandsList: React.FC<RaisedHandsListProps> = ({
                 onClick={handleCancelLower}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
-                Cancel
+                취소
               </button>
               <button
                 onClick={handleConfirmLower}
                 className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
               >
-                Lower Hand
+                손 내리기
               </button>
             </div>
           </div>

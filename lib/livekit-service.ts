@@ -590,18 +590,18 @@ export class LiveKitService {
     if (!this._room) throw new Error('Not connected to room');
     
     try {
-      
+      const isMobileDevice =
+        typeof navigator !== 'undefined' &&
+        /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
       // Check microphone permissions first
       try {
-        // Mobile browser compatibility check
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('Media devices not supported in this browser');
         }
 
-        // Production environment check
         const isProduction = process.env.NODE_ENV === 'production';
         if (isProduction) {
-          // Additional production checks
           if (!window.isSecureContext && location.protocol !== 'https:') {
             throw new Error('Microphone access requires HTTPS in production');
           }
@@ -609,28 +609,27 @@ export class LiveKitService {
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(device => device.kind === 'audioinput');
-        
+
         if (audioDevices.length === 0) {
           throw new Error('No microphone devices found');
         }
-        
-        // Test microphone access with mobile-optimized constraints
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            // Mobile-specific constraints
-            sampleRate: 44100,
-            channelCount: 1
-          } 
-        });
-        stream.getTracks().forEach(track => {
-          track.stop(); // Stop test stream
-        });
+
+        // Heavy permission probe is skipped on mobile to avoid long warm-ups
+        if (!isMobileDevice) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 44100,
+              channelCount: 1
+            }
+          });
+          stream.getTracks().forEach(track => {
+            track.stop();
+          });
+        }
       } catch (permError: any) {
-        
-        // Throw specific error for better user feedback
         if (permError.name === 'NotAllowedError') {
           throw new Error('Microphone permission denied. Please allow microphone access in your browser settings and refresh the page.');
         } else if (permError.name === 'NotFoundError') {
@@ -645,32 +644,56 @@ export class LiveKitService {
           throw new Error(`Microphone access failed: ${permError.message}`);
         }
       }
-      
+
+      const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const publishWaitMs = isMobileDevice ? 120 : 500;
+      const retryPauseMs = isMobileDevice ? 120 : 300;
+
       await this._room.localParticipant.setMicrophoneEnabled(true);
-      
-      // Wait for track to be published
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Verify audio track was actually published
+
+      if (publishWaitMs > 0) {
+        await wait(publishWaitMs);
+      }
+
       const audioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
-      
+
       if (audioTracks.length === 0) {
-        // Retry once
         await this._room.localParticipant.setMicrophoneEnabled(false);
-        await new Promise(resolve => setTimeout(resolve, 300));
+        if (retryPauseMs > 0) {
+          await wait(retryPauseMs);
+        }
         await this._room.localParticipant.setMicrophoneEnabled(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
+        if (publishWaitMs > 0) {
+          await wait(publishWaitMs);
+        }
+
         const retryAudioTracks = Array.from(this._room.localParticipant.audioTrackPublications.values());
         if (retryAudioTracks.length === 0) {
           throw new Error('Failed to publish audio track. Please check your microphone settings and try again.');
         }
-      } else {
       }
-      
+
       this.updateRoomState({ isMuted: false });
     } catch (error: any) {
       this.updateRoomState({ isMuted: true });
+
+      const errorName = error?.name || '';
+      if (errorName === 'NotAllowedError') {
+        throw new Error('Microphone permission denied. Please allow microphone access in your browser settings and refresh the page.');
+      }
+      if (errorName === 'NotFoundError') {
+        throw new Error('No microphone found. Please connect a microphone device.');
+      }
+      if (errorName === 'NotReadableError') {
+        throw new Error('Microphone is already in use by another application. Please close other apps using your microphone.');
+      }
+      if (errorName === 'NotSupportedError') {
+        throw new Error('Microphone not supported on this device. Please use a different browser or device.');
+      }
+      if (errorName === 'SecurityError') {
+        throw new Error('Microphone access blocked for security reasons. Please use HTTPS or localhost.');
+      }
+
       throw error;
     }
   }

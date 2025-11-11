@@ -44,7 +44,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
       const newMsg: Message = {
         _id: message._id || Date.now().toString(),
         text: message.text || (message as any).message || '',
-        displayName: message.displayName || (message as any).senderName || 'Unknown',
+        displayName: message.displayName || (message as any).senderName || '알 수 없음',
         createdAt: message.createdAt || new Date().toISOString(),
         userId: message.userId || (message as any).senderId || '',
         type: 'chat'
@@ -110,7 +110,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
 
     const handleError = (data: any) => {
       if (data.message?.includes('delete') || data.message?.includes('permission')) {
-        alert(`Cannot delete message: ${data.message}`);
+        alert(`메시지를 삭제할 수 없습니다: ${data.message}`);
       }
     };
 
@@ -127,8 +127,8 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
   useEffect(() => {
     const welcomeMessage: Message = {
       _id: 'welcome',
-      text: 'Welcome to the meeting! Chat is now active.',
-      displayName: 'System',
+      text: '회의에 오신 것을 환영합니다! 채팅이 활성화되었습니다.',
+      displayName: '시스템',
       createdAt: new Date().toISOString(),
       type: 'system'
     };
@@ -164,8 +164,8 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
         newParticipants.forEach(participant => {
           const joinMsg: Message = {
             _id: `meeting-join-${participant._id}-${Date.now()}`,
-            text: `${participant.displayName || 'A participant'} joined the meeting`,
-            displayName: 'System',
+            text: `${participant.displayName || '참가자'}님이 회의에 참여했습니다.`,
+            displayName: '시스템',
             createdAt: new Date().toISOString(),
             type: 'join'
           };
@@ -188,8 +188,8 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
         leftParticipants.forEach(participant => {
           const leaveMsg: Message = {
             _id: `meeting-leave-${participant._id}-${Date.now()}`,
-            text: `${participant.displayName || 'A participant'} left the meeting`,
-            displayName: 'System',
+            text: `${participant.displayName || '참가자'}님이 회의에서 나갔습니다.`,
+            displayName: '시스템',
             createdAt: new Date().toISOString(),
             type: 'leave'
           };
@@ -219,7 +219,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      const isOwnMessage = lastMessage.displayName === (currentUser?.displayName || 'You');
+      const isOwnMessage = lastMessage.displayName === (currentUser?.displayName || '나');
       
       // If it's not the user's own message and user hasn't scrolled manually
       if (!isOwnMessage && !isUserScrolled.current) {
@@ -277,7 +277,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
         const message: Message = {
           _id: `fallback-${Date.now()}`,
           text: messageText,
-          displayName: currentUser?.displayName || 'You',
+          displayName: currentUser?.displayName || '나',
           createdAt: new Date().toISOString(),
           type: 'chat'
         };
@@ -331,7 +331,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
             fontWeight: '600',
             color: '#333'
           }}>
-            Chat
+            채팅
           </h4>
           <div style={{
             display: 'flex',
@@ -348,7 +348,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
               fontSize: '12px',
               color: '#666'
             }}>
-              {isConnected ? 'Connected' : 'Disconnected'}
+              {isConnected ? '연결됨' : '연결 끊김'}
             </span>
           </div>
         </div>
@@ -495,10 +495,10 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
                         e.currentTarget.style.backgroundColor = isOwnMessage ? 'rgba(255, 255, 255, 0.2)' : 'rgba(220, 53, 69, 0.1)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '0.6';
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
-                      title={isHost ? 'Delete message (Host)' : 'Delete your message'}
+                      title={isHost ? '메시지 삭제 (호스트)' : '내 메시지 삭제'}
+                      aria-label={isHost ? '메시지 삭제 (호스트)' : '내 메시지 삭제'}
                     >
                       <svg 
                         width="14" 
@@ -540,7 +540,7 @@ const MinimalistChat: React.FC<MinimalistChatProps> = ({
             <textarea
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
+              placeholder="메시지를 입력하세요..."
               style={{
                 width: '100%',
                 minHeight: '40px',

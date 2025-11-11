@@ -90,12 +90,12 @@ export const useHandRaise = ({
 
     
     if (!socket || !isConnected) {
-      onError?.('Not connected to server');
+      onError?.('서버에 연결되어 있지 않습니다.');
       return;
     }
 
     if (!participantId) {
-      onError?.('No participant ID available');
+      onError?.('참가자 ID를 찾을 수 없습니다.');
       return;
     }
 
@@ -117,12 +117,12 @@ export const useHandRaise = ({
     lastActionTime.current = now;
 
     if (!socket || !isConnected) {
-      onError?.('Not connected to server');
+      onError?.('서버에 연결되어 있지 않습니다.');
       return;
     }
 
     if (!participantId) {
-      onError?.('No participant ID available');
+      onError?.('참가자 ID를 찾을 수 없습니다.');
       return;
     }
 
@@ -138,12 +138,12 @@ export const useHandRaise = ({
   // Host lowers a specific participant's hand
   const hostLowerHand = useCallback((targetParticipantId: string, reason?: string) => {
     if (!socket || !isConnected) {
-      onError?.('Not connected to server');
+      onError?.('서버에 연결되어 있지 않습니다.');
       return;
     }
 
     if (!isHost) {
-      onError?.('Only hosts can lower other participants\' hands');
+      onError?.('호스트만 다른 참가자의 손을 내릴 수 있습니다.');
       return;
     }
 
@@ -159,12 +159,12 @@ export const useHandRaise = ({
   // Host lowers all hands
   const lowerAllHands = useCallback((reason?: string) => {
     if (!socket || !isConnected) {
-      onError?.('Not connected to server');
+      onError?.('서버에 연결되어 있지 않습니다.');
       return;
     }
 
     if (!isHost) {
-      onError?.('Only hosts can lower all hands');
+      onError?.('호스트만 모든 손을 내릴 수 있습니다.');
       return;
     }
 
@@ -251,7 +251,7 @@ export const useHandRaise = ({
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else {
-        onError?.(error.message || 'Failed to raise hand');
+        onError?.(error.message || '손 들기에 실패했습니다.');
       }
     };
 
@@ -274,7 +274,7 @@ export const useHandRaise = ({
         setMyHandRaised(false);
         // Don't show error modal for this case
       } else {
-        onError?.(error.message || 'Failed to lower hand');
+        onError?.(error.message || '손 내리기에 실패했습니다.');
       }
     };
 
@@ -284,7 +284,7 @@ export const useHandRaise = ({
 
     const handleHostLowerHandError = (error: any) => {
       setIsLoading(false);
-      onError?.(error.message || 'Failed to lower hand as host');
+      onError?.(error.message || '호스트 손 내리기에 실패했습니다.');
     };
 
     const handleLowerAllHandsSuccess = (result: any) => {
@@ -293,7 +293,7 @@ export const useHandRaise = ({
 
     const handleLowerAllHandsError = (error: any) => {
       setIsLoading(false);
-      onError?.(error.message || 'Failed to lower all hands');
+      onError?.(error.message || '모든 손을 내리지 못했습니다.');
     };
 
     // Register event listeners

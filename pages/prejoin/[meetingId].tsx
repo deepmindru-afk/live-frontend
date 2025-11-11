@@ -63,6 +63,7 @@ const PrejoinPage = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [loadingTimeoutReached, setLoadingTimeoutReached] = useState(false);
 
   const createMockDevice = (deviceId: string, label: string, kind: MediaDeviceKind): MediaDeviceInfo => ({
     deviceId,
@@ -122,6 +123,13 @@ const PrejoinPage = () => {
     return resolvedId;
   }, [setCachedDeviceLabels]);
 
+  const getTimestamp = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const logPerformance = (label: string, durationMs: number) => {
+    if (typeof console !== 'undefined') {
+      console.info(`[Prejoin] ${label} took ${durationMs.toFixed(0)}ms`);
+    }
+  };
+
   useEffect(() => {
   }, [meetingId, isLoading, meetingInfo]);
 
@@ -139,6 +147,21 @@ const PrejoinPage = () => {
       window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+useEffect(() => {
+  if (typeof window === 'undefined') return;
+
+  setLoadingTimeoutReached(false);
+  if (!isLoading) return;
+
+  const timeoutId = window.setTimeout(() => {
+    setLoadingTimeoutReached(true);
+  }, 8000);
+
+  return () => {
+    window.clearTimeout(timeoutId);
+  };
+}, [isLoading]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -191,6 +214,7 @@ const PrejoinPage = () => {
 
   // Load available devices only after explicit user action
   const loadAvailableDevices = useCallback(async (): Promise<DeviceCollections> => {
+    const loadStart = getTimestamp();
     const empty: DeviceCollections = { cameras: [], microphones: [], speakers: [] };
 
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
@@ -213,21 +237,27 @@ const PrejoinPage = () => {
       syncSelectionWithStorage('microphone', microphones, selectedMicrophone, setSelectedMicrophone);
       syncSelectionWithStorage('speaker', speakers, selectedSpeaker, setSelectedSpeaker);
 
+      const duration = getTimestamp() - loadStart;
+      logPerformance('loadAvailableDevices', duration);
       return { cameras, microphones, speakers };
     } catch (error) {
       console.error('Error loading devices:', error);
+      logPerformance('loadAvailableDevices (failed)', getTimestamp() - loadStart);
       return empty;
     }
   }, [selectedCamera, selectedMicrophone, selectedSpeaker, syncSelectionWithStorage]);
 
   // Device testing functions
   const testDevices = async () => {
+    const overallStart = getTimestamp();
     setIsTestingDevices(true);
     setDeviceError(null);
     
     try {
       // First, check what devices are available
+      const enumerateStart = getTimestamp();
       const devices = await navigator.mediaDevices.enumerateDevices();
+      logPerformance('Device enumeration', getTimestamp() - enumerateStart);
       const audioInputs = devices.filter(device => device.kind === 'audioinput');
       const videoInputs = devices.filter(device => device.kind === 'videoinput');
       
@@ -274,7 +304,9 @@ const PrejoinPage = () => {
         } : true
       };
       
+      const mediaStart = getTimestamp();
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      logPerformance('Prejoin device getUserMedia', getTimestamp() - mediaStart);
       
       // Set audio output device if speaker is selected
       if (selectedSpeaker && audioRef.current && 'setSinkId' in audioRef.current) {
@@ -360,6 +392,7 @@ const PrejoinPage = () => {
       }
     } finally {
       setIsTestingDevices(false);
+      logPerformance('Device test total', getTimestamp() - overallStart);
     }
   };
 
@@ -410,8 +443,10 @@ const PrejoinPage = () => {
   };
 
   const handleRefresh = async () => {
+    const refreshStart = getTimestamp();
     await loadAvailableDevices();
     await testDevices();
+    logPerformance('Full refresh + test', getTimestamp() - refreshStart);
   };
 
   const stopDeviceTest = () => {
@@ -697,9 +732,18 @@ const PrejoinPage = () => {
     }
   };
 
-  const handleJoinMeeting = async () => {
-    if (!meetingId) return;
+  const normalizeMeetingStatus = useCallback((status?: string | null): MeetingInfo['status'] => {
+    if (!status) return 'SCHEDULED';
+    if (status === 'CREATED' || status === 'SCHEDULED') return 'SCHEDULED';
+    if (status === 'ENDED') return 'ENDED';
+    if (status === 'LIVE') return 'LIVE';
+    return 'SCHEDULED';
+  }, []);
 
+  const handleJoinMeeting = async () => {
+    if (!meetingId || !meetingInfo) return;
+
+    const joinStart = getTimestamp();
     setIsJoining(true);
     setJoinError(null);
 
@@ -735,26 +779,44 @@ const PrejoinPage = () => {
         userRole = currentUser?.systemRole || 'MEMBER';
       }
       
-      // CRITICAL FIX: Check backend meeting status first
-      const meetingResult = await makeGraphQLRequest(GET_MEETING_BY_ID, {
-        meetingId: meetingId as string
-      });
+      let backendStatus: MeetingInfo['status'] = meetingInfo.status;
+      let inviteCode = meetingInfo.inviteCode;
+      const shouldRefreshStatus = userRole === 'TUTOR' || userRole === 'ADMIN';
 
-      if (!meetingResult.getMeetingById) {
-        throw new Error('Meeting not found');
-      }
-
-      const backendStatus = meetingResult.getMeetingById.status;
-
-      // Join the meeting and check participant status
-      
-      const joinResult = await makeGraphQLRequest(JOIN_MEETING, {
+      const joinPromise = makeGraphQLRequest(JOIN_MEETING, {
         input: {
           meetingId: meetingId as string,
           displayName: 'Participant',
           role: userRole === 'TUTOR' || userRole === 'ADMIN' ? 'HOST' : 'PARTICIPANT'
         } as JoinParticipantInput
       });
+      const statusPromise = shouldRefreshStatus
+        ? makeGraphQLRequest(GET_MEETING_BY_ID, {
+            meetingId: meetingId as string
+          }).catch((error) => {
+            console.warn('Failed to refresh meeting status before join:', error);
+            return null;
+          })
+        : Promise.resolve(null);
+
+      const [joinResult, refreshedMeeting] = await Promise.all([joinPromise, statusPromise]);
+      logPerformance('Join mutation + optional status refresh', getTimestamp() - joinStart);
+
+      if (refreshedMeeting?.getMeetingById) {
+        const refreshedStatus = normalizeMeetingStatus(refreshedMeeting.getMeetingById.status);
+        backendStatus = refreshedStatus;
+        inviteCode = refreshedMeeting.getMeetingById.inviteCode || inviteCode;
+
+        setMeetingInfo((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: refreshedStatus,
+                inviteCode: inviteCode
+              }
+            : prev
+        );
+      }
 
 
       if (joinResult.joinMeeting && joinResult.joinMeeting._id) {
@@ -764,7 +826,7 @@ const PrejoinPage = () => {
         
         if (participantStatus === 'WAITING') {
           // Participant sent to waiting room, redirect to waiting page
-          router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
+          router.push(`/waiting?meetingId=${meetingId}&code=${inviteCode}`);
         } else if (participantStatus === 'ADMITTED') {
           // Participant admitted directly, go to live room
           router.push(`/livestream/${meetingId}`);
@@ -790,7 +852,7 @@ const PrejoinPage = () => {
             
             if (!lastRedirectTime || (now - parseInt(lastRedirectTime)) > REDIRECT_COOLDOWN) {
               localStorage.setItem(redirectKey, now.toString());
-              router.push(`/waiting?meetingId=${meetingId}&code=${meetingResult.getMeetingById.inviteCode}`);
+              router.push(`/waiting?meetingId=${meetingId}&code=${inviteCode}`);
             } else {
               // Clear the flag since we're going to live room
               localStorage.removeItem(redirectKey);
@@ -807,6 +869,7 @@ const PrejoinPage = () => {
       setJoinError(error.message || 'Failed to join meeting');
     } finally {
       setIsJoining(false);
+      logPerformance('Total join flow', getTimestamp() - joinStart);
     }
   };
 
@@ -864,6 +927,11 @@ const PrejoinPage = () => {
             <span>Meeting ID: {meetingId}</span>
             <span>상태: 연결 중...</span>
           </div>
+          {loadingTimeoutReached && (
+            <div className={styles.loaderHint}>
+              네트워크 상태를 확인해주세요. 모바일 데이터나 VPN 연결이 느릴 경우 최대 30초까지 소요될 수 있습니다.
+            </div>
+          )}
         </div>
       </div>
     );

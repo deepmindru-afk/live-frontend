@@ -1335,6 +1335,7 @@ const MemberDashboard: React.FC = () => {
                 const attendancePercentage = safeMeetingDurationSeconds > 0
                   ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
                   : 0;
+                const normalizedAttendancePercentage = Math.max(0, Math.min(attendancePercentage, 100));
 
                 const meetingDate = (meetingInfo && (meetingInfo.actualStartAt || meetingInfo.scheduledFor)) || selectedMeeting.schedule || selectedMeeting.createdAt;
 
@@ -1355,17 +1356,17 @@ const MemberDashboard: React.FC = () => {
                       </div>
                       <div className="attendance-row">
                         <span>출석률</span>
-                        <strong>{attendancePercentage} %</strong>
+                        <strong>{normalizedAttendancePercentage} %</strong>
                       </div>
                     </div>
                     <div className="attendance-progress">
                       <div className="attendance-progress-track">
                         <div
                           className="attendance-progress-bar"
-                          style={{ width: `${attendancePercentage}%` }}
+                          style={{ width: `${normalizedAttendancePercentage}%` }}
                         />
                       </div>
-                      <span className="attendance-progress-value">{attendancePercentage} %</span>
+                      <span className="attendance-progress-value">{normalizedAttendancePercentage} %</span>
                     </div>
                     <button className="attendance-close-btn" onClick={closeAttendancePopup}>닫기</button>
                   </div>

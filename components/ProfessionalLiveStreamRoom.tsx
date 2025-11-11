@@ -118,27 +118,29 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isLive, setIsLive] = useState(false);
   const [isHostState, setIsHostState] = useState(false);
-  // Read audio/video preferences from prejoin page (stored in sessionStorage)
-  const getPrejoinPreference = (key: string, defaultValue: boolean): boolean => {
+  // Clear audio/video preferences from prejoin page (stored in sessionStorage)
+  const clearPrejoinPreference = (key: string): void => {
     try {
-      const stored = sessionStorage.getItem(key);
-      if (stored !== null) {
-        const value = stored === 'true';
-        // Clear after reading so it doesn't persist across sessions
+      if (sessionStorage.getItem(key) !== null) {
         sessionStorage.removeItem(key);
-        return value;
       }
     } catch (error) {
     }
-    return defaultValue;
   };
 
-  const [micEnabled, setMicEnabled] = useState(() => getPrejoinPreference('prejoin_audio_enabled', false));
-  const [cameraEnabled, setCameraEnabled] = useState(() => getPrejoinPreference('prejoin_video_enabled', false));
+  useEffect(() => {
+    clearPrejoinPreference('prejoin_audio_enabled');
+    clearPrejoinPreference('prejoin_video_enabled');
+  }, []);
+
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');
   const [gridSize, setGridSize] = useState<'2x2' | '3x3' | '4x4'>('2x2');
   const [isMobile, setIsMobile] = useState(false);
+  const [isIOSPlatform, setIsIOSPlatform] = useState(false);
+  const viewportHeightValue = 'var(--ios-viewport-height, 100vh)';
   const [isAuth, setIsAuth] = useState(false);
   const [authComplete, setAuthComplete] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -193,6 +195,49 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   // Track render count (for monitoring only, won't block)
   renderCountRef.current += 1;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const nav = window.navigator;
+    const detectIOS = () => {
+      const platform = nav?.platform || '';
+      const userAgent = nav?.userAgent || '';
+      return /iP(ad|hone|od)/i.test(userAgent) || (platform === 'MacIntel' && (nav?.maxTouchPoints || 0) > 1);
+    };
+
+    const iosDetected = detectIOS();
+    setIsIOSPlatform(iosDetected);
+
+    const root = document.documentElement;
+    const updateViewportHeight = () => {
+      const viewport = window.visualViewport;
+      const height = viewport?.height ?? window.innerHeight;
+      root.style.setProperty('--ios-viewport-height', `${height}px`);
+    };
+
+    updateViewportHeight();
+
+    if (!iosDetected) {
+      return () => {
+        root.style.removeProperty('--ios-viewport-height');
+      };
+    }
+
+    const viewport = window.visualViewport;
+
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
+    viewport?.addEventListener('resize', updateViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight);
+      window.removeEventListener('orientationchange', updateViewportHeight);
+      viewport?.removeEventListener('resize', updateViewportHeight);
+      root.style.removeProperty('--ios-viewport-height');
+    };
+  }, []);
 
   // Participant Queue System - Memoize participants to prevent infinite loop
   // Use a ref to store the previous memoized value for deep comparison
@@ -838,7 +883,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // toast - centered at top of screen
       try {
         const toast = document.createElement('div');
-        toast.textContent = `${data.displayName} raised hand ✋`;
+        toast.textContent = `${data.displayName}님이 손을 들었습니다 ✋`;
         Object.assign(toast.style, {
           position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', 
           background:'#3b82f6', color:'#fff',
@@ -1165,6 +1210,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       // LiveKit connection with camera and mic state
       const liveKitIdentity = currentUser._id || currentUser.id || userId;
 
+      const connectStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
       liveKitConnect({
         roomName: actualMeetingId,
         participantName: currentUser.displayName || currentUser.name || 'User',
@@ -1173,7 +1219,14 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         enableCamera: cameraEnabled, // Enable camera based on state - connection handles it properly now
         enableMicrophone: micEnabled,
         enableScreenShare: true
-      }).catch(error => {
+      })
+        .then(() => {
+          const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          if (typeof console !== 'undefined') {
+            console.info(`[LiveKit] Connection established in ${(end - connectStart).toFixed(0)}ms`);
+          }
+        })
+        .catch(error => {
         // Connection error handled
       });
     }
@@ -2415,7 +2468,19 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   };
 
   const handleScreenShareToggle = async () => {
-    
+    const isWhiteboardRunning = isWhiteboardActive || isWhiteboardMode;
+    const isStartingScreenShare = !liveKitIsScreenSharing;
+
+    if (isWhiteboardRunning && isStartingScreenShare) {
+      Swal.fire({
+        icon: 'warning',
+        title: '화면 공유를 시작할 수 없습니다',
+        text: '현재 펜(화이트보드)이 켜져 있습니다. 화면 공유를 사용하려면 먼저 펜 도구를 종료해주세요.',
+        confirmButtonText: '확인'
+      });
+      return;
+    }
+
     if (isLiveKitConnected) {
       try {
         // ✅ MOBILE FIX: Ensure user gesture is properly handled for mobile screen sharing
@@ -2424,7 +2489,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           // On mobile, screen sharing must be triggered from user gesture
           // The button click itself is the gesture, so we can proceed
         }
-        
+
         await liveKitToggleScreenShare();
         // ✅ FIX: Don't manually set screenSharing state - let the useEffect handle it
         // The LiveKit state change will trigger the useEffect to update queue state
@@ -2835,6 +2900,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         setIsWhiteboardMode(false); // 중지가 실패해도 UI 업데이트
       });
     } else {
+      const isScreenShareRunning = liveKitIsScreenSharing || queueState.screenShareMode;
+      if (isScreenShareRunning) {
+        Swal.fire({
+          icon: 'warning',
+          title: '펜 도구를 열 수 없습니다',
+          text: '현재 화면 공유가 진행 중입니다. 화면 공유를 종료한 뒤 펜 도구를 사용해주세요.',
+          confirmButtonText: '확인'
+        });
+        return;
+      }
       // 화이트보드 시작 - 즉시 UI 업데이트
       setIsWhiteboardMode(true);
       // WhiteboardComponent가 스트림 생성을 처리하고 onStreamReady를 호출함
@@ -2885,7 +2960,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          height: '100vh',
+          height: viewportHeightValue,
         backgroundColor: '#f8f9fa',
         color: '#333'
       }}>
@@ -2913,7 +2988,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
         flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          height: '100vh',
+          height: viewportHeightValue,
         backgroundColor: '#f8f9fa',
         color: '#333',
         textAlign: 'center',
@@ -3024,7 +3099,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             overflow: hidden;
             position: fixed;
             width: 100vw;
-            height: 100vh;
+            height: var(--ios-viewport-height, 100vh);
             -webkit-overflow-scrolling: touch;
             background: #000000;
             margin: 0;
@@ -3046,7 +3121,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
           /* Fullscreen video player container */
           .video-player-mode #__next {
-            height: 100vh;
+            height: var(--ios-viewport-height, 100vh);
             width: 100vw;
             position: fixed;
             top: 0;
@@ -3128,14 +3203,16 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           style={{
             display: 'flex',
             flexDirection: 'column', // Ensure column layout for proper structure
-            height: isMobile ? '100vh' : '100vh',
+            height: viewportHeightValue,
             width: '100vw', // Use full viewport width
             backgroundColor: isVideoPlayerMode ? '#000000' : '#ffffff',
             color: isVideoPlayerMode ? '#ffffff' : '#333333',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             position: 'relative',
             overflow: 'hidden',
-            maxHeight: isMobile ? '100vh' : '100vh', // Ensure it doesn't exceed viewport
+            maxHeight: viewportHeightValue, // Ensure it doesn't exceed viewport
+            paddingBottom: isIOSPlatform ? 'env(safe-area-inset-bottom)' : undefined,
+            paddingTop: isIOSPlatform ? 'env(safe-area-inset-top)' : undefined,
             // Video player mode styling
             ...(isVideoPlayerMode && {
               background: 'linear-gradient(135deg, #000000 0%, #1a1a2e 100%)'
@@ -3670,7 +3747,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
 
         {/* Main Content - Hidden when PiP is active on mobile */}
       <div style={{
-        height: '100vh',
+        height: viewportHeightValue,
           paddingTop: isMobile ? '10px' : '10px',
           display: (isMobile && isPiPVisible) ? 'none' : 'flex',
           flexDirection: 'column', // Always column layout for better organization
@@ -4008,9 +4085,9 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
             display: 'flex',
             flexDirection: 'column',
             // ✅ MOBILE FIX: Full screen on mobile when screen sharing
-            minHeight: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? '0' : '60vh'), // Full screen minus header/controls on mobile
-            maxHeight: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? 'none' : '85vh'), // Full screen on mobile
-            height: isActuallyScreenSharing && isMobile ? 'calc(100vh - 180px)' : (viewMode === 'grid' ? '100%' : 'auto'), // Full height on mobile when screen sharing
+            minHeight: isActuallyScreenSharing && isMobile ? `calc(${viewportHeightValue} - 180px)` : (viewMode === 'grid' ? '0' : '60vh'), // Full screen minus header/controls on mobile
+            maxHeight: isActuallyScreenSharing && isMobile ? `calc(${viewportHeightValue} - 180px)` : (viewMode === 'grid' ? 'none' : '85vh'), // Full screen on mobile
+            height: isActuallyScreenSharing && isMobile ? `calc(${viewportHeightValue} - 180px)` : (viewMode === 'grid' ? '100%' : 'auto'), // Full height on mobile when screen sharing
             alignItems: isActuallyScreenSharing ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
             justifyContent: isActuallyScreenSharing ? 'stretch' : (viewMode === 'grid' ? 'stretch' : 'center'),
             position: 'relative',
@@ -4309,7 +4386,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
                     minHeight: isMobile ? '0' : '600px',
                     // ✅ MOBILE FIX: Ensure full viewport on mobile
                     maxWidth: isMobile ? '100vw' : '100%',
-                    maxHeight: isMobile ? '100vh' : '100%',
+                    maxHeight: isMobile ? viewportHeightValue : '100%',
                     overflow: 'hidden'
                   }}>
                     <WhiteboardComponent
@@ -5118,7 +5195,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
           right: 0,
             top: isMobile ? '56px' : '70px',
             width: isMobile ? '100%' : '400px',
-            height: isMobile ? 'calc(100vh - 136px)' : 'calc(100vh - 150px)',
+            height: isMobile ? `calc(${viewportHeightValue} - 136px)` : `calc(${viewportHeightValue} - 150px)`,
             backgroundColor: '#ffffff',
             borderLeft: '1px solid #e5e7eb',
             zIndex: 999,

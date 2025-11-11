@@ -57,6 +57,23 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   };
 
   const startRecording = useCallback(async () => {
+    const isIOS = (() => {
+      if (typeof navigator === 'undefined') {
+        return false;
+      }
+      const platform = navigator?.platform || '';
+      const userAgent = navigator?.userAgent || '';
+      return /iP(ad|hone|od)/i.test(userAgent) || (platform === 'MacIntel' && (navigator?.maxTouchPoints || 0) > 1);
+    })();
+
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      const message = isIOS
+        ? 'iOS Safari에서는 브라우저 제한으로 인해 화면 녹화가 지원되지 않습니다. 데스크톱 또는 Android 브라우저를 이용해 주세요.'
+        : '이 브라우저에서는 화면 녹화를 지원하지 않습니다. 최신 버전의 Chromium 기반 브라우저를 사용해 주세요.';
+      onError?.(message);
+      return;
+    }
+
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {

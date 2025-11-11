@@ -83,14 +83,14 @@ export const HandRaiseButton: React.FC<HandRaiseButtonProps> = ({
         {isLoading ? (
           <div className="flex items-center">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            {myHandRaised ? 'Lowering...' : 'Raising...'}
+            {myHandRaised ? '손 내리는 중...' : '손 드는 중...'}
           </div>
         ) : (
           <div className="flex items-center">
             <span className="text-lg mr-2">
               {myHandRaised ? '✋' : '✋'}
             </span>
-            {myHandRaised ? 'Lower Hand' : 'Raise Hand'}
+            {myHandRaised ? '손 내리기' : '손 들기'}
           </div>
         )}
       </button>
@@ -99,14 +99,14 @@ export const HandRaiseButton: React.FC<HandRaiseButtonProps> = ({
       {showReasonModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
-            <h3 className="text-lg font-semibold mb-4">Raise Hand</h3>
+            <h3 className="text-lg font-semibold mb-4">손 들기</h3>
             <p className="text-gray-600 mb-4">
-              Would you like to provide a reason for raising your hand? (Optional)
+              손을 드는 이유를 입력하시겠습니까? (선택 사항)
             </p>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason (optional)..."
+              placeholder="이유를 입력하세요 (선택 사항)..."
               className="w-full p-3 border border-gray-300 rounded-lg resize-none"
               rows={3}
               maxLength={200}
@@ -116,13 +116,13 @@ export const HandRaiseButton: React.FC<HandRaiseButtonProps> = ({
                 onClick={handleCancelRaise}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
-                Cancel
+                취소
               </button>
               <button
                 onClick={handleConfirmRaise}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
               >
-                Raise Hand
+                손 들기
               </button>
             </div>
           </div>

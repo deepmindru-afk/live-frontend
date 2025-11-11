@@ -181,7 +181,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
                 e.stopPropagation(); // Prevent triggering onClick on parent
                 onLowerHand && onLowerHand(participantId);
               }}
-              title="Lower participant's hand"
+              title="참가자 손 내리기"
               style={{ 
                 width: '32px', 
                 height: '32px', 
@@ -207,7 +207,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
               e.stopPropagation(); // Prevent triggering onClick on parent
               onKickParticipant && onKickParticipant({ participantId, name });
             }}
-            title="Remove participant"
+            title="참가자 퇴장"
             style={{ 
               width: '32px', 
               height: '32px', 
@@ -266,7 +266,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
           )}
           
           {isScreenSharing && (
-            <div className={`${styles['indicator']} ${styles['screen-sharing']}`} title="Sharing screen">
+            <div className={`${styles['indicator']} ${styles['screen-sharing']}`} title="화면 공유 중">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
               </svg>
@@ -276,7 +276,7 @@ export const ParticipantThumbnail: React.FC<ParticipantThumbnailProps> = ({
           {isWhiteboarding && (
             <div 
               className={`${styles['indicator']} ${styles['whiteboard']}`} 
-              title="Using whiteboard" 
+              title="화이트보드 사용 중" 
               style={{
                 backgroundColor: '#8b5cf6',
                 color: 'white',

@@ -104,7 +104,7 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       
       // Show notification for host
       if (isHost) {
-        setCurrentHandRaiseMessage(`${info.displayName} raised their hand`);
+        setCurrentHandRaiseMessage(`${info.displayName}님이 손을 들었습니다`);
         setTimeout(() => setCurrentHandRaiseMessage(null), 3000);
       }
     },
@@ -147,8 +147,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       if (info.userId === currentParticipant?._id) {
         Swal.fire({
           icon: 'info',
-          title: 'Hand Auto-Lowered',
-          text: 'Your hand was automatically lowered after 1 minute',
+          title: '손이 자동으로 내려갔습니다',
+          text: '1분이 지나 손이 자동으로 내려갔습니다.',
           timer: 3000,
           showConfirmButton: false
         });
@@ -178,8 +178,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       if (info.userId === currentParticipant?._id) {
         Swal.fire({
           icon: 'info',
-          title: 'Hand Lowered',
-          text: 'The host lowered your hand',
+          title: '손이 내려갔습니다',
+          text: '호스트가 손을 내렸습니다.',
           timer: 3000,
           showConfirmButton: false
         });
@@ -203,8 +203,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       if (wsMyHandRaised) {
         Swal.fire({
           icon: 'info',
-          title: 'All Hands Lowered',
-          text: 'The host lowered all hands',
+          title: '모든 손이 내려갔습니다',
+          text: '호스트가 모든 손을 내렸습니다.',
           timer: 3000,
           showConfirmButton: false
         });
@@ -238,8 +238,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       if (!currentParticipant?._id) {
         Swal.fire({
           icon: 'error',
-          title: 'Error',
-          text: 'No participant found. Please refresh the page.'
+          title: '오류',
+          text: '참가자를 찾을 수 없습니다. 페이지를 새로고침해 주세요.'
         });
         return;
       }
@@ -247,8 +247,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
       if (!socket || !isConnected) {
         Swal.fire({
           icon: 'error',
-          title: 'Connection Error',
-          text: 'Not connected to server. Please check your connection.'
+          title: '연결 오류',
+          text: '서버에 연결되어 있지 않습니다. 네트워크 상태를 확인해 주세요.'
         });
         return;
       }
@@ -276,8 +276,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
     } catch (error) {
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: `Failed to toggle hand raise: ${(error as Error).message || 'Unknown error'}`
+        title: '오류',
+        text: `손 들기 상태를 변경하지 못했습니다: ${(error as Error).message || '알 수 없는 오류'}`
       });
     }
   }, [
@@ -328,8 +328,8 @@ export const HandRaiseIndicator: React.FC<HandRaiseIndicatorProps> = ({
           animation: wsMyHandRaised ? 'pulse 1.5s infinite' : 'none',
           opacity: isLoading ? 0.6 : 1,
         }}
-        title={`Hand ${wsMyHandRaised ? 'raised' : 'lowered'} - Click to ${wsMyHandRaised ? 'lower' : 'raise'}`}
-        aria-label={wsMyHandRaised ? 'Lower hand' : 'Raise hand'}
+        title={`손 ${wsMyHandRaised ? '내림' : '듦'} - 클릭하여 ${wsMyHandRaised ? '내리기' : '들기'}`}
+        aria-label={wsMyHandRaised ? '손 내리기' : '손 들기'}
         aria-pressed={wsMyHandRaised}
       >
         <svg 
