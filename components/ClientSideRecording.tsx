@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
 interface ClientSideRecordingProps {
   meetingId: string;
@@ -189,6 +189,26 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
       setIsRecording(false);
     }
   }, [isRecording]);
+
+  useEffect(() => {
+    const handleExternalStop = (event: Event) => {
+      if (!isRecording) {
+        return;
+      }
+
+      const customEvent = event as CustomEvent<{ meetingId?: string }>;
+      const targetMeetingId = customEvent?.detail?.meetingId;
+      if (targetMeetingId && targetMeetingId !== meetingId) {
+        return;
+      }
+      stopRecording();
+    };
+
+    window.addEventListener('hrde-stop-recording', handleExternalStop);
+    return () => {
+      window.removeEventListener('hrde-stop-recording', handleExternalStop);
+    };
+  }, [isRecording, meetingId, stopRecording]);
 
   React.useEffect(() => {
     if (meetingStatus === 'ENDED' && isRecording) {
