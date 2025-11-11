@@ -1651,59 +1651,27 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       const token = currentUser?.token || localStorage.getItem('jwt') || localStorage.getItem('token') || '';
       
       try {
-        // Check if user is host - if yes, end meeting instead of just leaving
-        const isHost =
-          currentParticipant?.role === 'HOST' ||
-          role === 'HOST' ||
-          currentUser?.systemRole === 'TUTOR' ||
-          currentUser?.systemRole === 'ADMIN';
-        
-        if (isHost) {
-          // Host leaving - end the meeting for everyone
-          fetch(`${endpoint}/graphql`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-            },
-            body: JSON.stringify({
-              query: `
-                mutation EndMeeting($meetingId: ID!) {
-                  endMeeting(meetingId: $meetingId) {
-                    _id
-                    status
-                  }
-                }
-              `,
-              variables: {
-                meetingId: actualMeetingId
+        // Always attempt to leave meeting on unload; meeting ends only via explicit action
+        fetch(`${endpoint}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
+          body: JSON.stringify({
+            query: `
+              mutation LeaveMeeting($input: LeaveMeetingInput!) {
+                leaveMeeting(input: $input)
               }
-            }),
-            keepalive: true
-          }).catch(() => {});
-        } else {
-          // Regular participant - just leave meeting
-          fetch(`${endpoint}/graphql`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : '',
-            },
-            body: JSON.stringify({
-              query: `
-                mutation LeaveMeeting($input: LeaveMeetingInput!) {
-                  leaveMeeting(input: $input)
-                }
-              `,
-              variables: {
-                input: {
-                  participantId: currentParticipant._id
-                }
+            `,
+            variables: {
+              input: {
+                participantId: currentParticipant._id
               }
-            }),
-            keepalive: true
-          }).catch(() => {});
-        }
+            }
+          }),
+          keepalive: true
+        }).catch(() => {});
       } catch (error) {
         // Silently fail
       }
@@ -1734,32 +1702,15 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       } else {
         // User confirmed, mark as intentional leave
         isLeavingIntentionally = true;
-        
-        // Check if user is host
-        const isHost =
-          currentParticipant?.role === 'HOST' ||
-          role === 'HOST' ||
-          currentUser?.systemRole === 'TUTOR' ||
-          currentUser?.systemRole === 'ADMIN';
-        
-        if (isHost) {
-          // Host leaving - end the meeting for everyone
-          endMeeting({
+
+        if (currentParticipant?._id) {
+          leaveMeeting({
             variables: {
-              meetingId: actualMeetingId
+              input: {
+                participantId: currentParticipant._id
+              }
             }
           }).catch(() => {});
-        } else {
-          // Regular participant - just leave meeting
-          if (currentParticipant?._id) {
-            leaveMeeting({
-              variables: {
-                input: {
-                  participantId: currentParticipant._id
-                }
-              }
-            }).catch(() => {});
-          }
         }
         
         // Disconnect from LiveKit
@@ -1780,62 +1731,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
       window.removeEventListener('pagehide', handlePageHide);
       router.events.off('routeChangeStart', handleRouteChangeStart);
     };
-  }, [router, currentParticipant, currentUser, actualMeetingId, leaveMeeting, endMeeting, liveKitDisconnect]);
-
-  // Monitor host connection - end meeting if host loses connection
-  useEffect(() => {
-    // Only monitor if user is host and connected
-    if (currentParticipant?.role !== 'HOST' || !isLiveKitConnected) {
-      return;
-    }
-
-    // Track disconnection timer
-    let disconnectionTimer: NodeJS.Timeout | null = null;
-    const DISCONNECTION_TIMEOUT = 30000; // 30 seconds grace period
-    
-    // Check connection state
-    if (liveKitConnectionState === 'disconnected' || liveKitConnectionState === 'reconnecting') {
-      // Start timer - if still disconnected after timeout, end meeting
-      disconnectionTimer = setTimeout(async () => {
-        // Double check still disconnected
-        if (liveKitConnectionState === 'disconnected') {
-          
-          try {
-            // End the meeting
-            await endMeeting({
-              variables: {
-                meetingId: actualMeetingId
-              }
-            });
-            
-            // Show notification to host
-            if (typeof window !== 'undefined') {
-              Swal.fire({
-                icon: 'warning',
-                title: '연결 끊김',
-                text: '회의 연결이 끊어졌습니다. 회의가 종료되었습니다.',
-                timer: 3000,
-                showConfirmButton: false
-              });
-              
-              // Redirect after notification
-              setTimeout(() => {
-                redirectToDashboard();
-              }, 3500);
-            }
-          } catch (error) {
-          }
-        }
-      }, DISCONNECTION_TIMEOUT);
-    }
-    
-    // Cleanup timer
-    return () => {
-      if (disconnectionTimer) {
-        clearTimeout(disconnectionTimer);
-      }
-    };
-  }, [currentParticipant, isLiveKitConnected, liveKitConnectionState, actualMeetingId, endMeeting]);
+  }, [router, currentParticipant, currentUser, actualMeetingId, leaveMeeting, liveKitDisconnect, role, isRecording]);
 
   // Helper function to redirect based on user role
   const redirectToDashboard = useCallback(() => {

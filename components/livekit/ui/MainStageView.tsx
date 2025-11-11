@@ -145,32 +145,43 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
 
   // 중요: 소리를 위해 오디오 트랙 연결
   useEffect(() => {
-    if (!audioRef.current || !audioTrack) return;
-
-    // 항상 로컬 참가자 오디오 음소거
-    if (isLocalParticipant || participantId === 'local') {
-      audioRef.current.muted = true;
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return;
     }
 
-    // 중복 재생 방지
+    if (!audioTrack) {
+      audioElement.muted = true;
+      audioElement.volume = 0;
+      return;
+    }
+
+    const isLocal = isLocalParticipant || participantId === 'local';
+
+    if (isLocal) {
+      audioElement.muted = true;
+      audioElement.volume = 0;
+      try {
+        audioTrack.detach(audioElement);
+      } catch {}
+      return () => {
+        try {
+          audioTrack.detach(audioElement);
+        } catch {}
+      };
+    }
+
     try {
-      audioTrack.detach(audioRef.current);
+      audioTrack.detach(audioElement);
     } catch {}
 
-    // 안전하게 오디오 트랙 연결
-    audioTrack.attach(audioRef.current);
-
-    // 혹시 모르니 다시 음소거 강제 적용
-    if (isLocalParticipant || participantId === 'local') {
-      audioRef.current.muted = true;
-      audioRef.current.volume = 0; // 재생 보장 없음
-    }
+    audioTrack.attach(audioElement);
+    audioElement.muted = false;
+    audioElement.volume = 1;
 
     return () => {
       try {
-        if (audioRef.current && audioTrack) {
-          audioTrack.detach(audioRef.current);
-        }
+        audioTrack.detach(audioElement);
       } catch {}
     };
   }, [audioTrack, participantId, isLocalParticipant]);
@@ -184,7 +195,13 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   return (
     <div className={`${styles['main-stage-view']} ${isSpeaking ? styles['speaking'] : ''} ${isScreenSharing ? styles['screen-sharing'] : ''}`}>
       {/* 참가자 오디오 재생을 위한 숨겨진 오디오 요소 - 녹화 중이 아닐 때 에코 방지를 위해 로컬 참가자 음소거 */}
-      <audio ref={audioRef} autoPlay playsInline muted={(isLocalParticipant || participantId === 'local') && !isRecording} style={{ display: 'none' }} />
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        muted={isLocalParticipant || participantId === 'local'}
+        style={{ display: 'none' }}
+      />
       
       {/* 메인 비디오 컨테이너 */}
       <div className={`${styles['main-stage-container']} ${isScreenSharing ? styles['screen-sharing'] : ''}`} onClick={handleClick}>

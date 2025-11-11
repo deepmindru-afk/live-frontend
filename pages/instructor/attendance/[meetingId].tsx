@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
@@ -51,6 +51,10 @@ interface ParticipantAttendance {
     leftAt?: string;
     durationSec: number;
   }>;
+}
+
+interface AggregatedParticipantAttendance extends ParticipantAttendance {
+  aggregatedDurationSec?: number;
 }
 
 interface MeetingAttendance {
@@ -349,6 +353,11 @@ const parseDateTime = (value: string | number | Date | null | undefined): number
 };
 
 const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, totalMeetingTime: number) => {
+  const aggregatedDuration = (participant as AggregatedParticipantAttendance).aggregatedDurationSec;
+  if (typeof aggregatedDuration === 'number' && aggregatedDuration >= 0) {
+    return Math.round(aggregatedDuration);
+  }
+
   const joinedAtMs = parseDateTime(participant.joinedAt);
 
   let leftAtMs = parseDateTime(participant.leftAt);
@@ -398,10 +407,149 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
   return Math.max(0, resolved);
 };
 
-  const filteredParticipants = attendance?.participants.filter(participant =>
-    participant.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (participant.email && participant.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  ) || [];
+  const totalMeetingDuration = getTotalMeetingDuration();
+
+  const aggregatedParticipants = useMemo<AggregatedParticipantAttendance[]>(() => {
+    if (!attendance?.participants || attendance.participants.length === 0) {
+      return [];
+    }
+
+    const compareTimes = (
+      current: string | undefined,
+      incoming: string | undefined,
+      comparator: 'min' | 'max'
+    ) => {
+      const currentTs = parseDateTime(current ?? null);
+      const incomingTs = parseDateTime(incoming ?? null);
+
+      if (incomingTs === null) return current;
+      if (currentTs === null) return incoming;
+
+      if (comparator === 'min') {
+        return incomingTs < currentTs ? incoming : current;
+      }
+      return incomingTs > currentTs ? incoming : current;
+    };
+
+    const aggregateMap = new Map<string, AggregatedParticipantAttendance>();
+
+    attendance.participants.forEach((participant, index) => {
+      const key =
+        participant._id ||
+        (participant as any).userId ||
+        participant.email ||
+        `${participant.displayName || 'participant'}-${index}`;
+
+      const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
+      const existing = aggregateMap.get(key);
+
+      if (!existing) {
+        aggregateMap.set(key, {
+          ...participant,
+          aggregatedDurationSec: Math.max(attendanceSeconds, 0),
+          sessionCount:
+            participant.sessionCount ||
+            (Array.isArray(participant.sessions) ? participant.sessions.length : 0),
+          sessions: Array.isArray(participant.sessions) ? [...participant.sessions] : [],
+        });
+        return;
+      }
+
+      const currentDuration = existing.aggregatedDurationSec ?? 0;
+      const additionalDuration = Math.max(attendanceSeconds, 0);
+
+      aggregateMap.set(key, {
+        ...existing,
+        aggregatedDurationSec: Math.max(currentDuration + additionalDuration, 0),
+        sessionCount:
+          (existing.sessionCount || 0) +
+          (participant.sessionCount ||
+            (Array.isArray(participant.sessions) ? participant.sessions.length : 0)),
+        sessions: [
+          ...(Array.isArray(existing.sessions) ? existing.sessions : []),
+          ...(Array.isArray(participant.sessions) ? participant.sessions : []),
+        ],
+        joinedAt: compareTimes(existing.joinedAt, participant.joinedAt, 'min'),
+        leftAt: compareTimes(existing.leftAt, participant.leftAt, 'max') ?? existing.leftAt,
+        isCurrentlyOnline: existing.isCurrentlyOnline || participant.isCurrentlyOnline,
+        status: existing.isCurrentlyOnline || participant.isCurrentlyOnline
+          ? 'ONLINE'
+          : participant.status || existing.status,
+        micState: participant.micState || existing.micState,
+        cameraState: participant.cameraState || existing.cameraState,
+        hasHandRaised: existing.hasHandRaised || participant.hasHandRaised,
+        avatarUrl: participant.avatarUrl || existing.avatarUrl,
+        organization: participant.organization || existing.organization,
+        department: participant.department || existing.department,
+        email: participant.email || existing.email,
+        displayName: participant.displayName || existing.displayName,
+      });
+    });
+
+    return Array.from(aggregateMap.values()).map((participant) => {
+      const resolvedDuration =
+        typeof participant.aggregatedDurationSec === 'number'
+          ? participant.aggregatedDurationSec
+          : getParticipantAttendanceSeconds(participant, totalMeetingDuration);
+
+      return {
+        ...participant,
+        aggregatedDurationSec: Math.max(resolvedDuration, 0),
+        totalTime: Math.max(resolvedDuration, participant.totalTime || 0),
+      };
+    });
+  }, [attendance, totalMeetingDuration]);
+
+  const filteredParticipants = aggregatedParticipants.filter((participant) => {
+    const keyword = searchTerm.toLowerCase();
+    const name = (participant.displayName || '').toLowerCase();
+    const email = participant.email ? participant.email.toLowerCase() : '';
+    return name.includes(keyword) || email.includes(keyword);
+  });
+
+  const attendanceSummary = useMemo(() => {
+    if (aggregatedParticipants.length === 0) {
+      return {
+        totalParticipants: attendance?.totalParticipants ?? 0,
+        presentParticipants: attendance?.presentParticipants ?? 0,
+        absentParticipants: attendance?.absentParticipants ?? 0,
+        averageAttendanceSeconds: attendance?.averageAttendanceTime ?? 0,
+        attendanceRate: Math.round(attendance?.attendanceRate ?? 0),
+      };
+    }
+
+    let totalDuration = 0;
+    let presentCount = 0;
+
+    aggregatedParticipants.forEach((participant) => {
+      const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
+      if (attendanceSeconds > 0) {
+        presentCount += 1;
+      }
+
+      const cappedDuration =
+        totalMeetingDuration > 0 ? Math.min(attendanceSeconds, totalMeetingDuration) : attendanceSeconds;
+      totalDuration += Math.max(cappedDuration, 0);
+    });
+
+    const totalParticipantsCount = aggregatedParticipants.length;
+    const absentCount = Math.max(totalParticipantsCount - presentCount, 0);
+    const averageAttendanceSeconds =
+      totalParticipantsCount > 0 ? Math.round(totalDuration / totalParticipantsCount) : 0;
+    const theoreticalTotal =
+      totalMeetingDuration > 0 ? totalMeetingDuration * totalParticipantsCount : 0;
+    const computedRate =
+      theoreticalTotal > 0 ? Math.round((totalDuration / theoreticalTotal) * 100) : 0;
+
+    return {
+      totalParticipants: totalParticipantsCount,
+      presentParticipants: presentCount,
+      absentParticipants: absentCount,
+      averageAttendanceSeconds,
+      attendanceRate:
+        computedRate > 0 ? Math.min(computedRate, 100) : Math.round(attendance?.attendanceRate ?? 0),
+    };
+  }, [aggregatedParticipants, attendance, totalMeetingDuration]);
 
   const handleParticipantClick = (participant: ParticipantAttendance) => {
     setSelectedParticipant(participant);
@@ -415,7 +563,7 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
     
     const csvContent = [
       ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
-      ...attendance.participants.map((participant, index) => {
+      ...aggregatedParticipants.map((participant, index) => {
         const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
         const attendancePercentage = calculateAttendancePercentage(attendanceSeconds, totalMeetingDuration);
         return [
@@ -485,8 +633,6 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
       </div>
     );
   }
-
-  const totalMeetingDuration = getTotalMeetingDuration();
 
   return (
     <>
@@ -622,7 +768,7 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">
-                        <CountUp end={attendance?.totalParticipants || 0} duration={2} />
+                        <CountUp end={attendanceSummary.totalParticipants || 0} duration={2} />
                       </div>
                       <div className="text-xs text-gray-500">명</div>
                     </div>
@@ -630,7 +776,12 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">총 참가자</h3>
                 <p className="text-sm text-gray-600">
-                  참석: {attendance?.presentParticipants || 0}명
+                  참석: {attendanceSummary.presentParticipants}명
+                  {attendanceSummary.absentParticipants > 0 && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      미참석: {attendanceSummary.absentParticipants}명
+                    </span>
+                  )}
                 </p>
               </div>
             </motion.div>
@@ -665,7 +816,7 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-purple-600">
-                        <CountUp end={Math.floor((attendance?.averageAttendanceTime || 0) / 60)} duration={2} />
+                        <CountUp end={Math.floor((attendanceSummary.averageAttendanceSeconds || 0) / 60)} duration={2} />
                       </div>
                       <div className="text-xs text-gray-500">분</div>
                     </div>
@@ -673,7 +824,9 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">평균 참여 시간</h3>
                 <p className="text-sm text-gray-600">
-                  {attendance?.averageAttendanceTime ? formatDurationShort(attendance.averageAttendanceTime) : 'N/A'}
+                  {attendanceSummary.averageAttendanceSeconds
+                    ? formatDurationShort(attendanceSummary.averageAttendanceSeconds)
+                    : 'N/A'}
                 </p>
               </div>
             </motion.div>
