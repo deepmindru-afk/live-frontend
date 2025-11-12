@@ -462,7 +462,7 @@ const MemberDashboard: React.FC = () => {
 
     if (result.isConfirmed) {
       await handleLogout();
-      router.push('/login');
+      window.location.href = 'https://hrdeedu.co.kr';
     }
   };
 
@@ -889,37 +889,46 @@ const MemberDashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="empty-state">
-                  <div className="empty-icon">
-                    {searchQuery.trim() ? '🔍' : '📅'}
+                  <div className="empty-state-content">
+                    <div className="empty-logo">
+                      <span>HR</span>
+                    </div>
+                    <span className="empty-chip">
+                      {searchQuery.trim() ? '검색 결과 없음' : '현재 일정 없음'}
+                    </span>
+                    <h3 className="empty-title">
+                      {searchQuery.trim()
+                        ? `"${searchQuery}"에 대한 클래스가 없습니다`
+                        : '아직 예정된 라이브 클래스가 없어요'}
+                    </h3>
+                    <p className="empty-description">
+                      {searchQuery.trim()
+                        ? '다른 키워드를 입력하거나 필터를 초기화해보세요.'
+                        : '초대코드를 받으면 상단의 미팅 참여 탭에서 즉시 입장할 수 있습니다.'}
+                    </p>
+                    <div className="empty-actions">
+                      {searchQuery.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="empty-primary"
+                        >
+                          검색 초기화
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={fetchMeetings}
+                          className="empty-primary"
+                        >
+                          최신 일정 확인
+                        </button>
+                      )}
+                      <span className="empty-tip">
+                        초대코드를 받으셨다면 ‘미팅 참여’ 탭에서 바로 입력해보세요.
+                      </span>
+                    </div>
                   </div>
-                  <h3 className="empty-title">
-                    {searchQuery.trim() 
-                      ? `"${searchQuery}"에 대한 검색 결과가 없습니다.`
-                      : '검색된 미팅이 없습니다.'
-                    }
-                  </h3>
-                  <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>
-                    {searchQuery.trim() 
-                      ? '다른 검색어를 시도해보세요.'
-                      : '아직 참여한 미팅이 없습니다. 호스트로부터 초대코드를 받아 참여해보세요.'}
-                  </p>
-                  {searchQuery.trim() && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="reset-search-btn"
-                      style={{
-                        marginTop: '20px',
-                        padding: '10px 20px',
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      검색 초기화
-                    </button>
-                  )}
                 </div>
               )}
             </div>
