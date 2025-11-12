@@ -1548,36 +1548,12 @@ const MemberDashboard: React.FC = () => {
                   ? computeAttendanceDuration(attendanceRecord)
                   : null;
 
-                if (process.env.NODE_ENV !== 'production') {
-                  console.log('[MemberAttendance] computed data', {
-                    meetingId: selectedMeeting?._id,
-                    meetingStatus,
-                    safeMeetingDurationSeconds,
-                    attendanceRecord,
-                    attendanceRecordRaw: attendanceInfo,
-                    identifierSet: Array.from(identifierSet),
-                    fallbackSessionCount: participantInfo?.loginInfo?.sessions?.length || 0,
-                  });
-                }
-
                 if (participantDurationSeconds === null) {
                   if (meetingStatus === 'STARTED' || meetingStatus === 'LIVE') {
                     participantDurationSeconds = calculateParticipantDurationFallback();
                   } else {
                     participantDurationSeconds = 0;
                   }
-                }
-
-                if (process.env.NODE_ENV !== 'production') {
-                  console.log('[MemberAttendance] post-calc durations', {
-                    meetingId: selectedMeeting?._id,
-                    participantDurationSeconds,
-                    safeMeetingDurationSeconds,
-                    attendancePercentage:
-                      safeMeetingDurationSeconds > 0 && participantDurationSeconds !== null
-                        ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
-                        : 0,
-                  });
                 }
 
                 const attendancePercentage =

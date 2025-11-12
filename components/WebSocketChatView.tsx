@@ -16,6 +16,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
 }) => {
   
   const [newMessage, setNewMessage] = useState('');
+  const [viewportOffset, setViewportOffset] = useState(0);
   // DISABLED: Typing indicators removed to reduce server requests
   // const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -53,6 +54,32 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Ensure the chat input stays above the iOS keyboard
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) {
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+    const handleViewportResize = () => {
+      const keyboardOffset = Math.max(
+        0,
+        window.innerHeight - (visualViewport.height + visualViewport.offsetTop)
+      );
+
+      setViewportOffset((prev) => (prev !== keyboardOffset ? keyboardOffset : prev));
+    };
+
+    handleViewportResize();
+    visualViewport.addEventListener('resize', handleViewportResize);
+    visualViewport.addEventListener('scroll', handleViewportResize);
+
+    return () => {
+      visualViewport.removeEventListener('resize', handleViewportResize);
+      visualViewport.removeEventListener('scroll', handleViewportResize);
+    };
+  }, []);
+
   // DISABLED: Ping mechanism removed - heartbeat (every 10s) handles connection keepalive
   // No need for duplicate ping - WebSocket connection stays alive with heartbeat
   // useEffect(() => {
@@ -85,6 +112,12 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
     // Typing indicator functionality removed
+  };
+
+  const handleTextareaFocus = () => {
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const handleDeleteMessage = useCallback((messageId: string) => {
@@ -199,7 +232,8 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
         flex: 1,
         overflowY: 'auto',
         padding: '10px 0',
-        borderBottom: '1px solid #333'
+        borderBottom: '1px solid #333',
+        paddingBottom: 10 + viewportOffset
       }}>
         {Object.keys(groupedMessages).length === 0 ? (
           <div style={{
@@ -349,6 +383,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
       {/* Message Input */}
       <div style={{
         padding: '15px',
+        paddingBottom: 15 + viewportOffset,
         borderTop: '1px solid #333',
         backgroundColor: '#2a2a2a'
       }}>
@@ -361,6 +396,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
             value={newMessage}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onFocus={handleTextareaFocus}
             placeholder={isConnected ? "Type your message..." : "Connecting..."}
             disabled={!isConnected}
             style={{
