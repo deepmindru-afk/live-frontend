@@ -5,7 +5,8 @@ import { useRouter } from 'next/router';
 import { isAuthenticated, getCurrentUser, handleLogout, showErrorAlert, getAuthToken, makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MY_MEETINGS, GET_MEETING_BY_ID, GET_MEETING_STATS, GET_ALL_MEETINGS } from '../../apollo/meeting/queries';
 import { JOIN_MEETING_BY_CODE } from '../../apollo/meeting/mutations';
-import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING } from '../../apollo/livestream/queries';
+import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING, GET_MEETING_ATTENDANCE } from '../../apollo/livestream/queries';
+import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 
 import { UPDATE_PROFILE, UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE } from '../../apollo/member/mutations';
 import Swal from 'sweetalert2';
@@ -468,18 +469,22 @@ const MemberDashboard: React.FC = () => {
   const fetchParticipantAttendance = async (meetingId: string) => {
     try {
       setLoadingAttendance(true);
-      const [participantResult, meetingResult] = await Promise.all([
+      const [participantResult, meetingResult, attendanceResult] = await Promise.all([
         makeGraphQLRequest(GET_PARTICIPANT_BY_USER_MEETING, {
           meetingId: meetingId
         }),
-        makeGraphQLRequest(GET_MEETING_BY_ID, {
+        enhancedMakeGraphQLRequest(GET_MEETING_BY_ID, {
+          meetingId: meetingId
+        }),
+        enhancedMakeGraphQLRequest(GET_MEETING_ATTENDANCE, {
           meetingId: meetingId
         })
       ]);
 
       setParticipantData({
         participant: participantResult?.getParticipantByUserAndMeeting ?? null,
-        meeting: meetingResult?.getMeetingById ?? null
+        meeting: meetingResult?.getMeetingById ?? null,
+        attendance: attendanceResult?.getMeetingAttendance ?? null
       });
     } catch (error: any) {
       await showErrorAlert('Error', 'Failed to load attendance data');
@@ -1255,10 +1260,11 @@ const MemberDashboard: React.FC = () => {
               ) : participantData?.participant ? (() => {
                 const participantInfo = participantData.participant;
                 const meetingInfo = participantData.meeting || selectedMeeting;
+                const attendanceInfo = participantData.attendance;
 
                 const parseDateTime = (value: any): number | null => {
                   if (value === null || value === undefined) return null;
-                  if (typeof value === 'number') return value;
+                  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
                   if (typeof value === 'string') {
                     if (/^\d+$/.test(value)) {
                       const numeric = parseInt(value, 10);
@@ -1268,46 +1274,252 @@ const MemberDashboard: React.FC = () => {
                     return Number.isFinite(parsed) ? parsed : null;
                   }
                   if (value instanceof Date) {
-                    return value.getTime();
+                    const time = value.getTime();
+                    return Number.isFinite(time) ? time : null;
                   }
                   const parsed = new Date(value as any).getTime();
                   return Number.isFinite(parsed) ? parsed : null;
                 };
 
-                const calculateMeetingDurationSeconds = () => {
-                  if (!meetingInfo) return 0;
-                  const start = parseDateTime(meetingInfo.actualStartAt);
-                  const end = parseDateTime(meetingInfo.endedAt);
-                  if (start !== null && end !== null && end > start) {
-                    return Math.floor((end - start) / 1000);
+                const normalizeIdentifier = (value: any): string | null => {
+                  if (value === null || value === undefined) return null;
+                  if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    if (!trimmed) return null;
+                    return trimmed.toLowerCase();
                   }
-                  const scheduledMinutes = meetingInfo.durationMin || meetingInfo.duration || selectedMeeting.duration;
+                  return String(value).toLowerCase();
+                };
+
+                const getMeetingStatus = () => {
+                  const normalizeStatus = (status: string | undefined | null) => {
+                    if (!status) return undefined;
+                    return status.toUpperCase();
+                  };
+
+                  const priority = (status?: string) => {
+                    switch (status) {
+                      case 'ENDED':
+                      case 'END':
+                      case 'COMPLETED':
+                      case 'FINISHED':
+                      case 'CLOSED':
+                        return 3;
+                      case 'STARTED':
+                      case 'LIVE':
+                        return 2;
+                      case 'SCHEDULED':
+                        return 1;
+                      default:
+                        return 0;
+                    }
+                  };
+
+                  const meetingStatus = normalizeStatus(meetingInfo?.status);
+                  const fallbackStatus = normalizeStatus(selectedMeeting?.status);
+
+                  if (priority(fallbackStatus) > priority(meetingStatus)) {
+                    return fallbackStatus;
+                  }
+                  return meetingStatus ?? fallbackStatus;
+                };
+
+                const getSafeMeetingDurationSeconds = () => {
+                  const meetingStatus = getMeetingStatus();
+                  const startMs =
+                    parseDateTime(meetingInfo?.actualStartAt) ??
+                    parseDateTime((selectedMeeting as any)?.actualStartAt);
+                  const endMs =
+                    parseDateTime(meetingInfo?.endedAt) ??
+                    parseDateTime((selectedMeeting as any)?.endedAt);
+
+                  if (startMs !== null && endMs !== null && endMs > startMs) {
+                    return Math.floor((endMs - startMs) / 1000);
+                  }
+
+                  const scheduledMinutes =
+                    meetingInfo?.durationMin ??
+                    meetingInfo?.duration ??
+                    (selectedMeeting as any)?.durationMin ??
+                    selectedMeeting?.duration;
                   if (scheduledMinutes) {
-                    return Math.max(Math.floor(scheduledMinutes * 60), 0);
+                    const scheduledSeconds = Math.max(Math.floor(scheduledMinutes * 60), 0);
+                    if (scheduledSeconds > 0) {
+                      return scheduledSeconds;
+                    }
                   }
+
+                  if (startMs !== null && (meetingStatus === 'STARTED' || meetingStatus === 'LIVE')) {
+                    return Math.max(Math.floor((Date.now() - startMs) / 1000), 0);
+                  }
+
                   return 0;
                 };
 
-                const calculateParticipantDurationSeconds = () => {
+                const buildIdentifierSet = () => {
+                  const identifiers = new Set<string>();
+                  const add = (value: any) => {
+                    const normalized = normalizeIdentifier(value);
+                    if (normalized) {
+                      identifiers.add(normalized);
+                    }
+                  };
+
+                  add(participantInfo?.userId);
+                  add(participantInfo?._id);
+                  add((participantInfo as any)?.backendId);
+                  add((participantInfo as any)?.identity);
+                  add(participantInfo?.participantId);
+                  add(participantInfo?.email);
+                  add(participantInfo?.displayName);
+                  add(participantInfo?.loginInfo?.userId);
+                  add(participantInfo?.loginInfo?.email);
+                  add(user?._id);
+                  add(user?.email);
+                  add(user?.displayName);
+
+                  return identifiers;
+                };
+
+                const meetingStatus = getMeetingStatus();
+                const safeMeetingDurationSeconds = getSafeMeetingDurationSeconds();
+                const meetingEndedAtMs =
+                  parseDateTime(meetingInfo?.endedAt) ??
+                  parseDateTime((selectedMeeting as any)?.endedAt);
+
+                const computeAttendanceDuration = (record: any) => {
+                  const joinedAtMs = parseDateTime(record?.joinedAt);
+                  let leftAtMs = parseDateTime(record?.leftAt);
+
+                  if (!leftAtMs) {
+                    if (
+                      meetingStatus === 'ENDED' ||
+                      meetingStatus === 'END' ||
+                      meetingStatus === 'COMPLETED' ||
+                      meetingStatus === 'FINISHED' ||
+                      meetingStatus === 'CLOSED'
+                    ) {
+                      leftAtMs = meetingEndedAtMs;
+                    } else if (meetingStatus === 'STARTED' || meetingStatus === 'LIVE') {
+                      leftAtMs = Date.now();
+                    }
+                  }
+
+                  let timelineDuration = 0;
+                  if (joinedAtMs && leftAtMs && leftAtMs > joinedAtMs) {
+                    timelineDuration = Math.floor((leftAtMs - joinedAtMs) / 1000);
+                  }
+
+                  const sessionsDuration = Array.isArray(record?.sessions)
+                    ? record.sessions.reduce((acc: number, session: any) => {
+                        if (!session) return acc;
+                        if (typeof session.durationSec === 'number' && session.durationSec > 0) {
+                          return acc + session.durationSec;
+                        }
+                        const sessionJoin = parseDateTime(session?.joinedAt);
+                        const sessionLeft = parseDateTime(session?.leftAt);
+                        if (sessionJoin && sessionLeft && sessionLeft > sessionJoin) {
+                          return acc + Math.floor((sessionLeft - sessionJoin) / 1000);
+                        }
+                        return acc;
+                      }, 0)
+                    : 0;
+
+                  const reportedTotal =
+                    typeof record?.totalTime === 'number' && record.totalTime > 0 ? record.totalTime : 0;
+
+                  let resolved = timelineDuration;
+
+                  if (resolved === 0 && sessionsDuration > 0) {
+                    resolved = sessionsDuration;
+                  }
+
+                  if (resolved === 0 && reportedTotal > 0) {
+                    resolved = reportedTotal;
+                  }
+
+                  if (
+                    resolved === reportedTotal &&
+                    timelineDuration > 0 &&
+                    timelineDuration <= safeMeetingDurationSeconds
+                  ) {
+                    resolved = timelineDuration;
+                  }
+
+                  if (
+                    resolved === reportedTotal &&
+                    sessionsDuration > 0 &&
+                    sessionsDuration <= safeMeetingDurationSeconds
+                  ) {
+                    resolved = sessionsDuration;
+                  }
+
+                  if (safeMeetingDurationSeconds > 0) {
+                    resolved = Math.min(resolved, safeMeetingDurationSeconds);
+                  }
+
+                  return Math.max(0, resolved);
+                };
+
+                const identifierSet = buildIdentifierSet();
+                let attendanceRecord: any | null = null;
+                let bestMatchScore = 0;
+                if (Array.isArray(attendanceInfo?.participants)) {
+                  attendanceInfo.participants.forEach((record: any) => {
+                    const candidateValues = [
+                      record?.userId,
+                      record?._id,
+                      (record as any)?.participantId,
+                      (record as any)?.backendId,
+                      (record as any)?.identity,
+                      record?.email,
+                      record?.displayName,
+                      record?.user?._id,
+                      record?.user?.id,
+                      record?.user?.email,
+                    ];
+
+                    let score = 0;
+                    candidateValues.forEach((value) => {
+                      const normalized = normalizeIdentifier(value);
+                      if (normalized && identifierSet.has(normalized)) {
+                        score += 1;
+                      }
+                    });
+
+                    if (score > bestMatchScore) {
+                      bestMatchScore = score;
+                      attendanceRecord = record;
+                    }
+                  });
+                }
+
+                const calculateParticipantDurationFallback = () => {
                   const sessions = participantInfo?.loginInfo?.sessions || [];
                   if (!Array.isArray(sessions) || sessions.length === 0) {
                     const fallbackMinutes = participantInfo?.loginInfo?.totalDurationMinutes || 0;
-                    return Math.max(Math.floor(fallbackMinutes * 60), 0);
+                    const fallbackSeconds = Math.max(Math.floor(fallbackMinutes * 60), 0);
+                    return safeMeetingDurationSeconds > 0
+                      ? Math.min(fallbackSeconds, safeMeetingDurationSeconds)
+                      : fallbackSeconds;
                   }
 
-                  const meetingEndedAt = parseDateTime(meetingInfo?.endedAt);
-                  const meetingStatus = meetingInfo?.status || selectedMeeting.status;
                   let totalSeconds = 0;
-
                   sessions.forEach((session: any) => {
                     const joined = parseDateTime(session?.joinedAt);
                     if (joined === null) return;
-
                     let left = parseDateTime(session?.leftAt);
                     if (left === null) {
-                      if (meetingEndedAt !== null) {
-                        left = meetingEndedAt;
-                      } else if (meetingStatus !== 'ENDED') {
+                      if (
+                        meetingEndedAtMs !== null &&
+                        (meetingStatus === 'ENDED' ||
+                          meetingStatus === 'END' ||
+                          meetingStatus === 'COMPLETED' ||
+                          meetingStatus === 'FINISHED' ||
+                          meetingStatus === 'CLOSED')
+                      ) {
+                        left = meetingEndedAtMs;
+                      } else if (meetingStatus === 'STARTED' || meetingStatus === 'LIVE') {
                         left = Date.now();
                       }
                     }
@@ -1325,19 +1537,59 @@ const MemberDashboard: React.FC = () => {
                     totalSeconds = Math.max(Math.floor(fallbackMinutes * 60), 0);
                   }
 
-                  return totalSeconds;
+                  if (safeMeetingDurationSeconds > 0) {
+                    totalSeconds = Math.min(totalSeconds, safeMeetingDurationSeconds);
+                  }
+
+                  return Math.max(0, totalSeconds);
                 };
 
-                const meetingDurationSeconds = calculateMeetingDurationSeconds();
-                const participantDurationSeconds = calculateParticipantDurationSeconds();
-                const fallbackMeetingSeconds = selectedMeeting.duration ? selectedMeeting.duration * 60 : 0;
-                const safeMeetingDurationSeconds = meetingDurationSeconds > 0 ? meetingDurationSeconds : fallbackMeetingSeconds;
-                const attendancePercentage = safeMeetingDurationSeconds > 0
-                  ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
-                  : 0;
+                let participantDurationSeconds: number | null = attendanceRecord
+                  ? computeAttendanceDuration(attendanceRecord)
+                  : null;
+
+                if (process.env.NODE_ENV !== 'production') {
+                  console.log('[MemberAttendance] computed data', {
+                    meetingId: selectedMeeting?._id,
+                    meetingStatus,
+                    safeMeetingDurationSeconds,
+                    attendanceRecord,
+                    attendanceRecordRaw: attendanceInfo,
+                    identifierSet: Array.from(identifierSet),
+                    fallbackSessionCount: participantInfo?.loginInfo?.sessions?.length || 0,
+                  });
+                }
+
+                if (participantDurationSeconds === null) {
+                  if (meetingStatus === 'STARTED' || meetingStatus === 'LIVE') {
+                    participantDurationSeconds = calculateParticipantDurationFallback();
+                  } else {
+                    participantDurationSeconds = 0;
+                  }
+                }
+
+                if (process.env.NODE_ENV !== 'production') {
+                  console.log('[MemberAttendance] post-calc durations', {
+                    meetingId: selectedMeeting?._id,
+                    participantDurationSeconds,
+                    safeMeetingDurationSeconds,
+                    attendancePercentage:
+                      safeMeetingDurationSeconds > 0 && participantDurationSeconds !== null
+                        ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
+                        : 0,
+                  });
+                }
+
+                const attendancePercentage =
+                  safeMeetingDurationSeconds > 0 && participantDurationSeconds !== null
+                    ? Math.round((participantDurationSeconds / safeMeetingDurationSeconds) * 100)
+                    : 0;
                 const normalizedAttendancePercentage = Math.max(0, Math.min(attendancePercentage, 100));
 
-                const meetingDate = (meetingInfo && (meetingInfo.actualStartAt || meetingInfo.scheduledFor)) || selectedMeeting.schedule || selectedMeeting.createdAt;
+                const meetingDate =
+                  (meetingInfo && (meetingInfo.actualStartAt || meetingInfo.scheduledFor)) ||
+                  selectedMeeting.schedule ||
+                  selectedMeeting.createdAt;
 
                 return (
                   <div className="attendance-card">

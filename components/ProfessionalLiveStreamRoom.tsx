@@ -695,12 +695,163 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   });
 
 const meeting = meetingData && typeof meetingData === 'object' && 'getMeetingById' in meetingData ? meetingData.getMeetingById as any : null;
+
+const normalizeId = useCallback((value: any): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  if (typeof value === 'object') {
+    if ('toString' in value && typeof (value as any).toString === 'function') {
+      const converted = (value as any).toString();
+      if (typeof converted === 'string') {
+        const trimmed = converted.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      }
+    }
+    if ('_id' in value && typeof (value as any)._id === 'string') {
+      const trimmed = (value as any)._id.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+  }
+
+  return null;
+}, []);
+
+const userIdentifierValues = useMemo(() => {
+  const ids = new Set<string>();
+  const add = (value: any) => {
+    const normalized = normalizeId(value);
+    if (normalized) {
+      ids.add(normalized);
+    }
+  };
+
+  add(currentParticipant?._id);
+  add((currentParticipant as any)?.backendId);
+  add(currentParticipant?.identity);
+  add(currentParticipant?.participantId);
+  add(currentParticipant?.user?._id);
+  add(currentParticipant?.userId);
+  add(currentParticipant?.user?.id);
+  add(currentParticipant?.id);
+  add(currentUser?._id);
+  add(currentUser?.id);
+  add(actualUserId);
+
+  return Array.from(ids);
+}, [
+  normalizeId,
+  currentParticipant?._id,
+  (currentParticipant as any)?.backendId,
+  currentParticipant?.identity,
+  currentParticipant?.participantId,
+  currentParticipant?.user?._id,
+  currentParticipant?.userId,
+  currentParticipant?.user?.id,
+  currentParticipant?.id,
+  currentUser?._id,
+  currentUser?.id,
+  actualUserId
+]);
+
+const userIdentifierSet = useMemo(() => {
+  return new Set<string>(userIdentifierValues.filter(id => typeof id === 'string' && id.trim().length > 0));
+}, [userIdentifierValues]);
+
+const enhanceParticipantMediaState = useCallback((participant: any) => {
+  const identifiers = new Set<string>();
+  const add = (value: any) => {
+    const normalized = normalizeId(value);
+    if (normalized) {
+      identifiers.add(normalized);
+    }
+  };
+
+  add(participant?._id);
+  add((participant as any)?.backendId);
+  add(participant?.identity);
+  add(participant?.participantId);
+  add(participant?.user?._id);
+  add(participant?.userId);
+  add(participant?.user?.id);
+
+  const isCurrentUserParticipant = Array.from(identifiers).some(id => userIdentifierSet.has(id));
+
+  if (isCurrentUserParticipant) {
+    return {
+      ...participant,
+      micState: micEnabled ? 'ON' : 'OFF',
+      isMuted: !micEnabled,
+      cameraState: cameraEnabled ? 'ON' : 'OFF',
+      isCameraOff: !cameraEnabled
+    };
+  }
+
+  return participant;
+}, [normalizeId, userIdentifierSet, micEnabled, cameraEnabled]);
+
+const meetingCurrentHostId = normalizeId(meeting?.currentHostId) || normalizeId(meeting?.hostId);
+const isCurrentHostById = meetingCurrentHostId ? userIdentifierValues.includes(meetingCurrentHostId) : false;
 // Strict host check - must be actual meeting host, not just system admin/tutor
 // Only show Active Students to actual meeting hosts
-const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
+const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || isCurrentHostById;
 
 // For recording, ONLY allow the actual meeting host (not system admins)
-const isMeetingHost = currentParticipant?.role === 'HOST';
+const isMeetingHost = currentParticipant?.role === 'HOST' || isCurrentHostById;
+
+const canShareScreen = useMemo(() => {
+  const isSystemAdmin = currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+
+  if (isSystemAdmin) {
+    return true;
+  }
+
+  if (isCurrentHostById) {
+    return true;
+  }
+
+  if (!currentParticipant) {
+    return false;
+  }
+
+  if (currentParticipant.role === 'HOST') {
+    return true;
+  }
+
+  const currentId =
+    normalizeId(currentParticipant._id) ||
+    normalizeId((currentParticipant as any)?.backendId) ||
+    normalizeId(currentParticipant.user?._id) ||
+    normalizeId(currentParticipant.userId) ||
+    normalizeId(currentParticipant.id);
+
+  if (!currentId) {
+    return false;
+  }
+
+  return memoizedParticipants.some(p => {
+    const participantId =
+      normalizeId(p._id) ||
+      normalizeId((p as any)?.backendId) ||
+      normalizeId(p.user?._id) ||
+      normalizeId(p.userId) ||
+      normalizeId((p as any)?.id);
+    if (!participantId) {
+      return false;
+    }
+    return participantId === currentId && p.role === 'HOST';
+  });
+}, [currentParticipant, currentUser?.systemRole, memoizedParticipants, isCurrentHostById, normalizeId]);
 
 // Whiteboard state and hook
 const [isWhiteboardMode, setIsWhiteboardMode] = useState(false);
@@ -2121,6 +2272,7 @@ const handleWhiteboardToggle = useCallback(() => {
   useEffect(() => {
     if (participantsData && typeof participantsData === 'object' && 'getParticipantsByMeeting' in participantsData && participantsData.getParticipantsByMeeting) {
       const participantsList = participantsData.getParticipantsByMeeting as any[];
+      const normalizedParticipantsList = participantsList.map(enhanceParticipantMediaState);
       
       // Throttle participant list updates
       const now = Date.now();
@@ -2131,7 +2283,7 @@ const handleWhiteboardToggle = useCallback(() => {
       // Raw participant data processed
       
       // Create a stable string representation of participant IDs
-      const currentParticipantIds = participantsList.map((p: any) => p._id).sort().join(',');
+      const currentParticipantIds = normalizedParticipantsList.map((p: any) => p._id).sort().join(',');
       
       // Only process if the actual participant list changed (not just the object reference)
       if (currentParticipantIds !== prevParticipantIdsRef.current) {
@@ -2141,11 +2293,11 @@ const handleWhiteboardToggle = useCallback(() => {
         
         // ✅ CLEAN FIX: No need to normalize - just use the participants as they come from backend
         // The memoizedParticipants will handle the ID mapping cleanly
-        setParticipants(participantsList);
+        setParticipants(normalizedParticipantsList);
 
         // Check for new participants (joined)
         if (previousParticipants.length > 0) {
-          const newParticipants = participantsList.filter((newP: any) => 
+          const newParticipants = normalizedParticipantsList.filter((newP: any) => 
             !previousParticipants.find((oldP: any) => oldP._id === newP._id)
           );
           
@@ -2166,15 +2318,15 @@ const handleWhiteboardToggle = useCallback(() => {
 
           // Check for left participants
           const leftParticipants = previousParticipants.filter((oldP: any) => 
-            !participantsList.find((newP: any) => newP._id === oldP._id)
+            !normalizedParticipantsList.find((newP: any) => newP._id === oldP._id)
           );
           
           leftParticipants.forEach((participant: any) => {
             removeFromQueue(participant._id);
           });
-        } else if (participantsList.length > 0) {
+        } else if (normalizedParticipantsList.length > 0) {
           // Initial load - add all participants
-          participantsList.forEach((participant: any) => {
+          normalizedParticipantsList.forEach((participant: any) => {
             addToQueue({
               _id: participant._id,
               displayName: participant.displayName,
@@ -2191,7 +2343,7 @@ const handleWhiteboardToggle = useCallback(() => {
         }
       }
     }
-  }, [participantsData, addToQueue, removeFromQueue]);
+  }, [participantsData, addToQueue, removeFromQueue, enhanceParticipantMediaState]);
   
   // ✅ FIXED: Removed participants from dependency array to prevent infinite loop
 
@@ -2686,6 +2838,15 @@ const handleWhiteboardToggle = useCallback(() => {
   };
 
   const handleScreenShareToggle = async () => {
+    if (!canShareScreen) {
+      Swal.fire({
+        icon: 'warning',
+        title: '화면 공유 권한이 없습니다',
+        text: '호스트만 화면을 공유할 수 있습니다.'
+      });
+      return;
+    }
+
     const isWhiteboardRunning = isWhiteboardActive || isWhiteboardMode;
     const isStartingScreenShare = !liveKitIsScreenSharing;
 
@@ -3793,32 +3954,34 @@ const handleWhiteboardToggle = useCallback(() => {
                     </button>
 
                     {/* Screen Share Button */}
-                    <button
-                      onClick={handleScreenShareToggle}
-                      onTouchStart={handleScreenShareToggle}
-                      style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '50%',
-                        backgroundColor: liveKitIsScreenSharing ? '#3b82f6' : '#6b7280',
-                        border: '2px solid white',
-                        cursor: 'pointer',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                        transition: 'all 0.2s ease',
-                        zIndex: 1000,
-                        position: 'relative',
-                        touchAction: 'manipulation'
-                      }}
-                      title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
-                    </button>
+                    {canShareScreen && (
+                      <button
+                        onClick={handleScreenShareToggle}
+                        onTouchStart={handleScreenShareToggle}
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '50%',
+                          backgroundColor: liveKitIsScreenSharing ? '#3b82f6' : '#6b7280',
+                          border: '2px solid white',
+                          cursor: 'pointer',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                          transition: 'all 0.2s ease',
+                          zIndex: 1000,
+                          position: 'relative',
+                          touchAction: 'manipulation'
+                        }}
+                        title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </button>
+                    )}
 
                     {/* Thumbnail Toggle Button */}
                     <button
@@ -4499,7 +4662,8 @@ const handleWhiteboardToggle = useCallback(() => {
               {(() => {
                 // 호스트에게만 화이트보드 편집기 표시
                 const userIsHost = 
-                  isHost || 
+                  isHost ||
+                  isCurrentHostById ||
                   currentParticipant?.role === 'HOST' ||
                   currentUser?.systemRole === 'TUTOR' ||
                   currentUser?.systemRole === 'ADMIN';
@@ -4546,7 +4710,8 @@ const handleWhiteboardToggle = useCallback(() => {
               {(() => {
                 // Don't show participants when whiteboard is active (host sees whiteboard editor, participants see stream)
                 const userIsHost = 
-                  isHost || 
+                  isHost ||
+                  isCurrentHostById ||
                   currentParticipant?.role === 'HOST' ||
                   currentUser?.systemRole === 'TUTOR' ||
                   currentUser?.systemRole === 'ADMIN';
@@ -5062,27 +5227,27 @@ const handleWhiteboardToggle = useCallback(() => {
                 })()}
               </div>
               
-                {/* Mic Control - Video Player Style */}
-                <button
-                  onClick={handleMicToggle}
-                  style={{
-                    width: isMobile ? '44px' : '52px',
-                    height: isMobile ? '44px' : '52px',
-                    borderRadius: '50%',
-                    backgroundColor: micEnabled 
-                      ? 'rgba(34, 197, 94, 0.7)' 
-                      : 'rgba(239, 68, 68, 0.7)',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    cursor: 'pointer',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                  title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+              {/* Mic Control - Video Player Style */}
+              <button
+                onClick={handleMicToggle}
+                style={{
+                  width: isMobile ? '44px' : '52px',
+                  height: isMobile ? '44px' : '52px',
+                  borderRadius: '50%',
+                  backgroundColor: micEnabled 
+                    ? 'rgba(34, 197, 94, 0.9)' 
+                    : 'rgba(239, 68, 68, 0.85)',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  cursor: 'pointer',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                  backdropFilter: 'blur(10px)'
+                }}
+                title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
                 {micEnabled ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
@@ -5104,8 +5269,8 @@ const handleWhiteboardToggle = useCallback(() => {
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
                   backgroundColor: cameraEnabled 
-                    ? 'rgba(34, 197, 94, 0.7)' 
-                    : 'rgba(239, 68, 68, 0.7)',
+                    ? 'rgba(34, 197, 94, 0.9)' 
+                    : 'rgba(239, 68, 68, 0.85)',
                   border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
                   color: 'white',
@@ -5130,31 +5295,33 @@ const handleWhiteboardToggle = useCallback(() => {
               </button>
 
               {/* Screen Share Control */}
-              <button
-                onClick={handleScreenShareToggle}
-                style={{
-                  width: isMobile ? '40px' : '48px',
-                  height: isMobile ? '40px' : '48px',
-                  borderRadius: '50%',
-                  backgroundColor: liveKitIsScreenSharing 
-                    ? 'rgba(59, 130, 246, 0.7)' 
-                    : 'rgba(243, 244, 246, 0.5)',
-                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                  cursor: 'pointer',
-                  color: liveKitIsScreenSharing ? 'white' : '#6b7280',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                  backdropFilter: 'blur(10px)'
-                }}
-                title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
-              >
-                <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/>
-                </svg>
-              </button>
+              {canShareScreen && (
+                <button
+                  onClick={handleScreenShareToggle}
+                  style={{
+                    width: isMobile ? '40px' : '48px',
+                    height: isMobile ? '40px' : '48px',
+                    borderRadius: '50%',
+                    backgroundColor: liveKitIsScreenSharing 
+                      ? 'rgba(59, 130, 246, 0.9)' 
+                      : 'rgba(243, 244, 246, 0.85)',
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    cursor: 'pointer',
+                    color: liveKitIsScreenSharing ? 'white' : '#1f2937',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    backdropFilter: 'blur(10px)'
+                  }}
+                  title={liveKitIsScreenSharing ? 'Stop sharing' : 'Share screen'}
+                >
+                  <svg width={isMobile ? "18" : "20"} height={isMobile ? "18" : "20"} viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zm-7-3.53v-2.19c-2.78 0-4.61.85-6 2.72.56-2.67 2.11-5.33 6-5.87V7l4 3.73-4 3.74z"/>
+                  </svg>
+                </button>
+              )}
 
               {/* 화이트보드 제어 - 호스트 전용 */}
               {(() => {
@@ -5190,7 +5357,7 @@ const handleWhiteboardToggle = useCallback(() => {
                 
                 // Only show button if user is confirmed HOST, TUTOR, or ADMIN
                 // DO NOT use 'role' prop as it defaults to 'HOST' and is unreliable for participants
-                const userIsHost = isActualHost || isSystemAdmin || isHostInList;
+                const userIsHost = isActualHost || isSystemAdmin || isHostInList || isCurrentHostById;
                 
                 // ✅ STRICT CHECK: Hide button for all non-host participants
                 if (!userIsHost) {
@@ -5209,11 +5376,11 @@ const handleWhiteboardToggle = useCallback(() => {
                       height: isMobile ? '40px' : '48px',
                       borderRadius: '50%',
                       backgroundColor: isWhiteboardActive 
-                        ? 'rgba(139, 92, 246, 0.7)' 
-                        : 'rgba(243, 244, 246, 0.5)',
+                        ? 'rgba(139, 92, 246, 0.9)' 
+                        : 'rgba(243, 244, 246, 0.85)',
                       border: '2px solid rgba(255, 255, 255, 0.3)',
                       cursor: 'pointer',
-                      color: isWhiteboardActive ? 'white' : '#6b7280',
+                      color: isWhiteboardActive ? 'white' : '#1f2937',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -5241,11 +5408,11 @@ const handleWhiteboardToggle = useCallback(() => {
                   height: isMobile ? '40px' : '48px',
                   borderRadius: '50%',
                   backgroundColor: sidebarOpen 
-                    ? 'rgba(59, 130, 246, 0.7)' 
-                    : 'rgba(243, 244, 246, 0.5)',
+                    ? 'rgba(59, 130, 246, 0.9)' 
+                    : 'rgba(243, 244, 246, 0.85)',
                   border: '2px solid rgba(255, 255, 255, 0.3)',
                   cursor: 'pointer',
-                  color: sidebarOpen ? 'white' : '#6b7280',
+                  color: sidebarOpen ? 'white' : '#1f2937',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
