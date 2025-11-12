@@ -3472,7 +3472,7 @@ const handleWhiteboardToggle = useCallback(() => {
               flexShrink: 0
             }}>
               <img 
-                src="/Icons/HRDeOnAirLogo.svg" 
+                src="/Icons/HRDeOnAirBlack.svg" 
                 alt="HRDe Logo" 
                 style={{
                   width: '100%',
