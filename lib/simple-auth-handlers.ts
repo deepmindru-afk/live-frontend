@@ -4,6 +4,47 @@
 import { print } from 'graphql';
 import Swal from 'sweetalert2';
 
+const JWT_LAST_TIME_USE_KEY = 'jwt_last_time_use';
+const JWT_USAGE_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+function getStoredJwtToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('jwt') || window.localStorage.getItem('token');
+}
+
+function getJwtLastTimeUse(): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(JWT_LAST_TIME_USE_KEY);
+  if (!raw) return null;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setJwtLastTimeUse(timestamp: number = Date.now()): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(JWT_LAST_TIME_USE_KEY, timestamp.toString());
+}
+
+function clearJwtLastTimeUse(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(JWT_LAST_TIME_USE_KEY);
+}
+
+function hasJwtUsageWindowExpired(): boolean {
+  if (typeof window === 'undefined') return false;
+  const lastUse = getJwtLastTimeUse();
+  if (!lastUse) return false;
+  return Date.now() - lastUse > JWT_USAGE_WINDOW_MS;
+}
+
+function purgeJwtCredentials(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem('jwt');
+  window.localStorage.removeItem('token');
+  window.localStorage.removeItem('user');
+  clearJwtLastTimeUse();
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -135,7 +176,13 @@ const GET_CURRENT_USER_QUERY = `
 
 // Make GraphQL request
 export async function makeGraphQLRequest(query: string | any, variables: any = {}) {
-  const token = getAuthToken();
+  if (typeof window !== 'undefined') {
+    const storedToken = getStoredJwtToken();
+    if (storedToken && hasJwtUsageWindowExpired()) {
+      purgeJwtCredentials();
+      throw new Error('JWT_EXPIRED');
+    }
+  }
   
   // Convert GraphQL AST to string if needed
   let queryString = query;
@@ -604,29 +651,42 @@ export const redirectBasedOnRole = (user: any): void => {
 export const setAuthToken = (token: string) => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem('jwt', token);
+    window.localStorage.setItem('jwt', token);
+    window.localStorage.removeItem('token');
+    setJwtLastTimeUse();
   } catch (error) {
   }
 };
 
 export const getAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  const jwt = localStorage.getItem('jwt');
-  if (jwt) return jwt;
+  let token = window.localStorage.getItem('jwt');
 
-  const token = localStorage.getItem('token');
-  if (token) {
-    localStorage.setItem('jwt', token);
-    return token;
+  if (!token) {
+    const legacyToken = window.localStorage.getItem('token');
+    if (legacyToken) {
+      window.localStorage.setItem('jwt', legacyToken);
+      window.localStorage.removeItem('token');
+      token = legacyToken;
+    }
   }
-  return null;
+
+  if (!token) {
+    return null;
+  }
+
+  if (hasJwtUsageWindowExpired()) {
+    purgeJwtCredentials();
+    return null;
+  }
+
+  setJwtLastTimeUse();
+  return window.localStorage.getItem('jwt');
 };
 
 export const clearAuthToken = () => {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem('jwt');
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  purgeJwtCredentials();
 };
 
 // Force login for testing

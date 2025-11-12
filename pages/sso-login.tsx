@@ -57,8 +57,10 @@ const SSOLoginPage: React.FC = () => {
           confirmButtonText: '로그인 페이지로 이동',
           confirmButtonColor: '#d32f2f'
         }).then(() => {
-          // Redirect to regular login page
-          router.push('/login');
+          // Redirect to corporate site when SSO fails
+          if (typeof window !== 'undefined') {
+            window.location.href = 'https://hrdeedu.co.kr';
+          }
         });
       } finally {
         setIsLoading(false);
@@ -120,10 +122,14 @@ const SSOLoginPage: React.FC = () => {
               </p>
               <div className="mt-6">
                 <button
-                  onClick={() => router.push('/login')}
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.location.href = 'https://hrdeedu.co.kr';
+                    }
+                  }}
                   className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  로그인 페이지로 이동
+                  HRDe 사이트로 이동
                 </button>
               </div>
             </div>

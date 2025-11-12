@@ -1,17 +1,25 @@
 import React, { useEffect } from 'react';
 import Head from 'next/head';
-import { isAuthenticated } from '../lib/simple-auth-handlers';
-import { checkAndHandleSSOLogin } from '../lib/sso-handler';
+import { isAuthenticated, redirectBasedOnRole, handleSSOLogin } from '../lib/simple-auth-handlers';
+import { checkAndHandleSSOLogin, handleSSOLoginFromStorage } from '../lib/sso-handler';
 
 const HomePage: React.FC = () => {
   useEffect(() => {
     const handleInitialLoad = async () => {
       // First, check for SSO login from URL parameters
-      const ssoSuccess = await checkAndHandleSSOLogin();
-      
-      // If SSO login was successful, it will redirect automatically
-      // If not, check if user is already authenticated
-      if (!ssoSuccess && isAuthenticated()) {
+      const ssoResult = await checkAndHandleSSOLogin();
+
+      if (ssoResult === 'failed') {
+        window.location.href = 'https://hrdeedu.co.kr';
+        return;
+      }
+
+      if (ssoResult === 'success') {
+        return;
+      }
+
+      // If no SSO token present, check if user is already authenticated locally
+      if (isAuthenticated()) {
         window.location.href = '/dashboard';
       }
     };
@@ -19,56 +27,83 @@ const HomePage: React.FC = () => {
     handleInitialLoad();
   }, []);
 
+  const handleLiveClass = async () => {
+    try {
+      // Ensure any cookie-provided token is exchanged and stored
+      await handleSSOLoginFromStorage();
+
+      // If we already have a valid auth token, go straight to the dashboard
+      if (isAuthenticated()) {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          redirectBasedOnRole(user);
+          return;
+        }
+
+        // Fallback in case user data is missing
+        window.location.href = '/dashboard';
+        return;
+      }
+
+      // No token in localStorage yet—try to read JWT from cookies via API helper
+      const response = await fetch('/api/auth/session-jwt', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.success && data.token) {
+          const loginOk = await handleSSOLogin(data.token);
+          if (loginOk) {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+              const user = JSON.parse(userStr);
+              redirectBasedOnRole(user);
+              return;
+            }
+            window.location.href = '/dashboard';
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // ignore and fall through to redirect
+    }
+
+    window.location.href = 'https://hrdeedu.co.kr';
+  };
+
   return (
     <>
       <Head>
-        <title>HRDe Live - Virtual Meeting Platform</title>
-        <meta name="description" content="Connect, learn, and grow together in our virtual meeting platform" />
+        <title>HRDe On Air</title>
+        <meta name="description" content="HRDe On Air - Seamless live learning experience" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       
-      <div className="home-container">
-        <div className="home-content">
-          <div className="hero-section">
-            <h1 className="app-title">
-              <span className="meet">Meet:</span>
-              <span className="mate">
-                <span className="stylized-m">m</span>ate
+      <div className="onair-home">
+        <div className="onair-ambient">
+          <span className="onair-cube cube-lg" aria-hidden="true"></span>
+          <span className="onair-cube cube-md" aria-hidden="true"></span>
+          <span className="onair-cube cube-sm" aria-hidden="true"></span>
+        </div>
+        <div className="onair-overlay">
+          <div className="onair-hero">
+            <div className="onair-logo" aria-label="HRDe On Air">
+              <span className="onair-logo-mark" aria-hidden="true"></span>
+              <span className="onair-logo-name">
+                HRDe <span className="onair-logo-highlight">ON AIR<span className="onair-live-dot" aria-hidden="true"></span></span>
               </span>
-            </h1>
-            <p className="hero-description">
-              Connect, learn, and grow together in our virtual meeting platform
-            </p>
+            </div>
+            <h1>라이브 학습을 경험하세요</h1>
           </div>
 
-          <div className="auth-options">
-            <div className="auth-cards">
-              <div className="auth-card member-card">
-                <h3>Member Access</h3>
-                <p>Join meetings and participate in virtual sessions</p>
-                <div className="card-actions">
-                  <a href="/member" className="card-button primary">
-                    Member Portal
-                  </a>
-                  <a href="/login" className="card-button secondary">
-                    Member Login
-                  </a>
-                </div>
-              </div>
-
-              <div className="auth-card instructor-card">
-                <h3>Instructor Access</h3>
-                <p>Create and manage virtual meetings and content</p>
-                <div className="card-actions">
-                  <a href="/instructor" className="card-button primary">
-                    Instructor Portal
-                  </a>
-                  <a href="/instructor/login" className="card-button secondary">
-                    Instructor Login
-                  </a>
-                </div>
-              </div>
-            </div>
+          <div className="onair-cta">
+            <button
+              type="button"
+              className="onair-button primary onair-live-button"
+              onClick={handleLiveClass}
+            >
+              Live Class
+            </button>
           </div>
         </div>
       </div>

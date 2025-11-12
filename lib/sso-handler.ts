@@ -1,17 +1,19 @@
 import { handleSSOLogin, redirectBasedOnRole, isAuthenticated } from './simple-auth-handlers';
 
+export type SSOCheckResult = 'success' | 'no_token' | 'failed';
+
 /**
  * Check for SSO token in URL parameters and handle automatic login
  * This should be called on page load to handle redirects from PHP website
  */
-export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
+export const checkAndHandleSSOLogin = async (): Promise<SSOCheckResult> => {
   // Only run on client side
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') return 'no_token';
 
   try {
     // Check if user is already authenticated
     if (isAuthenticated()) {
-      return true;
+      return 'success';
     }
 
     // Get JWT token from URL parameters
@@ -19,9 +21,8 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
     const token = urlParams.get('token');
 
     if (!token) {
-      return false;
+      return 'no_token';
     }
-
 
     // Attempt SSO login
     const success = await handleSSOLogin(token);
@@ -34,13 +35,14 @@ export const checkAndHandleSSOLogin = async (): Promise<boolean> => {
         
         // Redirect based on user role
         redirectBasedOnRole(user);
-        return true;
+        cleanupSSOUrl();
+        return 'success';
       }
     }
 
-    return false;
+    return 'failed';
   } catch (error: any) {
-    return false;
+    return 'failed';
   }
 };
 
