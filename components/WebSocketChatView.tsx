@@ -17,6 +17,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
   
   const [newMessage, setNewMessage] = useState('');
   const [viewportOffset, setViewportOffset] = useState(0);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   // DISABLED: Typing indicators removed to reduce server requests
   // const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -56,27 +57,55 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
 
   // Ensure the chat input stays above the iOS keyboard
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.visualViewport) {
+    if (typeof window === 'undefined') {
       return;
     }
 
+    const detectMobileViewport = () => {
+      const nav = window.navigator;
+      const userAgent = nav?.userAgent || '';
+      const platform = nav?.platform || '';
+      const maxTouchPoints = nav?.maxTouchPoints || 0;
+      // Cover iOS (including iPadOS identifying as Mac) and Android touch devices
+      return /iPhone|iPad|iPod|Android/i.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1);
+    };
+
+    setIsMobileViewport(detectMobileViewport());
+
     const visualViewport = window.visualViewport;
+
     const handleViewportResize = () => {
-      const keyboardOffset = Math.max(
-        0,
-        window.innerHeight - (visualViewport.height + visualViewport.offsetTop)
+      if (!visualViewport) {
+        setViewportOffset(0);
+        return;
+      }
+
+      const keyboardOffset = Math.round(
+        Math.max(
+          0,
+          window.innerHeight - (visualViewport.height + visualViewport.offsetTop)
+        )
       );
 
       setViewportOffset((prev) => (prev !== keyboardOffset ? keyboardOffset : prev));
     };
 
     handleViewportResize();
-    visualViewport.addEventListener('resize', handleViewportResize);
-    visualViewport.addEventListener('scroll', handleViewportResize);
+
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', handleViewportResize);
+      visualViewport.addEventListener('scroll', handleViewportResize);
+    } else {
+      window.addEventListener('resize', handleViewportResize);
+    }
 
     return () => {
-      visualViewport.removeEventListener('resize', handleViewportResize);
-      visualViewport.removeEventListener('scroll', handleViewportResize);
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', handleViewportResize);
+        visualViewport.removeEventListener('scroll', handleViewportResize);
+      } else {
+        window.removeEventListener('resize', handleViewportResize);
+      }
     };
   }, []);
 
@@ -233,7 +262,7 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
         overflowY: 'auto',
         padding: '10px 0',
         borderBottom: '1px solid #333',
-        paddingBottom: 10 + viewportOffset
+        paddingBottom: `calc(10px + ${viewportOffset}px + ${isMobileViewport ? 'env(safe-area-inset-bottom, 0px)' : '0px'})`
       }}>
         {Object.keys(groupedMessages).length === 0 ? (
           <div style={{
@@ -383,9 +412,14 @@ const WebSocketChatView: React.FC<WebSocketChatViewProps> = ({
       {/* Message Input */}
       <div style={{
         padding: '15px',
-        paddingBottom: 15 + viewportOffset,
+        paddingBottom: `calc(15px + ${isMobileViewport ? 'env(safe-area-inset-bottom, 0px)' : '0px'})`,
         borderTop: '1px solid #333',
-        backgroundColor: '#2a2a2a'
+        backgroundColor: '#2a2a2a',
+        position: 'sticky',
+        bottom: 0,
+        zIndex: 5,
+        transform: `translateY(-${viewportOffset}px)`,
+        transition: 'transform 0.2s ease-out'
       }}>
         <div style={{
           display: 'flex',
