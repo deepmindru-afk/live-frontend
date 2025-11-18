@@ -34,6 +34,7 @@ interface ParticipantAttendance {
   avatarUrl?: string;
   organization?: string;
   department?: string;
+  ipAddress?: string;
   role: string;
   joinedAt: string;
   leftAt?: string;
@@ -562,7 +563,7 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
     const totalMeetingDuration = getTotalMeetingDuration();
     
     const csvContent = [
-      ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
+      ['No', '참가자', '이메일', '소속', '부서', '역할', 'IP 주소', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '마이크', '카메라', '손들기'],
       ...aggregatedParticipants.map((participant, index) => {
         const attendanceSeconds = getParticipantAttendanceSeconds(participant, totalMeetingDuration);
         const attendancePercentage = calculateAttendancePercentage(attendanceSeconds, totalMeetingDuration);
@@ -573,6 +574,7 @@ const getParticipantAttendanceSeconds = (participant: ParticipantAttendance, tot
           participant.organization || '',
           participant.department || '',
           participant.systemRole || '',
+          participant.ipAddress || '정보 없음',
           formatTime(participant.joinedAt),
           participant.leftAt ? formatTime(participant.leftAt) : '진행 중',
           formatDuration(attendanceSeconds),

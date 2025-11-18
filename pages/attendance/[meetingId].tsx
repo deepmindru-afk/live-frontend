@@ -18,6 +18,7 @@ interface ParticipantAttendance {
   avatarUrl?: string;
   organization?: string;
   department?: string;
+  ipAddress?: string;
   role: string;
   joinedAt: string;
   leftAt?: string;
@@ -588,7 +589,7 @@ const AttendancePage: React.FC = () => {
     const totalMeetingDuration = getTotalMeetingDuration();
     
     const csvContent = [
-      ['No', '참가자', '이메일', '소속', '부서', '역할', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '손들기'],
+      ['No', '참가자', '이메일', '소속', '부서', '역할', 'IP 주소', '참석 시간', '퇴장 시간', '참여 시간', '재접속 횟수', '출석률 (%)', '상태', '손들기'],
       ...aggregatedParticipants.map((participant, index) => {
         // ✅ FIX: Calculate actual attendance duration from joinedAt/leftAt times
         const actualDuration = calculateParticipantDuration(participant);
@@ -601,6 +602,7 @@ const AttendancePage: React.FC = () => {
           participant.organization || '',
           participant.department || '',
           participant.systemRole || '',
+          participant.ipAddress || '정보 없음',
           formatTime(participant.joinedAt),
           participant.leftAt ? formatTime(participant.leftAt) : 
           (meeting?.status === 'ENDED' || meeting?.status === 'END' ? '퇴장 정보 없음' : '진행 중'),

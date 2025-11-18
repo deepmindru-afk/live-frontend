@@ -184,6 +184,7 @@ export const GET_MEETING_ATTENDANCE = gql`
         _id
         displayName
         status
+        ipAddress
         joinedAt
         leftAt
         durationSec

@@ -112,6 +112,7 @@ export const GET_MEETING_ATTENDANCE = gql`
         avatarUrl
         organization
         department
+        ipAddress
         role
         joinedAt
         leftAt

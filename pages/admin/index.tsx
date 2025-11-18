@@ -1293,10 +1293,11 @@ const AdminDashboard: React.FC = () => {
                 onClick={() => {
                   // Export participants to Excel
                   const csvContent = [
-                    ['No', '참가자', '참석 시간', '퇴장 시간', '참여 시간', '상태'],
+                    ['No', '참가자', 'IP 주소', '참석 시간', '퇴장 시간', '참여 시간', '상태'],
                     ...selectedMeetingParticipants.map((participant, index) => [
                       index + 1,
                       participant.displayName || 'Unknown',
+                      participant.ipAddress || '정보 없음',
                       participant.joinedAt ? new Date(participant.joinedAt).toLocaleString('ko-KR') : 'N/A',
                       participant.leftAt ? new Date(participant.leftAt).toLocaleString('ko-KR') : '진행 중',
                       participant.totalTime ? `${Math.round(participant.totalTime / 60)}분` : 'N/A',
