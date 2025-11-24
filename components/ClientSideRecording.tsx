@@ -158,12 +158,21 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
       };
 
       mediaRecorder.onstop = async () => {
+        // Wait a bit to ensure all chunks are collected
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Create blob with proper MIME type
         const blob = new Blob(recordedChunksRef.current, {
-          type: 'video/webm;codecs=vp9,opus',
+          type: mimeType,
         });
+        
+        // For better seeking support, we'll let the backend convert to MP4
+        // But ensure the WebM is properly finalized
         await uploadRecording(blob);
       };
 
+      // Use smaller timeslice for better chunk handling, but not too small
+      // This helps with proper metadata writing
       mediaRecorder.start(1000);
       setIsRecording(true);
       onRecordingStart?.();

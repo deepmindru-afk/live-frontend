@@ -1,0 +1,769 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D6FE91792ECC06E700448BE2 /* Mobile lms Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D6FE91782ECC06E700448BE2 /* Mobile lms Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D6FE91632ECC06E700448BE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D6FE91402ECC06E500448BE2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D6FE91472ECC06E500448BE2;
+			remoteInfo = "Mobile lms";
+		};
+		D6FE916D2ECC06E700448BE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D6FE91402ECC06E500448BE2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D6FE91472ECC06E500448BE2;
+			remoteInfo = "Mobile lms";
+		};
+		D6FE917A2ECC06E700448BE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D6FE91402ECC06E500448BE2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D6FE91772ECC06E700448BE2;
+			remoteInfo = "Mobile lms Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D6FE91972ECC06E700448BE2 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D6FE91792ECC06E700448BE2 /* Mobile lms Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		D6FE91482ECC06E500448BE2 /* Mobile lms.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Mobile lms.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6FE91622ECC06E700448BE2 /* Mobile lmsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Mobile lmsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6FE916C2ECC06E700448BE2 /* Mobile lmsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Mobile lmsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6FE91782ECC06E700448BE2 /* Mobile lms Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Mobile lms Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D6FE91912ECC06E700448BE2 /* Exceptions for "Mobile lms Extension" folder in "Mobile lms Extension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D6FE91772ECC06E700448BE2 /* Mobile lms Extension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D6FE914A2ECC06E500448BE2 /* Mobile lms */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Mobile lms";
+			sourceTree = "<group>";
+		};
+		D6FE91652ECC06E700448BE2 /* Mobile lmsTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Mobile lmsTests";
+			sourceTree = "<group>";
+		};
+		D6FE916F2ECC06E700448BE2 /* Mobile lmsUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Mobile lmsUITests";
+			sourceTree = "<group>";
+		};
+		D6FE917C2ECC06E700448BE2 /* Mobile lms Extension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D6FE91912ECC06E700448BE2 /* Exceptions for "Mobile lms Extension" folder in "Mobile lms Extension" target */,
+			);
+			explicitFolders = (
+				Resources/_locales,
+				Resources/images,
+			);
+			path = "Mobile lms Extension";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D6FE91452ECC06E500448BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE915F2ECC06E700448BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91692ECC06E700448BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91752ECC06E700448BE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D6FE913F2ECC06E500448BE2 = {
+			isa = PBXGroup;
+			children = (
+				D6FE914A2ECC06E500448BE2 /* Mobile lms */,
+				D6FE91652ECC06E700448BE2 /* Mobile lmsTests */,
+				D6FE916F2ECC06E700448BE2 /* Mobile lmsUITests */,
+				D6FE917C2ECC06E700448BE2 /* Mobile lms Extension */,
+				D6FE91492ECC06E500448BE2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D6FE91492ECC06E500448BE2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D6FE91482ECC06E500448BE2 /* Mobile lms.app */,
+				D6FE91622ECC06E700448BE2 /* Mobile lmsTests.xctest */,
+				D6FE916C2ECC06E700448BE2 /* Mobile lmsUITests.xctest */,
+				D6FE91782ECC06E700448BE2 /* Mobile lms Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D6FE91472ECC06E500448BE2 /* Mobile lms */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6FE91982ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lms" */;
+			buildPhases = (
+				D6FE91442ECC06E500448BE2 /* Sources */,
+				D6FE91452ECC06E500448BE2 /* Frameworks */,
+				D6FE91462ECC06E500448BE2 /* Resources */,
+				D6FE91972ECC06E700448BE2 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D6FE917B2ECC06E700448BE2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D6FE914A2ECC06E500448BE2 /* Mobile lms */,
+			);
+			name = "Mobile lms";
+			packageProductDependencies = (
+			);
+			productName = "Mobile lms";
+			productReference = D6FE91482ECC06E500448BE2 /* Mobile lms.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D6FE91612ECC06E700448BE2 /* Mobile lmsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6FE919B2ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lmsTests" */;
+			buildPhases = (
+				D6FE915E2ECC06E700448BE2 /* Sources */,
+				D6FE915F2ECC06E700448BE2 /* Frameworks */,
+				D6FE91602ECC06E700448BE2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D6FE91642ECC06E700448BE2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D6FE91652ECC06E700448BE2 /* Mobile lmsTests */,
+			);
+			name = "Mobile lmsTests";
+			packageProductDependencies = (
+			);
+			productName = "Mobile lmsTests";
+			productReference = D6FE91622ECC06E700448BE2 /* Mobile lmsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D6FE916B2ECC06E700448BE2 /* Mobile lmsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6FE919E2ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lmsUITests" */;
+			buildPhases = (
+				D6FE91682ECC06E700448BE2 /* Sources */,
+				D6FE91692ECC06E700448BE2 /* Frameworks */,
+				D6FE916A2ECC06E700448BE2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D6FE916E2ECC06E700448BE2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D6FE916F2ECC06E700448BE2 /* Mobile lmsUITests */,
+			);
+			name = "Mobile lmsUITests";
+			packageProductDependencies = (
+			);
+			productName = "Mobile lmsUITests";
+			productReference = D6FE916C2ECC06E700448BE2 /* Mobile lmsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		D6FE91772ECC06E700448BE2 /* Mobile lms Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D6FE91922ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lms Extension" */;
+			buildPhases = (
+				D6FE91742ECC06E700448BE2 /* Sources */,
+				D6FE91752ECC06E700448BE2 /* Frameworks */,
+				D6FE91762ECC06E700448BE2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D6FE917C2ECC06E700448BE2 /* Mobile lms Extension */,
+			);
+			name = "Mobile lms Extension";
+			packageProductDependencies = (
+			);
+			productName = "Mobile lms Extension";
+			productReference = D6FE91782ECC06E700448BE2 /* Mobile lms Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D6FE91402ECC06E500448BE2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2610;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					D6FE91472ECC06E500448BE2 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
+					D6FE91612ECC06E700448BE2 = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = D6FE91472ECC06E500448BE2;
+					};
+					D6FE916B2ECC06E700448BE2 = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = D6FE91472ECC06E500448BE2;
+					};
+					D6FE91772ECC06E700448BE2 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
+				};
+			};
+			buildConfigurationList = D6FE91432ECC06E500448BE2 /* Build configuration list for PBXProject "Mobile lms" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D6FE913F2ECC06E500448BE2;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D6FE91492ECC06E500448BE2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D6FE91472ECC06E500448BE2 /* Mobile lms */,
+				D6FE91612ECC06E700448BE2 /* Mobile lmsTests */,
+				D6FE916B2ECC06E700448BE2 /* Mobile lmsUITests */,
+				D6FE91772ECC06E700448BE2 /* Mobile lms Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D6FE91462ECC06E500448BE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91602ECC06E700448BE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE916A2ECC06E700448BE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91762ECC06E700448BE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D6FE91442ECC06E500448BE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE915E2ECC06E700448BE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91682ECC06E700448BE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6FE91742ECC06E700448BE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D6FE91642ECC06E700448BE2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D6FE91472ECC06E500448BE2 /* Mobile lms */;
+			targetProxy = D6FE91632ECC06E700448BE2 /* PBXContainerItemProxy */;
+		};
+		D6FE916E2ECC06E700448BE2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D6FE91472ECC06E500448BE2 /* Mobile lms */;
+			targetProxy = D6FE916D2ECC06E700448BE2 /* PBXContainerItemProxy */;
+		};
+		D6FE917B2ECC06E700448BE2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D6FE91772ECC06E700448BE2 /* Mobile lms Extension */;
+			targetProxy = D6FE917A2ECC06E700448BE2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D6FE91932ECC06E700448BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Mobile lms Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mobile lms Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lms.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D6FE91942ECC06E700448BE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Mobile lms Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Mobile lms Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lms.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D6FE91952ECC06E700448BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D6FE91962ECC06E700448BE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D6FE91992ECC06E700448BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mobile lms";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lms";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D6FE919A2ECC06E700448BE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mobile lms";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lms";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D6FE919C2ECC06E700448BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lmsTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mobile lms.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Mobile lms";
+			};
+			name = Debug;
+		};
+		D6FE919D2ECC06E700448BE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lmsTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Mobile lms.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Mobile lms";
+			};
+			name = Release;
+		};
+		D6FE919F2ECC06E700448BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lmsUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Mobile lms";
+			};
+			name = Debug;
+		};
+		D6FE91A02ECC06E700448BE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "HRDE.Mobile-lmsUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Mobile lms";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D6FE91432ECC06E500448BE2 /* Build configuration list for PBXProject "Mobile lms" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6FE91952ECC06E700448BE2 /* Debug */,
+				D6FE91962ECC06E700448BE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D6FE91922ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lms Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6FE91932ECC06E700448BE2 /* Debug */,
+				D6FE91942ECC06E700448BE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D6FE91982ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lms" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6FE91992ECC06E700448BE2 /* Debug */,
+				D6FE919A2ECC06E700448BE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D6FE919B2ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lmsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6FE919C2ECC06E700448BE2 /* Debug */,
+				D6FE919D2ECC06E700448BE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D6FE919E2ECC06E700448BE2 /* Build configuration list for PBXNativeTarget "Mobile lmsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D6FE919F2ECC06E700448BE2 /* Debug */,
+				D6FE91A02ECC06E700448BE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D6FE91402ECC06E500448BE2 /* Project object */;
+}

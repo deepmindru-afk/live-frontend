@@ -131,7 +131,7 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   .thumbnail-video {
     width: 100%;
     height: 100%;
-    object-fit: cover; // Fill entire thumbnail without black bars
+    object-fit: contain; // Show original video without zooming/cropping
     object-position: center; // Center the video content
   }
 
@@ -469,7 +469,7 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     height: 100%;
     
     .main-stage-video {
-      object-fit: cover !important; // ✅ FIX: Use cover for grid to fill space without black bars
+      object-fit: contain !important; // Show original video without zooming/cropping
       border-radius: 8px;
       width: 100%;
       height: 100%;
@@ -542,31 +542,15 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
 .main-stage-video {
   width: 100%;
   height: 100%;
-  // ✅ FIX: Use 'cover' for single video to fill space and avoid large black bars
-  // Only use 'contain' when we want to show entire video without cropping
-  object-fit: cover; // ✅ FIX: Changed to cover for better face visibility, no black bars
-  object-position: center center; // ✅ Center the video content, focus on faces
-  background: #000000; // ✅ Black background for any small letterboxing
+  // ✅ Show original video without zooming/cropping - 1:1 aspect ratio
+  object-fit: contain; // Show full video content without cropping
+  object-position: center center; // Center the video content
+  background: #000000; // Black background for letterboxing
   border-radius: 8px;
   max-width: 100%;
   max-height: 100%;
   display: block; // ✅ Ensure proper rendering
   flex-shrink: 0; // ✅ Prevent shrinking
-
-  // ✅ FIX: For single video in speaker mode, use smart object-fit
-  // Detect if video is portrait or landscape and adjust
-  &:not(.screen-share-video) {
-    // Try to fill container while maintaining aspect ratio
-    // If container is much taller than video, use contain to avoid excessive cropping
-    @container (min-height: 600px) {
-      object-fit: contain;
-    }
-    
-    // For smaller containers, use cover to fill space
-    @container (max-height: 400px) {
-      object-fit: cover;
-    }
-  }
 
   &.screen-share-video {
     object-fit: contain !important; // ✅ Screen share: always contain to show full content
@@ -1015,10 +999,9 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
   .main-stage-video {
     width: 100% !important;
     height: 100% !important;
-    // ✅ FIX: Use cover for mobile to fill screen and avoid large black bars
-    // Mobile cameras are typically portrait, so cover works better
-    object-fit: cover !important;
-    object-position: center center !important; // ✅ Center and focus on faces
+    // ✅ Show original video without zooming/cropping - 1:1 aspect ratio
+    object-fit: contain !important;
+    object-position: center center !important; // Center the video content
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -1026,20 +1009,6 @@ $shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
     position: relative !important;
     background: #000000 !important;
     flex-shrink: 0 !important;
-  }
-  
-  // ✅ MOBILE LANDSCAPE: Use contain when in landscape to avoid excessive cropping
-  @media (orientation: landscape) and (max-width: 768px) {
-    .main-stage-video:not(.screen-share-video) {
-      object-fit: contain !important; // ✅ Landscape: show more of the video
-    }
-  }
-  
-  // ✅ MOBILE PORTRAIT: Use cover to fill screen
-  @media (orientation: portrait) and (max-width: 768px) {
-    .main-stage-video:not(.screen-share-video) {
-      object-fit: cover !important; // ✅ Portrait: fill screen
-    }
   }
   
   // ✅ MOBILE SCREEN SHARE FIXES
