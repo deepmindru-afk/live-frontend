@@ -357,19 +357,11 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
    */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // ✅ FIX: Warn user if recording is active or uploading
-      if (isRecording) {
-        e.preventDefault();
-        e.returnValue = '⚠️ 녹화 중입니다. 페이지를 새로고침하면 녹화가 중지됩니다. 계속하시겠습니까?';
-        return e.returnValue;
-      }
-      
-      // If upload is in progress, warn user
-      if (isUploading || isUploadingRef.current) {
-        e.preventDefault();
-        e.returnValue = '⚠️ 녹화 파일이 업로드 중입니다. 잠시만 기다려주세요...';
-        return e.returnValue;
-      }
+      // ✅ FIX: Disable browser reload confirmation dialog
+      // Recording is saved to IndexedDB, so reload is safe
+      // Upload will retry automatically on next page load
+      // Don't prevent reload - allow it without confirmation
+      return;
     };
 
     const handlePageHide = () => {

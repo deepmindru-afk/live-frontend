@@ -17,6 +17,7 @@ interface MainStageViewProps {
   connectionQuality?: number;
   isLocalParticipant?: boolean;
   isRecording?: boolean; // ✅ Check if recording is active
+  isNetworkDisconnected?: boolean; // ✅ Show network issue overlay during grace period
   onParticipantClick?: (participantId: string) => void;
 }
 
@@ -36,6 +37,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
   connectionQuality = 5,
   isLocalParticipant = false,
   isRecording = false, // ✅ Whether recording is active
+  isNetworkDisconnected = false, // ✅ Network disconnection during grace period
   onParticipantClick,
 }) => {
   const mainVideoRef = useRef<HTMLVideoElement>(null);
@@ -204,7 +206,7 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
       />
       
       {/* 메인 비디오 컨테이너 */}
-      <div className={`${styles['main-stage-container']} ${isScreenSharing ? styles['screen-sharing'] : ''}`} onClick={handleClick}>
+      <div className={`${styles['main-stage-container']} ${isScreenSharing ? styles['screen-sharing'] : ''} ${isNetworkDisconnected ? styles['network-disconnected'] : ''}`} onClick={handleClick}>
         {/* 화면 공유 비디오 - 화면 공유 시 렌더링 */}
         {isScreenSharing && screenShareTrack ? (
           <>
@@ -218,7 +220,9 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                backgroundColor: '#000000'
+                backgroundColor: '#000000',
+                filter: isNetworkDisconnected ? 'blur(8px)' : 'none',
+                transition: 'filter 0.3s ease'
               }}
             />
           </>
@@ -231,10 +235,17 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 autoPlay
                 playsInline
                 className={styles['main-stage-video']}
+                style={{
+                  filter: isNetworkDisconnected ? 'blur(8px)' : 'none',
+                  transition: 'filter 0.3s ease'
+                }}
               />
             ) : (
               // 비디오가 꺼져 있을 때 아바타/플레이스홀더
-              <div className={styles['avatar-placeholder']}>
+              <div className={styles['avatar-placeholder']} style={{
+                filter: isNetworkDisconnected ? 'blur(8px)' : 'none',
+                transition: 'filter 0.3s ease'
+              }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={name || '참가자'} />
                 ) : (
@@ -244,6 +255,91 @@ export const MainStageView: React.FC<MainStageViewProps> = ({
                 )}
               </div>
             )}
+          </>
+        )}
+        
+        {/* ✅ Network Disconnection Overlay - Shows during grace period */}
+        {isNetworkDisconnected && (
+          <>
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 1000,
+              padding: '20px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.95)',
+                borderRadius: '12px',
+                padding: '24px 32px',
+                maxWidth: '400px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                border: '2px solid rgba(255, 255, 255, 0.2)'
+              }}>
+                <div style={{
+                  fontSize: '48px',
+                  marginBottom: '16px',
+                  animation: 'networkPulse 2s infinite'
+                }}>
+                  ⚠️
+                </div>
+                <div style={{
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  color: '#ffffff',
+                  marginBottom: '12px'
+                }}>
+                  네트워크 연결 문제
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: 'rgba(255, 255, 255, 0.9)',
+                  lineHeight: '1.5',
+                  marginBottom: '8px'
+                }}>
+                  연결을 복구하는 중입니다...<br/>
+                  잠시만 기다려주세요.
+                </div>
+                <div style={{
+                  marginTop: '16px',
+                  fontSize: '12px',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    animation: 'networkPulse 1.5s infinite'
+                  }}></div>
+                  자동으로 재연결을 시도합니다
+                </div>
+              </div>
+            </div>
+            <style>{`
+              @keyframes networkPulse {
+                0%, 100% { 
+                  opacity: 1; 
+                  transform: scale(1);
+                }
+                50% { 
+                  opacity: 0.6; 
+                  transform: scale(1.1);
+                }
+              }
+            `}</style>
           </>
         )}
         

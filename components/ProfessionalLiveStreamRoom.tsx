@@ -139,6 +139,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('speaker');
+  const [isNetworkDisconnected, setIsNetworkDisconnected] = useState(false); // ✅ Track network disconnection during grace period
   const [gridSize, setGridSize] = useState<'2x2' | '3x3' | '4x4'>('2x2');
   const [isMobile, setIsMobile] = useState(false);
   const [isIOSPlatform, setIsIOSPlatform] = useState(false);
@@ -1075,14 +1076,49 @@ const handleWhiteboardToggle = useCallback(() => {
         router.push('/dashboard');
       });
 
+      // ✅ FIX: Listen for network disconnection events (grace period)
+      socket.on('USER_DISCONNECTED', (data: any) => {
+        // Check if it's the current user or if it affects the meeting
+        if (data.userId === currentUser?.id || data.userId === currentUser?._id) {
+          setIsNetworkDisconnected(true);
+          console.log('[Network] User disconnected, showing network issue overlay');
+        }
+      });
+
+      socket.on('USER_RECONNECTED', (data: any) => {
+        // Check if it's the current user
+        if (data.userId === currentUser?.id || data.userId === currentUser?._id) {
+          setIsNetworkDisconnected(false);
+          console.log('[Network] User reconnected, hiding network issue overlay');
+        }
+      });
+
+      // ✅ FIX: Also check socket connection status
+      const handleSocketDisconnect = () => {
+        setIsNetworkDisconnected(true);
+        console.log('[Network] Socket disconnected, showing network issue overlay');
+      };
+
+      const handleSocketConnect = () => {
+        setIsNetworkDisconnected(false);
+        console.log('[Network] Socket connected, hiding network issue overlay');
+      };
+
+      socket.on('disconnect', handleSocketDisconnect);
+      socket.on('connect', handleSocketConnect);
+
       return () => {
         socket.off('PARTICIPANT_ADMITTED');
         socket.off('MEETING_STATUS_CHANGED');
         socket.off('PARTICIPANT_LEFT_WAITING');
         socket.off('MEETING_ENDED');
+        socket.off('USER_DISCONNECTED');
+        socket.off('USER_RECONNECTED');
+        socket.off('disconnect', handleSocketDisconnect);
+        socket.off('connect', handleSocketConnect);
       };
     }
-  }, [socket, actualMeetingId, refetchParticipants, router]);
+  }, [socket, actualMeetingId, refetchParticipants, router, currentUser]);
 
   // 🎯 Live mic/camera state updates from backend or other participants
   useEffect(() => {
@@ -1896,14 +1932,17 @@ const handleWhiteboardToggle = useCallback(() => {
         return;
       }
       
-      // ✅ FIX: Check if recording is active and add warning
-      const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
-      const recordingWarning = (isHost && isRecording) ? '\n\n⚠️ 녹화 중입니다. 페이지를 새로고침하면 녹화가 중지됩니다.' : '';
+      // ✅ FIX: Disable browser reload confirmation dialog
+      // Modern browsers ignore custom messages anyway, so we'll handle this differently
+      // Only show warning for close tab/navigation, not for reload
       
-      // Show browser confirmation dialog
-      e.preventDefault();
-      e.returnValue = `회의를 나가시겠습니까?${recordingWarning}`;
-      return e.returnValue;
+      // Check if this is a reload (F5, Ctrl+R, etc.) vs navigation/close
+      // Note: We can't perfectly detect reload vs close, but we can disable the dialog
+      // and handle cleanup in pagehide instead
+      
+      // Don't prevent default - allow reload without confirmation
+      // Browser will reload without showing confirmation dialog
+      return;
     };
     
     // Handle page hide/unload - attempt to send leave/end meeting request
@@ -1954,35 +1993,45 @@ const handleWhiteboardToggle = useCallback(() => {
         return;
       }
       
-      // Check if host is recording and add warning
-      const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
-      const recordingWarning = (isHost && isRecording) ? '\n\n⚠️ 녹화 중입니다. 호스트가 나가면 녹화가 중지됩니다.' : '';
+      // ✅ FIX: Allow navigation without confirmation for reloads
+      // Only show confirmation for intentional navigation away from meeting
+      // Check if navigating to a different page (not just reload)
+      const isNavigatingAway = !url.includes('/live-room') && !url.includes('/meeting');
       
-      // Show custom confirmation dialog
-      const confirmed = window.confirm(`회의를 나가시겠습니까?${recordingWarning}`);
-      
-      if (!confirmed) {
-        // Prevent navigation
-        router.events.emit('routeChangeError');
-        throw 'Route change aborted by user';
-      } else {
-        // User confirmed, mark as intentional leave
-        isLeavingIntentionally = true;
-
-        if (currentParticipant?._id) {
-          leaveMeeting({
-            variables: {
-              input: {
-                participantId: currentParticipant._id
-              }
-            }
-          }).catch(() => {});
-        }
+      if (isNavigatingAway) {
+        // Check if host is recording and add warning
+        const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+        const recordingWarning = (isHost && isRecording) ? '\n\n⚠️ 녹화 중입니다. 호스트가 나가면 녹화가 중지됩니다.' : '';
         
-        // Disconnect from LiveKit
-        if (liveKitDisconnect) {
-          liveKitDisconnect().catch(() => {});
+        // Show custom confirmation dialog only for navigation away
+        const confirmed = window.confirm(`회의를 나가시겠습니까?${recordingWarning}`);
+        
+        if (!confirmed) {
+          // Prevent navigation
+          router.events.emit('routeChangeError');
+          throw 'Route change aborted by user';
+        } else {
+          // User confirmed, mark as intentional leave
+          isLeavingIntentionally = true;
+
+          if (currentParticipant?._id) {
+            leaveMeeting({
+              variables: {
+                input: {
+                  participantId: currentParticipant._id
+                }
+              }
+            }).catch(() => {});
+          }
+          
+          // Disconnect from LiveKit
+          if (liveKitDisconnect) {
+            liveKitDisconnect().catch(() => {});
+          }
         }
+      } else {
+        // Reload or staying in meeting - allow without confirmation
+        isLeavingIntentionally = true;
       }
     };
     
@@ -5164,6 +5213,7 @@ const handleWhiteboardToggle = useCallback(() => {
                     isHost={mainParticipant.role === 'HOST' || false}
                     isScreenSharing={finalIsScreenSharing}
                     screenShareTrack={finalIsScreenSharing ? mainScreenShareTrack : null}
+                    isNetworkDisconnected={isNetworkDisconnected} // ✅ Show network issue overlay during grace period
                     connectionQuality={5} // TODO: Get actual connection quality
                     isLocalParticipant={isMainParticipantLocal}
                     isRecording={isRecording} // ✅ Pass recording state
