@@ -5,6 +5,7 @@ interface ClientSideRecordingProps {
   userId: string;
   meetingName?: string;
   meetingStatus?: string;
+  liveKitService?: any; // ✅ Add LiveKit service to access audio tracks
   onRecordingStart?: () => void;
   onRecordingComplete?: (recordingUrl: string) => void;
   onError?: (error: string) => void;
@@ -15,6 +16,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   userId,
   meetingName,
   meetingStatus,
+  liveKitService,
   onRecordingStart,
   onRecordingComplete,
   onError,
@@ -101,19 +103,112 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
         // Mic permission not available
       }
 
-      const audioEls = document.querySelectorAll('audio');
+      // ✅ FIX: Capture participant audio from LiveKit tracks directly
       const participantAudioStream = new MediaStream();
+      const addedTrackIds = new Set<string>();
       
-      audioEls.forEach((audioEl) => {
-        if (audioEl.srcObject) {
-          const tracks = (audioEl.srcObject as MediaStream).getAudioTracks();
-          tracks.forEach(track => {
-            if (!track.muted) {
-              participantAudioStream.addTrack(track);
+      // Method 1: Get audio tracks directly from LiveKit room (PRIMARY METHOD)
+      if (liveKitService?.room) {
+        try {
+          // Get audio tracks from ALL remote participants
+          liveKitService.room.remoteParticipants.forEach((participant: any) => {
+            const audioPublications = Array.from(participant.audioTrackPublications.values());
+            audioPublications.forEach((pub: any) => {
+              if (pub.track && pub.isSubscribed && !pub.track.isMuted) {
+                try {
+                  // LiveKit RemoteAudioTrack has mediaStreamTrack property
+                  // Access the underlying MediaStreamTrack for recording
+                  const liveKitTrack = pub.track;
+                  
+                  // Try to get MediaStreamTrack - LiveKit tracks expose this property
+                  let mediaTrack: MediaStreamTrack | null = null;
+                  
+                  // Method A: Direct property access (most common)
+                  if (liveKitTrack.mediaStreamTrack) {
+                    mediaTrack = liveKitTrack.mediaStreamTrack;
+                  }
+                  // Method B: Access through track property
+                  else if ((liveKitTrack as any).track && (liveKitTrack as any).track instanceof MediaStreamTrack) {
+                    mediaTrack = (liveKitTrack as any).track;
+                  }
+                  // Method C: If track is already a MediaStreamTrack
+                  else if (liveKitTrack instanceof MediaStreamTrack) {
+                    mediaTrack = liveKitTrack;
+                  }
+                  // Method D: Try to create MediaStream from track and extract
+                  else if (typeof (liveKitTrack as any).getMediaStreamTrack === 'function') {
+                    mediaTrack = (liveKitTrack as any).getMediaStreamTrack();
+                  }
+                  
+                  if (mediaTrack && mediaTrack.kind === 'audio' && !mediaTrack.muted && !addedTrackIds.has(mediaTrack.id)) {
+                    participantAudioStream.addTrack(mediaTrack);
+                    addedTrackIds.add(mediaTrack.id);
+                  }
+                } catch (err) {
+                  // Track might not be available or already added
+                  console.warn('[Recording] Failed to add audio track from participant:', err);
+                }
+              }
+            });
+          });
+        } catch (err) {
+          console.warn('[Recording] Failed to get LiveKit remote participant audio:', err);
+        }
+      }
+      
+      // Method 2: Fallback - Capture from audio elements using Web Audio API
+      // LiveKit attach() doesn't set srcObject, so we use Web Audio API to capture
+      if (participantAudioStream.getAudioTracks().length === 0) {
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const destination = audioContext.createMediaStreamDestination();
+          
+          const audioEls = document.querySelectorAll('audio');
+          audioEls.forEach((audioEl) => {
+            try {
+              // Skip muted or local participant audio elements
+              if (audioEl.muted || audioEl.volume === 0) {
+                return;
+              }
+              
+              // Use Web Audio API to capture audio from element
+              // This works even when LiveKit attach() doesn't set srcObject
+              const source = audioContext.createMediaElementSource(audioEl);
+              source.connect(destination);
+              
+              // Add tracks from destination stream
+              destination.stream.getAudioTracks().forEach(track => {
+                if (!track.muted && !addedTrackIds.has(track.id)) {
+                  participantAudioStream.addTrack(track);
+                  addedTrackIds.add(track.id);
+                }
+              });
+            } catch (err) {
+              // Some audio elements might already have a source node (can only create one)
+              // Try to get srcObject as fallback
+              if (audioEl.srcObject && audioEl.srcObject instanceof MediaStream) {
+                const tracks = audioEl.srcObject.getAudioTracks();
+                tracks.forEach(track => {
+                  if (!track.muted && !addedTrackIds.has(track.id)) {
+                    participantAudioStream.addTrack(track);
+                    addedTrackIds.add(track.id);
+                  }
+                });
+              }
             }
           });
+        } catch (err) {
+          console.warn('[Recording] Web Audio API capture failed:', err);
         }
-      });
+      }
+      
+      // Log captured audio tracks for debugging
+      const totalParticipantTracks = participantAudioStream.getAudioTracks().length;
+      if (totalParticipantTracks > 0) {
+        console.log(`[Recording] ✅ Captured ${totalParticipantTracks} participant audio track(s)`);
+      } else {
+        console.warn('[Recording] ⚠️ No participant audio tracks captured - recording will only have host mic and screen audio');
+      }
       
       const combinedStream = new MediaStream();
       
@@ -184,7 +279,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to start recording');
     }
-  }, [meetingId, userId, onError]);
+  }, [meetingId, userId, liveKitService, onError, onRecordingStart]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {

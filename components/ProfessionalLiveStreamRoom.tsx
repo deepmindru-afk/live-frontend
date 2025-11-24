@@ -3850,6 +3850,7 @@ const handleWhiteboardToggle = useCallback(() => {
                       userId={currentUser?.id || currentUser?._id || 'unknown'}
                       meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                       meetingStatus={meetingStatus}
+                      liveKitService={liveKitService}
                       onRecordingStart={handleRecordingStarted}
                       onRecordingComplete={handleRecordingUploadComplete}
                       onError={handleRecordingError}
@@ -3864,6 +3865,7 @@ const handleWhiteboardToggle = useCallback(() => {
                     userId={currentUser?.id || currentUser?._id || 'unknown'}
                     meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                     meetingStatus={meetingStatus}
+                    liveKitService={liveKitService}
                     onRecordingStart={handleRecordingStarted}
                     onRecordingComplete={handleRecordingUploadComplete}
                     onError={handleRecordingError}
