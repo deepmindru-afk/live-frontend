@@ -1,14 +1,16 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { recordingStorage } from '../lib/recording-storage';
 
 interface ClientSideRecordingProps {
   meetingId: string;
   userId: string;
   meetingName?: string;
   meetingStatus?: string;
-  liveKitService?: any; // ✅ Add LiveKit service to access audio tracks
+  liveKitService?: any;
   onRecordingStart?: () => void;
   onRecordingComplete?: (recordingUrl: string) => void;
   onError?: (error: string) => void;
+  onUploadStatusChange?: (isUploading: boolean) => void; // ✅ Notify parent about upload status
 }
 
 const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
@@ -16,66 +18,165 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   userId,
   meetingName,
   meetingStatus,
-  liveKitService,
   onRecordingStart,
   onRecordingComplete,
   onError,
+  onUploadStatusChange,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingIdRef = useRef<string | null>(null);
+  const uploadAbortControllerRef = useRef<AbortController | null>(null);
+  const isUploadingRef = useRef(false);
 
-  const uploadRecording = async (blob: Blob) => {
-    setIsUploading(true);
-    
-    try {
-      const fileName = `recording_${Date.now()}.webm`;
-      const formData = new FormData();
-      formData.append('recording', blob, fileName);
-      formData.append('meetingId', meetingId);
-      formData.append('userId', userId);
-      formData.append('recordingName', meetingName || `Meeting_${meetingId}_${new Date().toISOString().split('T')[0]}`);
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007'}/recording-upload/client-recording`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const result = await response.json();
-      setRecordingUrl(result.recordingId);
-      onRecordingComplete?.(result.recordingId);
-    } catch (error) {
-      onError?.(error instanceof Error ? error.message : 'Failed to upload recording');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const startRecording = useCallback(async () => {
-    const isIOS = (() => {
-      if (typeof navigator === 'undefined') {
-        return false;
-      }
-      const platform = navigator?.platform || '';
-      const userAgent = navigator?.userAgent || '';
-      return /iP(ad|hone|od)/i.test(userAgent) || (platform === 'MacIntel' && (navigator?.maxTouchPoints || 0) > 1);
-    })();
-
-    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-      const message = isIOS
-        ? 'iOS Safari에서는 브라우저 제한으로 인해 화면 녹화가 지원되지 않습니다. 데스크톱 또는 Android 브라우저를 이용해 주세요.'
-        : '이 브라우저에서는 화면 녹화를 지원하지 않습니다. 최신 버전의 Chromium 기반 브라우저를 사용해 주세요.';
-      onError?.(message);
+  /**
+   * Upload recording with retry mechanism
+   * Saves to IndexedDB first, then uploads, deletes after success
+   */
+  const uploadRecording = async (blob: Blob, storageId?: string): Promise<void> => {
+    // Prevent multiple simultaneous uploads
+    if (isUploadingRef.current) {
+      console.warn('[Recording] Upload already in progress, skipping...');
       return;
     }
 
+    isUploadingRef.current = true;
+    setIsUploading(true);
+    onUploadStatusChange?.(true); // ✅ Notify parent
+    setUploadProgress('Saving recording locally...');
+
+    let currentStorageId = storageId;
+
+    try {
+      // Step 1: Save to IndexedDB if not already saved
+      if (!currentStorageId) {
+        currentStorageId = await recordingStorage.saveRecording(
+          blob,
+          meetingId,
+          userId,
+          meetingName || `Meeting_${meetingId}_${new Date().toISOString().split('T')[0]}`
+        );
+        recordingIdRef.current = currentStorageId;
+        console.log(`[Recording] ✅ Saved to IndexedDB: ${currentStorageId}`);
+      }
+
+      // Step 2: Update status to uploading
+      await recordingStorage.updateRecordingStatus(currentStorageId, 'uploading', true);
+      setUploadProgress('Uploading to server...');
+
+      // Step 3: Upload to server with retry logic
+      const maxRetries = 3;
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          uploadAbortControllerRef.current = new AbortController();
+          const fileName = `recording_${Date.now()}.webm`;
+          const formData = new FormData();
+          formData.append('recording', blob, fileName);
+          formData.append('meetingId', meetingId);
+          formData.append('userId', userId);
+          formData.append('recordingName', meetingName || `Meeting_${meetingId}_${new Date().toISOString().split('T')[0]}`);
+
+          setUploadProgress(`Uploading to server... (Attempt ${attempt}/${maxRetries})`);
+
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3007'}/recording-upload/client-recording`,
+            {
+              method: 'POST',
+              body: formData,
+              signal: uploadAbortControllerRef.current.signal,
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          
+          // Step 4: Upload successful - delete from IndexedDB
+          await recordingStorage.deleteRecording(currentStorageId);
+          setUploadProgress('Upload complete!');
+          console.log(`[Recording] ✅ Upload successful, deleted from IndexedDB: ${currentStorageId}`);
+
+          setRecordingUrl(result.recordingId);
+          onRecordingComplete?.(result.recordingId);
+          
+          isUploadingRef.current = false;
+          setIsUploading(false);
+          onUploadStatusChange?.(false); // ✅ Notify parent
+          setUploadProgress('');
+          return;
+
+        } catch (error: any) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // Don't retry if aborted (user navigated away)
+          if (error.name === 'AbortError') {
+            console.log('[Recording] Upload aborted');
+            await recordingStorage.updateRecordingStatus(currentStorageId, 'pending', false);
+            isUploadingRef.current = false;
+            setIsUploading(false);
+            onUploadStatusChange?.(false); // ✅ Notify parent
+            setUploadProgress('');
+            return;
+          }
+
+          // Wait before retry (exponential backoff)
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+            console.warn(`[Recording] Upload attempt ${attempt} failed, retrying in ${delay}ms...`, error);
+            setUploadProgress(`Upload failed, retrying... (${attempt}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      }
+
+      // All retries failed - mark as failed in IndexedDB
+      await recordingStorage.updateRecordingStatus(currentStorageId, 'failed', false);
+      setUploadProgress('Upload failed - saved locally for retry');
+      console.error(`[Recording] ❌ All upload attempts failed:`, lastError);
+      onError?.(lastError?.message || 'Failed to upload recording after multiple attempts. Recording saved locally.');
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save/upload recording';
+      console.error('[Recording] ❌ Error:', error);
+      onError?.(errorMessage);
+    } finally {
+      isUploadingRef.current = false;
+      setIsUploading(false);
+      onUploadStatusChange?.(false); // ✅ Notify parent
+      uploadAbortControllerRef.current = null;
+    }
+  };
+
+  /**
+   * Upload using sendBeacon (for page unload scenarios)
+   * Note: sendBeacon doesn't support FormData well, so we'll just mark it for retry
+   */
+  const uploadWithBeacon = (storageId: string): boolean => {
+    try {
+      // sendBeacon doesn't work well with FormData, so we'll just ensure
+      // the recording is marked as pending for retry on next page load
+      recordingStorage.updateRecordingStatus(storageId, 'pending', false).then(() => {
+        console.log('[Recording] ✅ Marked recording for retry on next page load');
+      }).catch(err => {
+        console.error('[Recording] ❌ Failed to mark for retry:', err);
+      });
+      return true;
+    } catch (error) {
+      console.error('[Recording] ❌ sendBeacon preparation failed:', error);
+    }
+    return false;
+  };
+
+  const startRecording = useCallback(async () => {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -103,112 +204,19 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
         // Mic permission not available
       }
 
-      // ✅ FIX: Capture participant audio from LiveKit tracks directly
+      const audioEls = document.querySelectorAll('audio');
       const participantAudioStream = new MediaStream();
-      const addedTrackIds = new Set<string>();
       
-      // Method 1: Get audio tracks directly from LiveKit room (PRIMARY METHOD)
-      if (liveKitService?.room) {
-        try {
-          // Get audio tracks from ALL remote participants
-          liveKitService.room.remoteParticipants.forEach((participant: any) => {
-            const audioPublications = Array.from(participant.audioTrackPublications.values());
-            audioPublications.forEach((pub: any) => {
-              if (pub.track && pub.isSubscribed && !pub.track.isMuted) {
-                try {
-                  // LiveKit RemoteAudioTrack has mediaStreamTrack property
-                  // Access the underlying MediaStreamTrack for recording
-                  const liveKitTrack = pub.track;
-                  
-                  // Try to get MediaStreamTrack - LiveKit tracks expose this property
-                  let mediaTrack: MediaStreamTrack | null = null;
-                  
-                  // Method A: Direct property access (most common)
-                  if (liveKitTrack.mediaStreamTrack) {
-                    mediaTrack = liveKitTrack.mediaStreamTrack;
-                  }
-                  // Method B: Access through track property
-                  else if ((liveKitTrack as any).track && (liveKitTrack as any).track instanceof MediaStreamTrack) {
-                    mediaTrack = (liveKitTrack as any).track;
-                  }
-                  // Method C: If track is already a MediaStreamTrack
-                  else if (liveKitTrack instanceof MediaStreamTrack) {
-                    mediaTrack = liveKitTrack;
-                  }
-                  // Method D: Try to create MediaStream from track and extract
-                  else if (typeof (liveKitTrack as any).getMediaStreamTrack === 'function') {
-                    mediaTrack = (liveKitTrack as any).getMediaStreamTrack();
-                  }
-                  
-                  if (mediaTrack && mediaTrack.kind === 'audio' && !mediaTrack.muted && !addedTrackIds.has(mediaTrack.id)) {
-                    participantAudioStream.addTrack(mediaTrack);
-                    addedTrackIds.add(mediaTrack.id);
-                  }
-                } catch (err) {
-                  // Track might not be available or already added
-                  console.warn('[Recording] Failed to add audio track from participant:', err);
-                }
-              }
-            });
-          });
-        } catch (err) {
-          console.warn('[Recording] Failed to get LiveKit remote participant audio:', err);
-        }
-      }
-      
-      // Method 2: Fallback - Capture from audio elements using Web Audio API
-      // LiveKit attach() doesn't set srcObject, so we use Web Audio API to capture
-      if (participantAudioStream.getAudioTracks().length === 0) {
-        try {
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const destination = audioContext.createMediaStreamDestination();
-          
-          const audioEls = document.querySelectorAll('audio');
-          audioEls.forEach((audioEl) => {
-            try {
-              // Skip muted or local participant audio elements
-              if (audioEl.muted || audioEl.volume === 0) {
-                return;
-              }
-              
-              // Use Web Audio API to capture audio from element
-              // This works even when LiveKit attach() doesn't set srcObject
-              const source = audioContext.createMediaElementSource(audioEl);
-              source.connect(destination);
-              
-              // Add tracks from destination stream
-              destination.stream.getAudioTracks().forEach(track => {
-                if (!track.muted && !addedTrackIds.has(track.id)) {
-                  participantAudioStream.addTrack(track);
-                  addedTrackIds.add(track.id);
-                }
-              });
-            } catch (err) {
-              // Some audio elements might already have a source node (can only create one)
-              // Try to get srcObject as fallback
-              if (audioEl.srcObject && audioEl.srcObject instanceof MediaStream) {
-                const tracks = audioEl.srcObject.getAudioTracks();
-                tracks.forEach(track => {
-                  if (!track.muted && !addedTrackIds.has(track.id)) {
-                    participantAudioStream.addTrack(track);
-                    addedTrackIds.add(track.id);
-                  }
-                });
-              }
+      audioEls.forEach((audioEl) => {
+        if (audioEl.srcObject) {
+          const tracks = (audioEl.srcObject as MediaStream).getAudioTracks();
+          tracks.forEach(track => {
+            if (!track.muted) {
+              participantAudioStream.addTrack(track);
             }
           });
-        } catch (err) {
-          console.warn('[Recording] Web Audio API capture failed:', err);
         }
-      }
-      
-      // Log captured audio tracks for debugging
-      const totalParticipantTracks = participantAudioStream.getAudioTracks().length;
-      if (totalParticipantTracks > 0) {
-        console.log(`[Recording] ✅ Captured ${totalParticipantTracks} participant audio track(s)`);
-      } else {
-        console.warn('[Recording] ⚠️ No participant audio tracks captured - recording will only have host mic and screen audio');
-      }
+      });
       
       const combinedStream = new MediaStream();
       
@@ -253,21 +261,61 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
       };
 
       mediaRecorder.onstop = async () => {
-        // Wait a bit to ensure all chunks are collected
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Create blob with proper MIME type
-        const blob = new Blob(recordedChunksRef.current, {
-          type: mimeType,
-        });
-        
-        // For better seeking support, we'll let the backend convert to MP4
-        // But ensure the WebM is properly finalized
-        await uploadRecording(blob);
+        try {
+          // Wait a bit to ensure all chunks are collected
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          const blob = new Blob(recordedChunksRef.current, {
+            type: mimeType,
+          });
+
+          console.log(`[Recording] 📦 Recording stopped, blob size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+          
+          // ✅ CRITICAL FIX: Save to IndexedDB IMMEDIATELY (synchronously) before any async operations
+          // This ensures recording is saved even if page unloads
+          let storageId: string | undefined;
+          try {
+            storageId = await recordingStorage.saveRecording(
+              blob,
+              meetingId,
+              userId,
+              meetingName || `Meeting_${meetingId}_${new Date().toISOString().split('T')[0]}`
+            );
+            recordingIdRef.current = storageId;
+            console.log(`[Recording] ✅ CRITICAL: Saved to IndexedDB BEFORE upload: ${storageId}`);
+          } catch (saveError) {
+            console.error('[Recording] ❌ Failed to save to IndexedDB:', saveError);
+            // Continue anyway - try to upload directly
+          }
+          
+          // Start upload (will use existing storageId if saved, or save again)
+          uploadRecording(blob, storageId).catch(error => {
+            console.error('[Recording] ❌ Upload error:', error);
+          });
+        } catch (error) {
+          console.error('[Recording] ❌ Error in onstop handler:', error);
+          // Try to save chunks directly if blob creation failed
+          if (recordedChunksRef.current.length > 0) {
+            try {
+              const emergencyBlob = new Blob(recordedChunksRef.current, { type: mimeType });
+              recordingStorage.saveRecording(
+                emergencyBlob,
+                meetingId,
+                userId,
+                meetingName || `Meeting_${meetingId}_${new Date().toISOString().split('T')[0]}`
+              ).then(id => {
+                console.log(`[Recording] ✅ Emergency save successful: ${id}`);
+                recordingIdRef.current = id;
+              }).catch(err => {
+                console.error('[Recording] ❌ Emergency save failed:', err);
+              });
+            } catch (emergencyError) {
+              console.error('[Recording] ❌ Emergency blob creation failed:', emergencyError);
+            }
+          }
+        }
       };
 
-      // Use smaller timeslice for better chunk handling, but not too small
-      // This helps with proper metadata writing
       mediaRecorder.start(1000);
       setIsRecording(true);
       onRecordingStart?.();
@@ -279,7 +327,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to start recording');
     }
-  }, [meetingId, userId, liveKitService, onError, onRecordingStart]);
+  }, [meetingId, userId, onError]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -294,31 +342,100 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
     }
   }, [isRecording]);
 
-  useEffect(() => {
-    const handleExternalStop = (event: Event) => {
-      if (!isRecording) {
-        return;
-      }
-
-      const customEvent = event as CustomEvent<{ meetingId?: string }>;
-      const targetMeetingId = customEvent?.detail?.meetingId;
-      if (targetMeetingId && targetMeetingId !== meetingId) {
-        return;
-      }
-      stopRecording();
-    };
-
-    window.addEventListener('hrde-stop-recording', handleExternalStop);
-    return () => {
-      window.removeEventListener('hrde-stop-recording', handleExternalStop);
-    };
-  }, [isRecording, meetingId, stopRecording]);
-
+  /**
+   * Handle meeting end - wait for upload to complete before allowing redirect
+   */
   React.useEffect(() => {
     if (meetingStatus === 'ENDED' && isRecording) {
+      console.log('[Recording] Meeting ended, stopping recording...');
       stopRecording();
     }
   }, [meetingStatus, isRecording, stopRecording]);
+
+  /**
+   * Handle page unload - try to upload using sendBeacon if upload is in progress
+   */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // ✅ FIX: Warn user if recording is active or uploading
+      if (isRecording) {
+        e.preventDefault();
+        e.returnValue = '⚠️ 녹화 중입니다. 페이지를 새로고침하면 녹화가 중지됩니다. 계속하시겠습니까?';
+        return e.returnValue;
+      }
+      
+      // If upload is in progress, warn user
+      if (isUploading || isUploadingRef.current) {
+        e.preventDefault();
+        e.returnValue = '⚠️ 녹화 파일이 업로드 중입니다. 잠시만 기다려주세요...';
+        return e.returnValue;
+      }
+    };
+
+    const handlePageHide = () => {
+      // If recording was stopped but upload hasn't completed, mark for retry
+      if (recordingIdRef.current && !isUploadingRef.current) {
+        recordingStorage.getRecording(recordingIdRef.current).then(metadata => {
+          if (metadata && (metadata.status === 'pending' || metadata.status === 'uploading')) {
+            console.log('[Recording] Page unloading, marking recording for retry...');
+            uploadWithBeacon(recordingIdRef.current!);
+          }
+        }).catch(err => {
+          console.error('[Recording] Failed to get recording for retry:', err);
+        });
+      }
+
+      // Abort ongoing upload if any (but don't delete from IndexedDB)
+      if (uploadAbortControllerRef.current) {
+        uploadAbortControllerRef.current.abort();
+        // Mark as pending for retry
+        if (recordingIdRef.current) {
+          recordingStorage.updateRecordingStatus(recordingIdRef.current, 'pending', false)
+            .catch(err => console.error('[Recording] Failed to mark for retry:', err));
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [isUploading]);
+
+  /**
+   * Retry failed uploads on component mount
+   */
+  useEffect(() => {
+    const retryFailedUploads = async () => {
+      try {
+        const failedRecordings = await recordingStorage.getFailedRecordings();
+        const pendingRecordings = await recordingStorage.getPendingRecordings();
+        
+        const allRecordings = [...failedRecordings, ...pendingRecordings];
+        
+        if (allRecordings.length > 0) {
+          console.log(`[Recording] 🔄 Found ${allRecordings.length} recordings to retry`);
+          
+          // Retry uploads for this meeting
+          for (const recording of allRecordings) {
+            if (recording.meetingId === meetingId && !isUploadingRef.current) {
+              console.log(`[Recording] 🔄 Retrying upload: ${recording.id}`);
+              uploadRecording(recording.blob, recording.id).catch(err => {
+                console.error(`[Recording] Retry failed for ${recording.id}:`, err);
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Recording] Failed to retry uploads:', error);
+      }
+    };
+
+    retryFailedUploads();
+  }, [meetingId]);
 
   // Detect mobile
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
@@ -340,7 +457,13 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
       onClick={handleClick}
       onTouchEnd={handleClick}
       disabled={isUploading}
-      title={isRecording ? 'Stop Recording' : 'Start Recording'}
+      title={
+        isUploading 
+          ? uploadProgress || 'Uploading recording...' 
+          : isRecording 
+          ? 'Stop Recording' 
+          : 'Start Recording'
+      }
       aria-label={isRecording ? 'Stop Recording' : 'Start Recording'}
       style={{
         width: isMobile ? '44px' : '48px',
@@ -389,6 +512,25 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
             animation: 'pulse 1s infinite',
             pointerEvents: 'none'
           }}></div>
+          {/* Upload progress text */}
+          {isUploading && uploadProgress && (
+            <div style={{
+              position: 'absolute',
+              bottom: '-30px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontSize: '11px',
+              color: '#3b82f6',
+              whiteSpace: 'nowrap',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              zIndex: 1001
+            }}>
+              {uploadProgress}
+            </div>
+          )}
         </>
       ) : (
         <>

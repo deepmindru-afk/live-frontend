@@ -115,6 +115,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [activeTab, setActiveTab] = useState<'participants' | 'chat'>('chat');
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingInProgress, setIsRecordingInProgress] = useState(false);
+  const [isRecordingUploading, setIsRecordingUploading] = useState(false); // ✅ Track upload status
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isLive, setIsLive] = useState(false);
@@ -1895,9 +1896,13 @@ const handleWhiteboardToggle = useCallback(() => {
         return;
       }
       
+      // ✅ FIX: Check if recording is active and add warning
+      const isHost = currentParticipant?.role === 'HOST' || role === 'HOST' || currentUser?.systemRole === 'TUTOR' || currentUser?.systemRole === 'ADMIN';
+      const recordingWarning = (isHost && isRecording) ? '\n\n⚠️ 녹화 중입니다. 페이지를 새로고침하면 녹화가 중지됩니다.' : '';
+      
       // Show browser confirmation dialog
       e.preventDefault();
-      e.returnValue = '회의를 나가시겠습니까?';
+      e.returnValue = `회의를 나가시겠습니까?${recordingWarning}`;
       return e.returnValue;
     };
     
@@ -2223,12 +2228,36 @@ const handleWhiteboardToggle = useCallback(() => {
   // Auto-redirect when meeting ends
   useEffect(() => {
     if (meetingStatus === 'ENDED') {
-      // Auto-redirect all participants to dashboard when meeting ends
-      setTimeout(() => {
+      // ✅ FIX: Wait for recording upload to complete before redirecting
+      const waitForUpload = async () => {
+        let attempts = 0;
+        const maxWaitTime = 60000; // Maximum 60 seconds wait
+        const checkInterval = 500; // Check every 500ms
+        
+        while (isRecordingUploading && attempts * checkInterval < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+          attempts++;
+        }
+        
+        // If still uploading after max wait, show warning but redirect anyway
+        if (isRecordingUploading) {
+          console.warn('[Meeting] Recording upload still in progress, redirecting anyway...');
+          Swal.fire({
+            icon: 'warning',
+            title: '녹화 업로드 중',
+            text: '녹화 파일이 아직 업로드 중입니다. 로컬에 저장되어 나중에 자동으로 업로드됩니다.',
+            timer: 3000,
+            showConfirmButton: false
+          });
+        }
+        
         redirectToDashboard();
-      }, 1000);
+      };
+      
+      // Start waiting for upload
+      waitForUpload();
     }
-  }, [meetingStatus, redirectToDashboard]);
+  }, [meetingStatus, isRecordingUploading, redirectToDashboard]);
 
   // Handle GraphQL errors
   useEffect(() => {
@@ -3035,6 +3064,7 @@ const handleWhiteboardToggle = useCallback(() => {
 
   const handleRecordingError = (errorMessage: string) => {
     setIsRecording(false);
+    setIsRecordingUploading(false); // ✅ Reset upload status
     setRecordingStartTime(null);
     setRecordingDuration(0);
     signalVodRefresh(null);
@@ -3043,6 +3073,12 @@ const handleWhiteboardToggle = useCallback(() => {
       title: '녹화 업로드 실패',
       text: errorMessage || '녹화 파일 업로드 중 문제가 발생했습니다. 다시 시도해주세요.'
     });
+  };
+
+  // ✅ Callback to track recording upload status
+  const handleRecordingUploadStatusChange = (isUploading: boolean) => {
+    setIsRecordingUploading(isUploading);
+    console.log(`[Recording] Upload status changed: ${isUploading ? 'Uploading...' : 'Upload complete/failed'}`);
   };
 
   // handleRecordingToggle - Disabled for client-side recording
@@ -3854,6 +3890,7 @@ const handleWhiteboardToggle = useCallback(() => {
                       onRecordingStart={handleRecordingStarted}
                       onRecordingComplete={handleRecordingUploadComplete}
                       onError={handleRecordingError}
+                      onUploadStatusChange={handleRecordingUploadStatusChange}
                     />
                   </>
                 )}
@@ -3869,6 +3906,7 @@ const handleWhiteboardToggle = useCallback(() => {
                     onRecordingStart={handleRecordingStarted}
                     onRecordingComplete={handleRecordingUploadComplete}
                     onError={handleRecordingError}
+                    onUploadStatusChange={handleRecordingUploadStatusChange}
                   />
                 )}
 
@@ -4037,9 +4075,11 @@ const handleWhiteboardToggle = useCallback(() => {
                         userId={currentUser?.id || currentUser?._id || 'unknown'}
                         meetingName={(meetingData as any)?.title || `Meeting_${actualMeetingId}`}
                         meetingStatus={meetingStatus}
+                        liveKitService={liveKitService}
                         onRecordingStart={handleRecordingStarted}
                         onRecordingComplete={handleRecordingUploadComplete}
                         onError={handleRecordingError}
+                        onUploadStatusChange={handleRecordingUploadStatusChange}
                       />
                     )}
                   </div>
