@@ -118,6 +118,7 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = me
   const [isRecordingUploading, setIsRecordingUploading] = useState(false); // ✅ Track upload status
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const stopRecordingRef = useRef<(() => void) | null>(null); // ✅ Ref to stopRecording function
   const [isLive, setIsLive] = useState(false);
   const [isHostState, setIsHostState] = useState(false);
   // Clear audio/video preferences from prejoin page (stored in sessionStorage)
@@ -2277,8 +2278,26 @@ const handleWhiteboardToggle = useCallback(() => {
   // Auto-redirect when meeting ends
   useEffect(() => {
     if (meetingStatus === 'ENDED') {
-      // ✅ FIX: Wait for recording upload to complete before redirecting
-      const waitForUpload = async () => {
+      // ✅ CRITICAL FIX: Stop recording if active before redirecting
+      const stopRecordingAndWait = async () => {
+        if (isRecording && stopRecordingRef.current) {
+          console.log('[Meeting] Meeting ended, stopping recording...');
+          stopRecordingRef.current();
+          
+          // Wait a bit for upload to start
+          let uploadStarted = false;
+          let attempts = 0;
+          while (!uploadStarted && attempts < 20) { // Wait up to 2 seconds
+            if (isRecordingUploading) {
+              uploadStarted = true;
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+        }
+
+        // ✅ FIX: Wait for recording upload to complete before redirecting
         let attempts = 0;
         const maxWaitTime = 60000; // Maximum 60 seconds wait
         const checkInterval = 500; // Check every 500ms
@@ -2304,9 +2323,9 @@ const handleWhiteboardToggle = useCallback(() => {
       };
       
       // Start waiting for upload
-      waitForUpload();
+      stopRecordingAndWait();
     }
-  }, [meetingStatus, isRecordingUploading, redirectToDashboard]);
+  }, [meetingStatus, isRecordingUploading, isRecording, redirectToDashboard]);
 
   // Handle GraphQL errors
   useEffect(() => {
@@ -2499,6 +2518,67 @@ const handleWhiteboardToggle = useCallback(() => {
 
   const handleEndMeeting = useCallback(async () => {
     try {
+      // ✅ CRITICAL FIX: If recording is active, prompt to stop recording first
+      if (isRecording && stopRecordingRef.current) {
+        const result = await Swal.fire({
+          title: '녹화 중입니다',
+          html: '회의를 종료하기 전에 녹화를 중지해야 합니다.<br/>녹화를 중지하고 업로드하시겠습니까?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '녹화 중지 후 종료',
+          cancelButtonText: '취소',
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        });
+
+        if (!result.isConfirmed) {
+          return; // User cancelled, don't end meeting
+        }
+
+        // Stop recording first
+        console.log('[Meeting] Stopping recording before ending meeting...');
+        stopRecordingRef.current();
+        
+        // Wait for recording to stop and upload to start
+        await Swal.fire({
+          title: '녹화 중지 중...',
+          html: '녹화를 중지하고 업로드를 준비하는 중입니다.<br/>잠시만 기다려주세요.',
+          icon: 'info',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          timer: 2000
+        });
+
+        // Wait a bit for upload to start
+        let uploadStarted = false;
+        let attempts = 0;
+        while (!uploadStarted && attempts < 20) { // Wait up to 2 seconds
+          if (isRecordingUploading) {
+            uploadStarted = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (isRecordingUploading) {
+          // Show message that upload is in progress
+          await Swal.fire({
+            title: '녹화 업로드 중',
+            html: '녹화 파일을 업로드하는 중입니다.<br/>업로드가 완료되면 회의가 종료됩니다.',
+            icon: 'info',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            timer: 3000
+          });
+        }
+      }
+
+      // End meeting
       await endMeeting({
         variables: { meetingId: actualMeetingId }
       });
@@ -2517,7 +2597,7 @@ const handleWhiteboardToggle = useCallback(() => {
         text: '회의 종료에 실패했습니다. 다시 시도해주세요.'
       });
     }
-  }, [endMeeting, actualMeetingId, redirectToDashboard]);
+  }, [endMeeting, actualMeetingId, redirectToDashboard, isRecording, isRecordingUploading]);
 
   // ✅ Backend handles auto-end when participantCount reaches 0
   // Frontend just monitors and redirects when meeting status changes to ENDED
@@ -2535,6 +2615,56 @@ const handleWhiteboardToggle = useCallback(() => {
 
   const handleParticipantLeave = async () => {
     try {
+      // ✅ CRITICAL FIX: If recording is active (host), stop recording first
+      const isHost = currentParticipant?.role === 'HOST' || role === 'HOST';
+      if (isRecording && isHost && stopRecordingRef.current) {
+        const result = await Swal.fire({
+          title: '녹화 중입니다',
+          html: '회의를 나가기 전에 녹화를 중지해야 합니다.<br/>녹화를 중지하고 업로드하시겠습니까?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '녹화 중지 후 나가기',
+          cancelButtonText: '취소',
+          confirmButtonColor: '#dc3545',
+          cancelButtonColor: '#6c757d',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        });
+
+        if (!result.isConfirmed) {
+          return; // User cancelled, don't leave meeting
+        }
+
+        // Stop recording first
+        console.log('[Meeting] Stopping recording before leaving meeting...');
+        stopRecordingRef.current();
+        
+        // Wait a bit for upload to start
+        let uploadStarted = false;
+        let attempts = 0;
+        while (!uploadStarted && attempts < 20) { // Wait up to 2 seconds
+          if (isRecordingUploading) {
+            uploadStarted = true;
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (isRecordingUploading) {
+          // Show message that upload is in progress
+          await Swal.fire({
+            title: '녹화 업로드 중',
+            html: '녹화 파일을 업로드하는 중입니다.<br/>업로드가 완료되면 회의를 나갑니다.',
+            icon: 'info',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            timer: 2000
+          });
+        }
+      }
+
       const result = await Swal.fire({
         title: '회의 나가기',
         text: '회의를 나가시겠습니까?',
@@ -2546,7 +2676,7 @@ const handleWhiteboardToggle = useCallback(() => {
         cancelButtonColor: '#6c757d'
       });
 
-            if (result.isConfirmed) {
+      if (result.isConfirmed) {
         // Check if we have current participant data
         if (!currentParticipant?._id) {
           Swal.fire({
@@ -2557,25 +2687,25 @@ const handleWhiteboardToggle = useCallback(() => {
           return;
         }
 
-      const leaveResult = await leaveMeeting({
-        variables: { 
-          input: { 
-              participantId: currentParticipant._id
+        const leaveResult = await leaveMeeting({
+          variables: { 
+            input: { 
+                participantId: currentParticipant._id
+            }
           }
+        });
+        
+        // Only redirect if leave was successful
+        if ((leaveResult.data as any)?.leaveMeeting?.success || true) {
+          // Auto-redirect after successful leave
+          setTimeout(() => {
+            redirectToDashboard();
+          }, 1000);
+        } else {
+          throw new Error('Leave meeting failed');
         }
-      });
-      
-      // Only redirect if leave was successful
-      if ((leaveResult.data as any)?.leaveMeeting?.success || true) {
-        // Auto-redirect after successful leave
-        setTimeout(() => {
-          redirectToDashboard();
-        }, 1000);
-      } else {
-        throw new Error('Leave meeting failed');
       }
-      }
-              } catch (error) {
+    } catch (error) {
       Swal.fire({
         icon: 'error',
         title: '오류',
@@ -3940,6 +4070,7 @@ const handleWhiteboardToggle = useCallback(() => {
                       onRecordingComplete={handleRecordingUploadComplete}
                       onError={handleRecordingError}
                       onUploadStatusChange={handleRecordingUploadStatusChange}
+                      onStopRecordingReady={(stopFn) => { stopRecordingRef.current = stopFn; }}
                     />
                   </>
                 )}
@@ -3956,6 +4087,7 @@ const handleWhiteboardToggle = useCallback(() => {
                     onRecordingComplete={handleRecordingUploadComplete}
                     onError={handleRecordingError}
                     onUploadStatusChange={handleRecordingUploadStatusChange}
+                    onStopRecordingReady={(stopFn) => { stopRecordingRef.current = stopFn; }}
                   />
                 )}
 
@@ -4129,6 +4261,7 @@ const handleWhiteboardToggle = useCallback(() => {
                         onRecordingComplete={handleRecordingUploadComplete}
                         onError={handleRecordingError}
                         onUploadStatusChange={handleRecordingUploadStatusChange}
+                        onStopRecordingReady={(stopFn) => { stopRecordingRef.current = stopFn; }}
                       />
                     )}
                   </div>

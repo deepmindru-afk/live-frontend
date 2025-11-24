@@ -11,6 +11,7 @@ interface ClientSideRecordingProps {
   onRecordingComplete?: (recordingUrl: string) => void;
   onError?: (error: string) => void;
   onUploadStatusChange?: (isUploading: boolean) => void; // ✅ Notify parent about upload status
+  onStopRecordingReady?: (stopFn: () => void) => void; // ✅ Expose stopRecording function to parent
 }
 
 const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
@@ -22,6 +23,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
   onRecordingComplete,
   onError,
   onUploadStatusChange,
+  onStopRecordingReady,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -331,6 +333,7 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log('[Recording] Stopping recording...');
       mediaRecorderRef.current.stop();
       
       if (streamRef.current) {
@@ -341,6 +344,13 @@ const ClientSideRecording: React.FC<ClientSideRecordingProps> = ({
       setIsRecording(false);
     }
   }, [isRecording]);
+
+  // ✅ Expose stopRecording function to parent component
+  useEffect(() => {
+    if (onStopRecordingReady) {
+      onStopRecordingReady(stopRecording);
+    }
+  }, [onStopRecordingReady, stopRecording]);
 
   /**
    * Handle meeting end - wait for upload to complete before allowing redirect
