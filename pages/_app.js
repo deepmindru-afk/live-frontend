@@ -5,7 +5,7 @@ import '../pages/app/globals.css';
 import '@excalidraw/excalidraw/index.css';
 import ApolloProviderWrapper from '../lib/apollo-provider';
 import { useEffect } from 'react';
-import { handleSSOLogin } from '../lib/simple-auth-handlers';
+import { handleSSOLogin, redirectBasedOnRole } from '../lib/simple-auth-handlers';
 
 // Cleanup duplicate tokens on app start
 function cleanupDuplicateTokens() {
@@ -90,7 +90,18 @@ export default function App({ Component, pageProps }) {
             // Exchange it via ssoLogin so backend creates/fetches the user and returns its own JWT.
             try {
               const ok = await handleSSOLogin(data.token);
-              if (!ok) {
+              if (ok) {
+                // ✅ SSO login successful - get user and redirect
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                  try {
+                    const user = JSON.parse(userStr);
+                    redirectBasedOnRole(user);
+                    return; // Exit early after redirect
+                  } catch (parseError) {
+                    console.error('Failed to parse user data:', parseError);
+                  }
+                }
               }
             } catch (e) {
               // Only fall back if we don't have an existing token

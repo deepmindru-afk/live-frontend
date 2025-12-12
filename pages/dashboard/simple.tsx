@@ -42,7 +42,7 @@ const SimpleDashboard: React.FC = () => {
           router.push('/member');
           return;
         } else if (userData?.systemRole === 'ADMIN') {
-          router.push('/admin');
+          router.push('/instructor');
           return;
         } else if (userData?.systemRole === 'TUTOR') {
           router.push('/instructor');

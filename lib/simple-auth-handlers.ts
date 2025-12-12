@@ -633,7 +633,7 @@ export const redirectBasedOnRole = (user: any): void => {
 
   switch (user.systemRole) {
     case 'ADMIN':
-      window.location.href = '/admin';
+      window.location.href = '/instructor';
       break;
     case 'TUTOR':
       window.location.href = '/instructor';
