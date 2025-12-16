@@ -104,6 +104,7 @@ export const GET_MEETING_ATTENDANCE = gql`
       attendanceRate
       participants {
         _id
+        userId
         displayName
         email
         firstName

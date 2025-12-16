@@ -10,6 +10,7 @@ import styles from '../../styles/attendance.module.css';
 
 interface ParticipantAttendance {
   _id: string;
+  userId?: string;
   displayName: string;
   email?: string;
   firstName?: string;
@@ -412,46 +413,73 @@ const AttendancePage: React.FC = () => {
     };
 
     const getAggregationKey = (participant: ParticipantAttendance) => {
-      if ((participant as any).userId) {
-        return String((participant as any).userId);
+      // Priority 1: Use userId (most reliable for registered users)
+      if (participant.userId && String(participant.userId).trim()) {
+        return `user:${String(participant.userId)}`;
       }
-      const email = participant.email;
-      if (email) {
-        return email.toLowerCase();
+      
+      // Priority 2: Use email (reliable for registered users)
+      if (participant.email && participant.email.trim()) {
+        return `email:${participant.email.toLowerCase().trim()}`;
       }
+      
+      // Priority 3: Use firstName + lastName combination
       if (participant.firstName || participant.lastName) {
-        return `${(participant.firstName || '').toLowerCase()}|${(participant.lastName || '').toLowerCase()}`;
+        const firstName = (participant.firstName || '').toLowerCase().trim();
+        const lastName = (participant.lastName || '').toLowerCase().trim();
+        if (firstName || lastName) {
+          return `name:${firstName}|${lastName}`;
+        }
       }
-      return participant.displayName.toLowerCase();
+      
+      // Priority 4: Use displayName (may not be unique)
+      if (participant.displayName && participant.displayName.trim()) {
+        return `display:${participant.displayName.toLowerCase().trim()}`;
+      }
+      
+      // Priority 5: Fall back to _id (guaranteed unique, prevents incorrect merging)
+      return `id:${participant._id}`;
     };
 
     const aggregator = new Map<string, AggregatedParticipantAttendance>();
 
-    attendance.participants.forEach((participant) => {
-      const key = getAggregationKey(participant);
-      const sessionDuration = calculateParticipantDuration(participant);
-      const participantSessions = participant.sessions ? [...participant.sessions] : [];
+    attendance.participants.forEach((participant, index) => {
+      try {
+        // Validate participant has minimum required data
+        if (!participant || !participant._id) {
+          console.warn(`[Attendance] Skipping invalid participant at index ${index}: missing _id`);
+          return;
+        }
 
-      if (!aggregator.has(key)) {
-        const initialEntry: AggregatedParticipantAttendance = {
-          ...participant,
-          aggregatedDurationSec: Math.max(sessionDuration, 0),
-          aggregatedRecords: [participant],
-          totalTime: Math.max(sessionDuration, 0),
-          sessionCount: 1,
-          sessions: participantSessions,
-        };
-        aggregator.set(key, initialEntry);
-        return;
+        const key = getAggregationKey(participant);
+        const sessionDuration = calculateParticipantDuration(participant);
+        const participantSessions = participant.sessions ? [...participant.sessions] : [];
+
+        if (!aggregator.has(key)) {
+          const initialEntry: AggregatedParticipantAttendance = {
+            ...participant,
+            aggregatedDurationSec: Math.max(sessionDuration, 0),
+            aggregatedRecords: [participant],
+            totalTime: Math.max(sessionDuration, 0),
+            sessionCount: 1,
+            sessions: participantSessions,
+          };
+          aggregator.set(key, initialEntry);
+          return;
+        }
+
+        const existing = aggregator.get(key)!;
+        existing.aggregatedDurationSec = Math.max(existing.aggregatedDurationSec + Math.max(sessionDuration, 0), 0);
+        existing.totalTime = Math.max((existing.totalTime || 0) + Math.max(sessionDuration, 0), 0);
+        existing.aggregatedRecords = [...existing.aggregatedRecords, participant];
+        existing.sessions = participantSessions.length
+          ? [...(existing.sessions || []), ...participantSessions]
+          : existing.sessions;
+      } catch (error) {
+        console.error(`[Attendance] Error processing participant at index ${index}:`, error);
+        console.error('[Attendance] Participant data:', participant);
+        // Continue processing other participants instead of failing completely
       }
-
-      const existing = aggregator.get(key)!;
-      existing.aggregatedDurationSec = Math.max(existing.aggregatedDurationSec + Math.max(sessionDuration, 0), 0);
-      existing.totalTime = Math.max((existing.totalTime || 0) + Math.max(sessionDuration, 0), 0);
-      existing.aggregatedRecords = [...existing.aggregatedRecords, participant];
-      existing.sessions = participantSessions.length
-        ? [...(existing.sessions || []), ...participantSessions]
-        : existing.sessions;
     });
 
     const statusPriority: Record<string, number> = {
