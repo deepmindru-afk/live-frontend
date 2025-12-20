@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { isAuthenticated } from '../../lib/simple-auth-handlers';
 import ProfessionalLiveStreamRoom from '../../components/ProfessionalLiveStreamRoom';
 
-const REDIRECT_URL = 'https://hrdeedu.co.kr';
+const REDIRECT_URL = 'https://beta.hrdeedu.co.kr';
 
 const LiveStreamRoomPage: React.FC = () => {
   const router = useRouter();

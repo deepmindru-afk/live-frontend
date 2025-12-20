@@ -4,6 +4,7 @@ import '../pages/app/globals.css';
 // Import Excalidraw styles
 import '@excalidraw/excalidraw/index.css';
 import ApolloProviderWrapper from '../lib/apollo-provider';
+import { ThemeProvider } from '../lib/theme-context';
 import { useEffect } from 'react';
 import { handleSSOLogin, redirectBasedOnRole } from '../lib/simple-auth-handlers';
 
@@ -153,9 +154,11 @@ export default function App({ Component, pageProps }) {
   }, []); // Empty deps - only run once
 
   return (
-    <ApolloProviderWrapper>
-      <Component {...pageProps} />
-    </ApolloProviderWrapper>
+    <ThemeProvider>
+      <ApolloProviderWrapper>
+        <Component {...pageProps} />
+      </ApolloProviderWrapper>
+    </ThemeProvider>
   );
 }
 

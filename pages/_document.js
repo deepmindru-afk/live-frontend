@@ -7,7 +7,7 @@ export default function Document() {
         {/* Favicon - Standard and Apple Touch Icons */}
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/Icons/HRDeOnAirLogo.svg" />
+        <link rel="apple-touch-icon" href="/mainLogo.png" />
         
         {/* Mobile web app optimization */}
         <meta name="mobile-web-app-capable" content="yes" />

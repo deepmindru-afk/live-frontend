@@ -462,7 +462,7 @@ const MemberDashboard: React.FC = () => {
 
     if (result.isConfirmed) {
       await handleLogout();
-      window.location.href = 'https://hrdeedu.co.kr';
+      window.location.href = 'https://beta.hrdeedu.co.kr';
     }
   };
 
@@ -688,7 +688,7 @@ const MemberDashboard: React.FC = () => {
           <div className="topbar-inner">
             <div className="topbar-logo">
               <Image
-                src="/Icons/HRDeOnAirLogo.svg"
+                src="/mainLogo.png"
                 alt="HRDe"
                 width={96}
                 height={40}

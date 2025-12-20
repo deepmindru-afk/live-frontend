@@ -1,10 +1,12 @@
 // Authentication pages styles
+@import './theme-variables.scss';
+
 .auth-container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-auth);
   position: relative;
   overflow: hidden;
   padding: 20px;
@@ -25,16 +27,16 @@
 }
 
 .auth-modal {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg-modal);
   backdrop-filter: blur(10px);
   border-radius: 20px;
   padding: 40px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-modal);
   position: relative;
   z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-primary);
 
   .logo {
     text-align: center;
@@ -46,17 +48,17 @@
       margin: 0;
       
       .meet {
-        color: #4A90E2;
+        color: var(--accent-secondary);
       }
       
       .mate {
-        color: #333;
+        color: var(--text-secondary);
         font-family: 'Arial', sans-serif;
         
         .stylized-m {
           font-family: 'Georgia', serif;
           font-style: italic;
-          color: #4A90E2;
+          color: var(--accent-secondary);
         }
       }
     }
@@ -68,7 +70,7 @@
     .form-title {
       font-size: 1.8rem;
       font-weight: 700;
-      color: #333;
+      color: var(--text-secondary);
       margin-bottom: 20px;
       text-align: center;
     }
@@ -79,7 +81,7 @@
       label {
         display: block;
         font-size: 0.9rem;
-        color: #666;
+        color: var(--text-muted);
         margin-bottom: 8px;
         font-weight: 500;
       }
@@ -87,29 +89,29 @@
       .form-input {
         width: 100%;
         padding: 15px;
-        border: 2px solid #e1e5e9;
+        border: 2px solid var(--border-input);
         border-radius: 10px;
         font-size: 1rem;
         transition: all 0.3s ease;
-        background: #fff;
+        background: var(--bg-input);
         box-sizing: border-box;
-        color: #333 !important; // FIX: Force dark text color
+        color: var(--text-input) !important;
 
         &:focus {
           outline: none;
-          border-color: #4A90E2;
-          box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
-          color: #333 !important; // FIX: Ensure text stays dark on focus
+          border-color: var(--accent-secondary);
+          box-shadow: 0 0 0 3px var(--accent-hover);
+          color: var(--text-input) !important;
         }
 
         &::placeholder {
-          color: #999 !important; // FIX: Force placeholder color
+          color: var(--text-muted) !important;
         }
 
         &.error {
           border-color: #e74c3c;
           box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
-          color: #333 !important; // FIX: Keep text dark even on error
+          color: var(--text-input) !important;
         }
       }
     }

@@ -358,7 +358,7 @@ const WaitingRoomPage: React.FC = () => {
           <div className="form-section">
             <div className="logo-section">
               <Image
-                src="/Icons/HRDeOnAirLogo.svg"
+                src="/mainLogo.png"
                 alt="HRDE"
                 width={120}
                 height={55}

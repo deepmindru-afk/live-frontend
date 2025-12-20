@@ -125,7 +125,7 @@ const InstructorLoginPage: React.FC = () => {
         <div className="auth-modal">
           <div className="logo">
             <Image
-              src="/Icons/HRDeOnAirLogo.svg"
+              src="/mainLogo.png"
               alt="HRDE"
               width={150}
               height={69}

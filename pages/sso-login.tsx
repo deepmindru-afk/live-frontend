@@ -59,7 +59,7 @@ const SSOLoginPage: React.FC = () => {
         }).then(() => {
           // Redirect to corporate site when SSO fails
           if (typeof window !== 'undefined') {
-            window.location.href = 'https://hrdeedu.co.kr';
+            window.location.href = 'https://beta.hrdeedu.co.kr';
           }
         });
       } finally {
@@ -124,7 +124,7 @@ const SSOLoginPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (typeof window !== 'undefined') {
-                      window.location.href = 'https://hrdeedu.co.kr';
+                      window.location.href = 'https://beta.hrdeedu.co.kr';
                     }
                   }}
                   className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

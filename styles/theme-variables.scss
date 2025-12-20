@@ -1,0 +1,92 @@
+// Theme Variables - Light and Dark Mode
+// This file defines CSS variables for both themes
+// Import this file in your SCSS files to use theme variables
+
+// Dark Theme (Default)
+[data-theme='dark'] {
+  // Backgrounds
+  --bg-primary: linear-gradient(160deg, #0f0f13 0%, #161616 40%, #30163f 100%);
+  --bg-secondary: rgba(22, 22, 22, 0.9);
+  --bg-tertiary: rgba(27, 27, 29, 0.92);
+  --bg-quaternary: rgba(48, 22, 63, 0.95);
+  --bg-card: linear-gradient(120deg, rgba(22, 22, 22, 0.9) 0%, rgba(27, 27, 29, 0.92) 55%, rgba(48, 22, 63, 0.95) 100%);
+  --bg-button: rgba(22, 22, 22, 0.65);
+  --bg-button-hover: linear-gradient(115deg, #30163f 0%, #9579b7 100%);
+  --bg-modal: rgba(255, 255, 255, 0.95);
+  --bg-input: #fff;
+  --bg-sidebar: rgba(22, 22, 22, 0.85);
+  
+  // Text Colors
+  --text-primary: #f5f5f5;
+  --text-secondary: #f8f8f8;
+  --text-tertiary: #f3f3f3;
+  --text-muted: #999;
+  --text-input: #333;
+  --text-button: #f3f3f3;
+  
+  // Borders
+  --border-primary: #3e3e3e;
+  --border-secondary: rgba(149, 121, 183, 0.45);
+  --border-input: #e1e5e9;
+  
+  // Shadows
+  --shadow-primary: 0 18px 45px rgba(17, 6, 43, 0.4);
+  --shadow-secondary: 0 15px 32px rgba(46, 22, 63, 0.45);
+  --shadow-button: 0 12px 28px rgba(149, 121, 183, 0.32);
+  --shadow-modal: 0 20px 40px rgba(0, 0, 0, 0.1);
+  
+  // Gradients
+  --gradient-primary: linear-gradient(100deg, #161616 0%, #30163f 55%, #9579b7 100%);
+  --gradient-radial: radial-gradient(circle at top right, rgba(149, 121, 183, 0.15), transparent 45%);
+  --gradient-auth: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  
+  // Accent Colors
+  --accent-primary: #9579b7;
+  --accent-secondary: #4A90E2;
+  --accent-hover: rgba(149, 121, 183, 0.35);
+}
+
+// Light Theme
+[data-theme='light'] {
+  // Backgrounds
+  --bg-primary: linear-gradient(160deg, #f5f5f5 0%, #ffffff 40%, #f0f0f0 100%);
+  --bg-secondary: rgba(255, 255, 255, 0.9);
+  --bg-tertiary: rgba(248, 248, 248, 0.92);
+  --bg-quaternary: rgba(245, 245, 245, 0.95);
+  --bg-card: linear-gradient(120deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 248, 248, 0.95) 55%, rgba(250, 250, 250, 0.95) 100%);
+  --bg-button: rgba(255, 255, 255, 0.8);
+  --bg-button-hover: linear-gradient(115deg, #e8e8e8 0%, #d0d0d0 100%);
+  --bg-modal: rgba(255, 255, 255, 0.98);
+  --bg-input: #fff;
+  --bg-sidebar: rgba(255, 255, 255, 0.9);
+  
+  // Text Colors
+  --text-primary: #171717;
+  --text-secondary: #333333;
+  --text-tertiary: #444444;
+  --text-muted: #666666;
+  --text-input: #333;
+  --text-button: #333333;
+  
+  // Borders
+  --border-primary: #e1e5e9;
+  --border-secondary: rgba(74, 144, 226, 0.3);
+  --border-input: #d0d0d0;
+  
+  // Shadows
+  --shadow-primary: 0 18px 45px rgba(0, 0, 0, 0.08);
+  --shadow-secondary: 0 15px 32px rgba(0, 0, 0, 0.1);
+  --shadow-button: 0 12px 28px rgba(0, 0, 0, 0.15);
+  --shadow-modal: 0 20px 40px rgba(0, 0, 0, 0.12);
+  
+  // Gradients
+  --gradient-primary: linear-gradient(100deg, #ffffff 0%, #f5f5f5 55%, #e8e8e8 100%);
+  --gradient-radial: radial-gradient(circle at top right, rgba(74, 144, 226, 0.1), transparent 45%);
+  --gradient-auth: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  
+  // Accent Colors
+  --accent-primary: #4A90E2;
+  --accent-secondary: #4A90E2;
+  --accent-hover: rgba(74, 144, 226, 0.2);
+}
+

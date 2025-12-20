@@ -14,6 +14,7 @@ import {
   REMOVE_PARTICIPANT
 } from '../../apollo/admin/mutations';
 import Swal from 'sweetalert2';
+import ThemeToggle from '../../components/ThemeToggle';
 
 interface Meeting {
   _id: string;
@@ -505,20 +506,23 @@ const AdminDashboard: React.FC = () => {
         <div className="admin-header">
           <div className="admin-logo">
             <Image
-              src="/Icons/HRDeOnAirLogo.svg"
+              src="/mainLogo.png"
               alt="Meet: mate"
               width={120}
               height={40}
               className="logo-image"
             />
           </div>
-          <div className="admin-user-info">
-            <div className="user-avatar">
-              <span>{user?.displayName?.charAt(0) || 'A'}</span>
-            </div>
-            <div className="user-details">
-              <div className="user-name">{user?.displayName || 'Admin'}</div>
-              <div className="user-role">Administrator</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <ThemeToggle />
+            <div className="admin-user-info">
+              <div className="user-avatar">
+                <span>{user?.displayName?.charAt(0) || 'A'}</span>
+              </div>
+              <div className="user-details">
+                <div className="user-name">{user?.displayName || 'Admin'}</div>
+                <div className="user-role">Administrator</div>
+              </div>
             </div>
           </div>
         </div>

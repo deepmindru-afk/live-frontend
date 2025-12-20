@@ -10,7 +10,7 @@ const HomePage: React.FC = () => {
       const ssoResult = await checkAndHandleSSOLogin();
 
       if (ssoResult === 'failed') {
-        window.location.href = 'https://hrdeedu.co.kr';
+        window.location.href = 'https://beta.hrdeedu.co.kr';
         return;
       }
 
@@ -68,7 +68,7 @@ const HomePage: React.FC = () => {
       // ignore and fall through to redirect
     }
 
-    window.location.href = 'https://hrdeedu.co.kr';
+    window.location.href = 'https://beta.hrdeedu.co.kr';
   };
 
   return (

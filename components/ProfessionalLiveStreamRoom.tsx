@@ -80,7 +80,7 @@ interface ProfessionalLiveStreamRoomProps {
   userId?: string;
 }
 
-const REDIRECT_URL = 'https://hrdeedu.co.kr';
+const REDIRECT_URL = 'https://beta.hrdeedu.co.kr';
 
 const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = memo(({
   meetingId: propMeetingId,

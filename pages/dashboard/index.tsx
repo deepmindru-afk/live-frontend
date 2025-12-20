@@ -7,6 +7,7 @@ import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { CREATE_MEETING, START_MEETING, END_MEETING } from '../../apollo/meeting/mutations';
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { handleLogout } from '../../lib/simple-auth-handlers';
+import ThemeToggle from '../../components/ThemeToggle';
 import Swal from 'sweetalert2';
 
 interface Meeting {
@@ -54,7 +55,7 @@ const Dashboard: React.FC = () => {
         await testBackendConnection();
         await fetchMeetings();
       } else {
-        window.location.href = '/login';
+        window.location.href = 'https://beta.hrdeedu.co.kr';
       }
       setLoading(false);
     };
@@ -466,21 +467,23 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-header">
           <div className="logo" onClick={() => router.push('/dashboard')}>
             <Image
-              src="/Icons/HRDeOnAirLogo.svg"
+              src="/mainLogo.png"
               alt="HRDe Live"
               width={120}
               height={40}
               className="logo-image"
             />
           </div>
-          <button
-            onClick={async () => {
-              try {
-                await handleLogout();
-                router.push('/');
-              } catch (error) {
-              }
-            }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ThemeToggle />
+            <button
+              onClick={async () => {
+                try {
+                  await handleLogout();
+                  router.push('/');
+                } catch (error) {
+                }
+              }}
             style={{
               padding: '10px 20px',
               background: 'rgba(255, 255, 255, 0.2)',
@@ -512,6 +515,7 @@ const Dashboard: React.FC = () => {
             </svg>
             <span>로그아웃</span>
           </button>
+          </div>
         </div>
 
         <div className="dashboard-content">
