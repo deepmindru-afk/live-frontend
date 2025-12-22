@@ -1,0 +1,393 @@
+// Prejoin Page Light Mode Styles
+// All styles for the prejoin page in light mode
+// IMPORTANT: All styles are scoped to [data-theme='light'] to not affect dark mode
+// Using attribute selectors to target CSS module classes (they contain the class name)
+
+@import '../../styles/theme-variables.scss';
+
+// Only apply these styles when light theme is active
+[data-theme='light'] {
+  // Page container
+  [class*="prejoinPage"] {
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf1 50%, #e1e5e9 100%) !important;
+    color: #1a1a1a !important;
+  }
+
+  [class*="prejoinPage"]::before {
+    background: radial-gradient(circle at center, rgba(74, 108, 247, 0.08), transparent 65%) !important;
+  }
+
+  // Main content card
+  [class*="content"] {
+    background: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 24px 64px rgba(107, 114, 128, 0.15) !important;
+    border: 1px solid #e1e5e9 !important;
+    backdrop-filter: blur(24px) !important;
+  }
+
+  // Header
+  [class*="header"] {
+    color: #1a1a1a !important;
+  }
+
+  [class*="meetingTitle"] {
+    color: #1a1a1a !important;
+  }
+
+  // Left and right columns
+  [class*="leftColumn"],
+  [class*="rightColumn"] {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid #e1e5e9 !important;
+    box-shadow: inset 0 0 0 1px rgba(74, 108, 247, 0.08) !important;
+  }
+
+  [class*="sectionLabel"] {
+    color: #1a1a1a !important;
+  }
+
+  // Refresh button
+  [class*="refreshButton"] {
+    border: 1px solid #d1d5db !important;
+    background: #ffffff !important;
+    color: #4b5563 !important;
+  }
+
+  [class*="refreshButton"] svg,
+  [class*="refreshButton"] img {
+    filter: brightness(0) saturate(100%) invert(35%) sepia(5%) saturate(500%) hue-rotate(200deg) brightness(95%) contrast(90%) !important;
+    opacity: 0.8 !important;
+  }
+
+  [class*="refreshButton"]:hover {
+    background: #f5f7fa !important;
+    border-color: #9ca3af !important;
+  }
+
+  [class*="refreshButton"]:hover svg,
+  [class*="refreshButton"]:hover img {
+    opacity: 1 !important;
+    filter: brightness(0) saturate(100%) invert(25%) sepia(5%) saturate(500%) hue-rotate(200deg) brightness(90%) contrast(95%) !important;
+  }
+
+  // Device select
+  [class*="deviceField"] {
+    margin-bottom: 16px !important;
+  }
+
+  [class*="deviceLabel"] {
+    color: #1a1a1a !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    margin-bottom: 8px !important;
+    display: block !important;
+  }
+
+  [class*="deviceSelectGroup"] {
+    margin-bottom: 20px !important;
+  }
+
+  [class*="deviceSelect"] {
+    border: 1px solid #e5e7eb !important;
+    background: #f9fafb !important;
+    color: #1a1a1a !important;
+    padding: 10px 14px !important;
+    height: auto !important;
+    min-height: 44px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+    transition: all 0.2s ease !important;
+  }
+
+  [class*="deviceSelect"]:hover:not(:disabled) {
+    background: #ffffff !important;
+    border-color: #d1d5db !important;
+  }
+
+  [class*="deviceSelect"]:focus {
+    border-color: #4a6cf7 !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1) !important;
+    outline: none !important;
+  }
+
+  [class*="deviceSelect"]:disabled {
+    background: #f3f4f6 !important;
+    color: #9ca3af !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+  }
+
+  [class*="deviceSelect"] option {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+    padding: 8px !important;
+  }
+
+  // Video preview
+  [class*="videoPreview"] {
+    background: #f5f7fa !important;
+    border: 1px solid #d1d5db !important;
+  }
+
+  [class*="videoPlaceholder"] {
+    background: #f9fafb !important;
+    color: #6b7280 !important;
+  }
+
+  [class*="videoPlaceholderIcon"] {
+    background: #f3f4f6 !important;
+    border: 1px solid #d1d5db !important;
+  }
+
+  [class*="videoPlaceholderIcon"] img {
+    filter: brightness(0) saturate(100%) invert(30%) sepia(8%) saturate(1000%) hue-rotate(200deg) brightness(95%) contrast(85%) !important;
+    opacity: 0.7 !important;
+  }
+
+  [class*="videoPlaceholderHint"] {
+    color: #6b7280 !important;
+  }
+
+  // Control buttons
+  [class*="controlButton"] {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    color: #4b5563 !important;
+  }
+
+  [class*="controlButton"] img {
+    filter: brightness(0) saturate(100%) invert(35%) sepia(5%) saturate(500%) hue-rotate(200deg) brightness(95%) contrast(90%) !important;
+    opacity: 0.8 !important;
+  }
+
+  [class*="controlButton"]:hover:not(:disabled) {
+    background: #f5f7fa !important;
+    border-color: #9ca3af !important;
+  }
+
+  [class*="controlButton"]:hover:not(:disabled) img {
+    opacity: 1 !important;
+    filter: brightness(0) saturate(100%) invert(25%) sepia(5%) saturate(500%) hue-rotate(200deg) brightness(90%) contrast(95%) !important;
+  }
+
+  [class*="controlButtonPrimary"] {
+    background: #4a6cf7 !important;
+    border-color: #4a6cf7 !important;
+    color: #ffffff !important;
+  }
+
+  [class*="controlButtonPrimary"] img {
+    filter: brightness(0) saturate(100%) invert(100%) !important;
+    opacity: 1 !important;
+  }
+
+  [class*="controlButtonPrimary"]:hover {
+    background: #3b5ce6 !important;
+    border-color: #3b5ce6 !important;
+  }
+
+  // Action button (참여하기)
+  [class*="actionButton"] {
+    background: linear-gradient(135deg, #4a6cf7 0%, #8c5aef 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 16px 32px rgba(74, 108, 247, 0.3) !important;
+  }
+
+  [class*="actionButton"]:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5b7cff 0%, #9c66ff 100%) !important;
+    box-shadow: 0 22px 42px rgba(74, 108, 247, 0.4) !important;
+  }
+
+  // Confirm button (확인하기)
+  [class*="confirmButton"] {
+    background: #4a6cf7 !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    padding: 12px 24px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.25) !important;
+  }
+
+  [class*="confirmButton"]:hover:not(:disabled) {
+    background: #3b5ce6 !important;
+    box-shadow: 0 6px 16px rgba(74, 108, 247, 0.35) !important;
+    transform: translateY(-1px) !important;
+  }
+
+  [class*="confirmButton"]:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+  }
+
+  // Status panel
+  [class*="statusPanel"] {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 16px !important;
+    padding: 20px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  }
+
+  [class*="statusPanelTitle"] {
+    color: #1a1a1a !important;
+    font-weight: 600 !important;
+    margin-bottom: 16px !important;
+    font-size: 15px !important;
+  }
+
+  [class*="statusItem"] {
+    border-bottom: 1px solid #f3f4f6 !important;
+    padding: 12px 0 !important;
+  }
+
+  [class*="statusItem"]:last-child {
+    border-bottom: none !important;
+  }
+
+  [class*="statusLabel"] {
+    color: #4b5563 !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+  }
+
+  [class*="statusValue"] {
+    font-weight: 600 !important;
+    font-size: 14px !important;
+  }
+
+  [class*="statusValueSuccess"] {
+    color: #059669 !important;
+  }
+
+  [class*="statusValueError"] {
+    color: #f59e0b !important; // Changed from red to amber/orange for softer warning
+    font-weight: 600 !important;
+  }
+
+  // Device error
+  [class*="deviceError"] {
+    color: #dc2626 !important;
+  }
+
+  // Camera badge
+  [class*="cameraBadge"] {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid #d1d5db !important;
+    color: #1a1a1a !important;
+  }
+
+  // Subtle text
+  [class*="subtleText"] {
+    color: #6b7280 !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    margin-top: 12px !important;
+    padding: 0 !important;
+  }
+
+  // Error and success banners
+  [class*="errorBanner"] {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    color: #991b1b !important;
+  }
+
+  [class*="successBanner"] {
+    background: rgba(16, 185, 129, 0.1) !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
+    color: #065f46 !important;
+  }
+
+  // Loader container
+  [class*="loaderContainer"] {
+    background: linear-gradient(140deg, #e0e7ff 0%, #e9d5ff 48%, #f3e8ff 100%) !important;
+    color: #1a1a1a !important;
+  }
+
+  [class*="loaderCard"] {
+    background: rgba(255, 255, 255, 0.6) !important;
+    border: 1px solid rgba(107, 114, 128, 0.2) !important;
+    color: #4b5563 !important;
+  }
+
+  [class*="loaderMeta"] {
+    color: #4b5563 !important;
+  }
+
+  [class*="loaderHint"] {
+    background: rgba(107, 114, 128, 0.1) !important;
+    color: #4b5563 !important;
+  }
+
+  // Empty state
+  [class*="emptyState"] {
+    background: linear-gradient(140deg, #e0e7ff 0%, #e9d5ff 48%, #f3e8ff 100%) !important;
+    color: #1a1a1a !important;
+  }
+
+  [class*="emptyCard"] {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(107, 114, 128, 0.2) !important;
+    color: #1a1a1a !important;
+  }
+
+  [class*="emptyIcon"] {
+    background: rgba(74, 108, 247, 0.15) !important;
+  }
+
+  [class*="emptyTitle"] {
+    color: #1a1a1a !important;
+  }
+
+  [class*="emptyDescription"] {
+    color: #6b7280 !important;
+  }
+
+  // Secondary button
+  [class*="secondaryButton"] {
+    border: 1px solid #d1d5db !important;
+    color: #4b5563 !important;
+    background: #ffffff !important;
+  }
+
+  [class*="secondaryButton"]:hover {
+    background: #f5f7fa !important;
+    border-color: #9ca3af !important;
+  }
+
+  // Meeting details
+  [class*="meetingDetails"] {
+    background: #f9fafb !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  [class*="meetingDetailsRow"] {
+    color: #4b5563 !important;
+  }
+
+  // Divider
+  [class*="divider"] {
+    background: linear-gradient(90deg, transparent, #e5e7eb, transparent) !important;
+  }
+
+  // Device status icons
+  [class*="deviceStatus"] svg,
+  [class*="deviceStatus"] img {
+    filter: brightness(0) saturate(100%) invert(35%) sepia(5%) saturate(500%) hue-rotate(200deg) brightness(95%) contrast(90%) !important;
+    opacity: 0.8 !important;
+  }
+
+  // Camera badge icon
+  [class*="cameraBadge"]::before {
+    background: #10b981 !important; // Green indicator dot
+  }
+
+  // Empty icon
+  [class*="emptyIcon"] {
+    background: rgba(74, 108, 247, 0.12) !important;
+    border: 1px solid rgba(74, 108, 247, 0.2) !important;
+  }
+}
+

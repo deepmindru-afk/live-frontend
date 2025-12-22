@@ -15,6 +15,7 @@ import {
 } from '../../apollo/admin/mutations';
 import Swal from 'sweetalert2';
 import ThemeToggle from '../../components/ThemeToggle';
+import { useTheme } from '../../lib/theme-context';
 
 interface Meeting {
   _id: string;
@@ -74,6 +75,7 @@ interface ChatStats {
 
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
+  const { theme } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('meetings');
@@ -506,7 +508,7 @@ const AdminDashboard: React.FC = () => {
         <div className="admin-header">
           <div className="admin-logo">
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="Meet: mate"
               width={120}
               height={40}

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 import { makeGraphQLRequest } from '../../lib/simple-auth-handlers';
 import { GET_MEETING_BY_ID } from '../../apollo/meeting/queries';
+import { useTheme } from '../../lib/theme-context';
 import { io } from 'socket.io-client';
 import Swal from 'sweetalert2';
 
@@ -17,6 +18,7 @@ interface MeetingInfo {
 
 const WaitingRoomPage: React.FC = () => {
   const router = useRouter();
+  const { theme } = useTheme();
   const [inviteCode, setInviteCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -358,7 +360,7 @@ const WaitingRoomPage: React.FC = () => {
           <div className="form-section">
             <div className="logo-section">
               <Image
-                src="/mainLogo.png"
+                src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
                 alt="HRDE"
                 width={120}
                 height={55}

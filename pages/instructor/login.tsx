@@ -4,9 +4,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { handleTutorLogin, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { LoginCredentials } from '../../lib/simple-auth-handlers';
+import { useTheme } from '../../lib/theme-context';
 import Swal from 'sweetalert2';
 
 const InstructorLoginPage: React.FC = () => {
+  const { theme } = useTheme();
   const [formData, setFormData] = useState<LoginCredentials>({
     email: '',
     password: '',
@@ -125,7 +127,7 @@ const InstructorLoginPage: React.FC = () => {
         <div className="auth-modal">
           <div className="logo">
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="HRDE"
               width={150}
               height={69}

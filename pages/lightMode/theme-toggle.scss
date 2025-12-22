@@ -1,0 +1,54 @@
+// Theme Toggle Button Styles
+// No inline styles - all CSS classes
+
+.theme-toggle-button {
+  padding: 10px;
+  background: #ffffff;
+  backdrop-filter: blur(10px);
+  border: 2px solid #e1e5e9;
+  border-radius: 12px;
+  color: #333333;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  &:hover {
+    background: #f5f7fa;
+    transform: translateY(-2px);
+    border-color: #4A90E2;
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.3);
+  }
+}
+
+[data-theme='dark'] {
+  .theme-toggle-button {
+    background: #000000;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+
+    &:hover {
+      background: #1a1a1a;
+      border-color: rgba(255, 255, 255, 0.4);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+  }
+}
+

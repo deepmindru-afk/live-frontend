@@ -1,7 +1,8 @@
-// Authentication pages styles
+// Authentication pages styles (Dark Mode)
+// Dark mode styles (default when not light theme)
 @import './theme-variables.scss';
 
-.auth-container {
+.auth-container:not([data-theme='light']) {
   min-height: 100vh;
   display: flex;
   align-items: center;

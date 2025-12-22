@@ -2,8 +2,10 @@ import React from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useTheme } from '../lib/theme-context';
 
 const SignupPage: React.FC = () => {
+  const { theme } = useTheme();
   return (
     <>
       <Head>
@@ -16,7 +18,7 @@ const SignupPage: React.FC = () => {
         <div className="auth-modal">
           <div className="logo">
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="HRDE"
               width={160}
               height={74}

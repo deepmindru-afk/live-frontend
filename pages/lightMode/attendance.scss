@@ -1,0 +1,378 @@
+// Attendance Page Light Mode Styles
+// All styles for the attendance page in light mode
+// IMPORTANT: All styles are scoped to [data-theme='light'] to not affect dark mode
+// Using attribute selectors to target CSS module classes (they contain the class name)
+
+@import '../../styles/theme-variables.scss';
+
+// Only apply these styles when light theme is active
+[data-theme='light'] {
+  // Page container
+  [class*="page"] {
+    background: linear-gradient(180deg, #f5f7fa 0%, #e8ecf1 45%, #e1e5e9 100%);
+    color: #1a1a1a;
+  }
+
+  [class*="backgroundGlow"] {
+    background: radial-gradient(circle at 70% 60%, rgba(74, 108, 247, 0.08), transparent 55%),
+      radial-gradient(circle at 20% 80%, rgba(140, 90, 239, 0.1), transparent 60%);
+  }
+
+  // Sidebar - Main container
+  [class*="sidebar"]:not([class*="sidebarHeader"]):not([class*="sidebarBadge"]):not([class*="sidebarTitle"]):not([class*="sidebarSubtitle"]):not([class*="sidebarMeta"]):not([class*="sidebarDivider"]):not([class*="sidebarStats"]) {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    border-radius: 24px;
+  }
+
+  [class*="sidebarHeader"] {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  [class*="sidebarBadge"] {
+    background: rgba(74, 108, 247, 0.15);
+    color: #4a6cf7;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 999px;
+    align-self: flex-start;
+  }
+
+  [class*="sidebarTitle"] {
+    color: #1a1a1a;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  [class*="sidebarSubtitle"] {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0;
+  }
+
+  [class*="sidebarMeta"] {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  [class*="metaItem"] {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  [class*="metaLabel"] {
+    color: #6b7280;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+
+  [class*="metaValue"] {
+    color: #1a1a1a;
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  [class*="metaCode"] {
+    background: rgba(74, 108, 247, 0.1);
+    border: 1px solid rgba(74, 108, 247, 0.25);
+    color: #4a6cf7;
+    font-family: "Fira Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    padding: 8px 12px;
+    border-radius: 10px;
+    display: inline-block;
+    font-weight: 500;
+  }
+
+  [class*="statusBadge"] {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  [class*="statusLive"] {
+    background: rgba(58, 207, 160, 0.15);
+    color: #059669;
+  }
+
+  [class*="statusEnded"] {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+  }
+
+  [class*="statusScheduled"] {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+  }
+
+  [class*="statusDefault"] {
+    background: rgba(0, 0, 0, 0.05);
+    color: #6b7280;
+  }
+
+  [class*="sidebarDivider"] {
+    background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
+    height: 1px;
+    width: 100%;
+  }
+
+  [class*="sidebarStats"] {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  [class*="statCard"] {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  [class*="statLabel"] {
+    color: #6b7280;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+
+  [class*="statValue"] {
+    color: #1a1a1a;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  [class*="meter"] {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  [class*="meterHeader"] {
+    color: #4b5563;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  [class*="meterValue"] {
+    color: #1a1a1a;
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  [class*="meterTrack"] {
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    height: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  [class*="meterFill"] {
+    background: linear-gradient(90deg, #4a6cf7 0%, #8c5aef 100%);
+    border-radius: 12px;
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+
+  [class*="meterCaption"] {
+    color: #6b7280;
+    font-size: 12px;
+    margin: 0;
+  }
+
+  // Main content area
+  [class*="main"]:not([class*="mainHeader"]):not([class*="mainLabel"]):not([class*="mainTitle"]):not([class*="mainSubtitle"]) {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  [class*="mainLabel"] {
+    color: #6b7280;
+  }
+
+  [class*="mainTitle"] {
+    color: #1a1a1a;
+  }
+
+  [class*="mainSubtitle"] {
+    color: #6b7280;
+  }
+
+  // Search bar
+  [class*="search"]:not([class*="searchIcon"]):not([class*="searchInput"]) {
+    background: #f5f7fa;
+    border: 1px solid #e1e5e9;
+  }
+
+  [class*="searchIcon"] {
+    color: #6b7280;
+  }
+
+  [class*="searchInput"] {
+    color: #1a1a1a;
+  }
+
+  [class*="searchInput"]::placeholder {
+    color: #9ca3af;
+  }
+
+  [class*="downloadButton"] {
+    background: linear-gradient(135deg, #4a6cf7 0%, #8c5aef 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(74, 108, 247, 0.25);
+  }
+
+  [class*="downloadButton"]:hover {
+    box-shadow: 0 6px 16px rgba(74, 108, 247, 0.35);
+  }
+
+  // Summary pills
+  [class*="pillPrimary"] {
+    background: rgba(74, 108, 247, 0.15);
+    color: #4a6cf7;
+  }
+
+  [class*="pillSecondary"] {
+    background: rgba(58, 207, 160, 0.15);
+    color: #059669;
+  }
+
+  [class*="pillSoft"] {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+  }
+
+  // Table
+  [class*="tableCard"] {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  [class*="table"] thead {
+    background: #f9fafb;
+  }
+
+  [class*="table"] th {
+    color: #6b7280;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  [class*="table"] td {
+    color: #1a1a1a;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  [class*="tableRow"] {
+    background: #ffffff;
+  }
+
+  [class*="tableRow"]:nth-child(even) {
+    background: #f9fafb;
+  }
+
+  [class*="tableRow"]:hover {
+    background: linear-gradient(90deg, rgba(74, 108, 247, 0.08), rgba(140, 90, 239, 0.08));
+  }
+
+  [class*="participantName"] {
+    color: #1a1a1a;
+  }
+
+  [class*="participantMeta"] {
+    color: #6b7280;
+  }
+
+  [class*="avatar"]:not([class*="avatarFallback"]) {
+    border: 2px solid rgba(74, 108, 247, 0.2);
+  }
+
+  [class*="avatarFallback"] {
+    background: linear-gradient(135deg, rgba(74, 108, 247, 0.3), rgba(140, 90, 239, 0.3));
+    color: #ffffff;
+  }
+
+  [class*="percentageTrack"] {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  [class*="percentageFill"] {
+    background: linear-gradient(90deg, #4a6cf7 0%, #8c5aef 100%);
+  }
+
+  [class*="levelHigh"] {
+    color: #059669;
+  }
+
+  [class*="levelMedium"] {
+    color: #d97706;
+  }
+
+  [class*="levelLow"] {
+    color: #dc2626;
+  }
+
+  [class*="percentageFill"][class*="levelHigh"],
+  [class*="meterFill"][class*="levelHigh"] {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  }
+
+  [class*="percentageFill"][class*="levelMedium"],
+  [class*="meterFill"][class*="levelMedium"] {
+    background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+  }
+
+  [class*="percentageFill"][class*="levelLow"],
+  [class*="meterFill"][class*="levelLow"] {
+    background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);
+  }
+
+  [class*="percentageValue"][class*="levelHigh"] {
+    color: #059669;
+  }
+
+  [class*="percentageValue"][class*="levelMedium"] {
+    color: #d97706;
+  }
+
+  [class*="percentageValue"][class*="levelLow"] {
+    color: #dc2626;
+  }
+
+  [class*="ellipsisButton"] {
+    background: #f5f7fa;
+    border: 1px solid #e1e5e9;
+    color: #4b5563;
+  }
+
+  [class*="ellipsisButton"]:hover {
+    border-color: rgba(140, 90, 239, 0.4);
+    background: #f0f0f0;
+  }
+
+  [class*="emptyState"] {
+    color: #9ca3af;
+  }
+}

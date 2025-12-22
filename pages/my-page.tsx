@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { getCurrentUser, isAuthenticated, makeGraphQLRequest } from '../lib/simple-auth-handlers';
 import { UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE, UPDATE_PROFILE, CHANGE_PASSWORD } from '../apollo/auth/mutations';
+import { useTheme } from '../lib/theme-context';
 import Swal from 'sweetalert2';
 
 interface User {
@@ -22,6 +23,7 @@ interface User {
 }
 
 const MyPage: React.FC = () => {
+  const { theme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
@@ -370,7 +372,7 @@ const MyPage: React.FC = () => {
             
             <div className="logo-container" onClick={() => router.push('/dashboard')}>
               <Image
-                src="/mainLogo.png"
+                src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
                 alt="HRDe Live"
                 width={140}
                 height={45}

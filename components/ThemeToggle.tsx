@@ -4,39 +4,14 @@ import { useTheme } from '../lib/theme-context';
 const ThemeToggle: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
 
+  const isDark = theme === 'dark';
+
   return (
     <button
       onClick={toggleTheme}
       className="theme-toggle-button"
-      style={{
-        padding: '10px',
-        background: 'var(--bg-button)',
-        backdropFilter: 'blur(10px)',
-        border: '2px solid var(--border-primary)',
-        borderRadius: '12px',
-        color: 'var(--text-button)',
-        cursor: 'pointer',
-        fontSize: '14px',
-        fontWeight: '600',
-        transition: 'all 0.3s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '40px',
-        height: '40px',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--bg-button-hover)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.borderColor = 'transparent';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--bg-button)';
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = 'var(--border-primary)';
-      }}
-      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {theme === 'dark' ? (
         // Sun icon for light mode

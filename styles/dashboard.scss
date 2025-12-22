@@ -1,7 +1,8 @@
-// Dashboard Styles
+// Dashboard Styles (Dark Mode)
+// Dark mode styles (default when not light theme)
 @import './theme-variables.scss';
 
-.dashboard-container {
+.dashboard-container:not([data-theme='light']) {
   min-height: 100vh;
   background: var(--gradient-radial), var(--bg-primary);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,6 +20,12 @@
   box-shadow: var(--shadow-primary);
   position: relative;
   z-index: 10;
+
+  .theme-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
 }
 
 .dashboard-header-logo {
@@ -215,6 +222,37 @@
       font-size: 0.9rem;
     }
 
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+    }
+
+    input[type="text"],
+    input[type="datetime-local"] {
+      width: 100%;
+      padding: 0.85rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(17, 24, 39, 0.65);
+      color: white;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      transition: all 0.3s ease;
+
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      &:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+      }
+    }
+
     .input-group {
       display: flex;
       gap: 0.5rem;
@@ -238,6 +276,74 @@
         }
       }
 
+    }
+
+    .file-upload-section {
+      margin-bottom: 1.5rem;
+
+      label {
+        display: block;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.7);
+        margin-bottom: 0.6rem;
+        font-weight: 500;
+      }
+
+      .file-upload-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+      }
+
+      .file-select-btn {
+        padding: 0.7rem 1.2rem;
+        border-radius: 9px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(99, 102, 241, 0.35) 100%);
+          border-color: rgba(255, 255, 255, 0.3);
+        }
+      }
+
+      .file-name {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.8rem;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .file-remove-btn {
+        padding: 0.55rem 0.9rem;
+        border-radius: 9px;
+        border: 1px solid rgba(239, 68, 68, 0.45);
+        background: rgba(239, 68, 68, 0.15);
+        color: #fecaca;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: rgba(239, 68, 68, 0.25);
+        }
+      }
+
+      .file-upload-info {
+        margin: 0.6rem 0 0 0;
+        font-size: 0.72rem;
+        color: rgba(255, 255, 255, 0.45);
+      }
     }
 
     &.create-room {
@@ -271,28 +377,43 @@
       }
     }
 
+    .create-btn,
     .schedule-action-btn {
       width: 100%;
       margin-top: 1rem;
-      padding: 0.85rem 1rem;
+      padding: 0.95rem 1rem;
       border: none;
       border-radius: 12px;
-      background: linear-gradient(135deg, #451b5e 0%, #262a60 100%);
-      color: #f5f5f5;
+      background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+      color: white;
       font-size: 1rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 14px 28px rgba(79, 70, 229, 0.35);
+      letter-spacing: 0.01em;
       transition: all 0.3s ease;
-      box-shadow: 0 12px 24px rgba(38, 42, 96, 0.35);
 
       &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 16px 32px rgba(69, 27, 94, 0.45);
+        box-shadow: 0 16px 32px rgba(79, 70, 229, 0.45);
       }
 
       &:active {
         transform: translateY(0);
+        box-shadow: 0 14px 28px rgba(79, 70, 229, 0.35);
+      }
+    }
+
+    .schedule-action-btn {
+      background: linear-gradient(135deg, #451b5e 0%, #262a60 100%);
+      color: #f5f5f5;
+      box-shadow: 0 12px 24px rgba(38, 42, 96, 0.35);
+
+      &:hover {
+        box-shadow: 0 16px 32px rgba(69, 27, 94, 0.45);
+      }
+
+      &:active {
         box-shadow: 0 10px 20px rgba(38, 42, 96, 0.4);
       }
     }
@@ -317,7 +438,7 @@
     display: flex;
     gap: 0.35rem;
     padding: 0.5rem 1.25rem 0;
-    background: linear-gradient(180deg, #121320 0%, #171829 100%);
+    background: linear-gradient(180deg, #0a0b12 0%, #0f1117 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow: inset 0 -1px 0 rgba(133, 40, 251, 0.15);
 
@@ -373,7 +494,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    background: linear-gradient(180deg, #151523 0%, #121320 100%);
+    background: linear-gradient(180deg, #0a0b12 0%, #0f1117 100%);
 
     .search-meta {
       display: flex;
@@ -399,11 +520,11 @@
       align-items: center;
       margin-left: auto;
       gap: 0.3rem;
-      padding: 0.25rem 0.35rem 0.25rem 0.65rem;
+      padding: 0.4rem 0.5rem 0.4rem 0.75rem;
       border-radius: 10px;
-      background: rgba(17, 18, 29, 0.85);
+      background: rgba(5, 6, 12, 0.95);
       border: 1px solid rgba(133, 40, 251, 0.25);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
 
       input {
         width: 210px;
@@ -414,7 +535,7 @@
         padding: 0.2rem 0.2rem;
 
         &::placeholder {
-          color: rgba(229, 231, 235, 0.4);
+          color: rgba(200, 200, 200, 0.4);
         }
 
         &:focus {
@@ -427,7 +548,7 @@
         height: 28px;
         border: none;
         border-radius: 8px;
-        background: rgba(133, 40, 251, 0.15);
+        background: rgba(133, 40, 251, 0.2);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -435,7 +556,7 @@
         transition: background 0.2s ease, transform 0.2s ease;
 
         &:hover {
-          background: rgba(133, 40, 251, 0.25);
+          background: rgba(133, 40, 251, 0.3);
           transform: translateY(-1px);
         }
 
@@ -443,6 +564,67 @@
           filter: drop-shadow(0 2px 4px rgba(133, 40, 251, 0.35));
         }
       }
+    }
+  }
+
+  // Support for tabs-container and tab-button classes (used in instructor page)
+  .tabs-container {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+    padding: 0.5rem 1.25rem 0;
+    background: linear-gradient(180deg, #0a0b12 0%, #0f1117 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 -1px 0 rgba(133, 40, 251, 0.15);
+  }
+
+  .tab-button {
+    flex: 1;
+    position: relative;
+    padding: 0.85rem 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.01em;
+    transition: color 0.25s ease, transform 0.25s ease;
+    min-width: 0;
+
+    &:hover:not(.active) {
+      color: #d1d5db;
+      transform: translateY(-1px);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      left: 16%;
+      right: 16%;
+      bottom: -0.5rem;
+      height: 3px;
+      border-radius: 999px;
+      background: transparent;
+      transform: scaleX(0);
+      transform-origin: center;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 0 rgba(133, 40, 251, 0.4);
+    }
+
+    &.active {
+      color: #8528fb;
+
+      &::after {
+        background: #8528fb;
+        transform: scaleX(1);
+        box-shadow: 0 0 12px rgba(133, 40, 251, 0.65);
+      }
+    }
+
+    span {
+      display: inline-block;
     }
   }
 
@@ -730,13 +912,71 @@
     .actions {
       display: flex;
       justify-content: flex-end;
-      flex-wrap: nowrap;
-      gap: 0.35rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
 
       button {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+      }
+    }
+
+    .action-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 92px;
+
+      &.btn-start {
+        background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(86, 171, 47, 0.3);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(86, 171, 47, 0.4);
+        }
+      }
+
+      &.btn-join {
+        background: linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(34, 211, 238, 0.35);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(34, 211, 238, 0.45);
+        }
+      }
+
+      &.btn-end {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+        }
+      }
+
+      &.btn-attendance {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
       }
     }
 

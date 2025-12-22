@@ -9,6 +9,8 @@ import { GET_PARTICIPANTS_BY_MEETING, GET_PARTICIPANT_BY_USER_MEETING, GET_MEETI
 import { enhancedMakeGraphQLRequest } from '../../lib/mock-graphql-service';
 
 import { UPDATE_PROFILE, UPLOAD_PROFILE_IMAGE, DELETE_PROFILE_IMAGE } from '../../apollo/member/mutations';
+import { useTheme } from '../../lib/theme-context';
+import ThemeToggle from '../../components/ThemeToggle';
 import Swal from 'sweetalert2';
 
 interface Meeting {
@@ -36,6 +38,7 @@ interface User {
 
 const MemberDashboard: React.FC = () => {
   const router = useRouter();
+  const { theme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'meetings' | 'join' | 'menu'>('meetings');
@@ -688,26 +691,31 @@ const MemberDashboard: React.FC = () => {
           <div className="topbar-inner">
             <div className="topbar-logo">
               <Image
-                src="/mainLogo.png"
+                src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
                 alt="HRDe"
                 width={96}
                 height={40}
                 priority
               />
             </div>
-            <button
-              type="button"
-              className="topbar-logout"
-              onClick={handleLogoutClick}
-            >
-              <Image
-                src="/Icons/dashboard/logout.svg"
-                alt="로그아웃"
-                width={20}
-                height={20}
-              />
-              <span>로그아웃</span>
-            </button>
+            <div className="topbar-actions">
+              <div className="theme-toggle-wrapper">
+                <ThemeToggle />
+              </div>
+              <button
+                type="button"
+                className="topbar-logout"
+                onClick={handleLogoutClick}
+              >
+                <Image
+                  src="/Icons/dashboard/logout.svg"
+                  alt="로그아웃"
+                  width={20}
+                  height={20}
+                />
+                <span>로그아웃</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -722,7 +730,7 @@ const MemberDashboard: React.FC = () => {
               <input
                 ref={heroSearchInputRef}
                 type="text"
-                placeholder="미팅 제목으로 검색하세요."
+                placeholder="미팅제목으로 검색하세요"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="hero-search-input"
@@ -756,14 +764,14 @@ const MemberDashboard: React.FC = () => {
                 className={`hero-tab ${activeTab === 'meetings' ? 'active' : ''}`}
                 onClick={() => setActiveTab('meetings')}
               >
-                내 미팅
+                내 강의
               </button>
               <button
                 type="button"
                 className={`hero-tab ${activeTab === 'join' ? 'active' : ''}`}
                 onClick={() => setActiveTab('join')}
               >
-                미팅 참여
+                강의 참여
               </button>
             </div>
           </div>
@@ -811,6 +819,7 @@ const MemberDashboard: React.FC = () => {
                             aria-label="미팅 자료 다운로드"
                             onClick={() => handleDownloadMeetingFile(meeting)}
                             disabled={downloadingMeetingId === meeting._id}
+                            style={{ marginLeft: 'auto' }}
                           >
                             <svg
                               width="18"
@@ -837,9 +846,6 @@ const MemberDashboard: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <h3 className="meeting-card-title">
-                        {meeting.title}
-                      </h3>
                       <p className="meeting-card-description">강의 제목: {meeting.title}</p>
                       <div className="meeting-card-body">
                         <div className="meeting-info">
@@ -1657,6 +1663,17 @@ const MemberDashboard: React.FC = () => {
           padding: 1.1rem 2.5rem;
         }
 
+        .topbar-actions {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .theme-toggle-wrapper {
+          display: flex;
+          align-items: center;
+        }
+
         .topbar-logo :global(img) {
           width: auto;
           height: 36px;
@@ -1811,32 +1828,33 @@ const MemberDashboard: React.FC = () => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 0.75rem;
-          background: rgba(255, 255, 255, 0.06);
-          border-radius: 999px;
-          padding: 0.45rem;
+          gap: 0;
+          background: transparent;
+          border-radius: 0;
+          padding: 0;
           margin: 0 auto;
-          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+          box-shadow: none;
+          border-bottom: 2px solid transparent;
         }
 
         .hero-tab {
           position: relative;
           border: none;
-          border-radius: 999px;
-          padding: 0.65rem 1.75rem;
-          font-size: 0.95rem;
+          border-radius: 0;
+          padding: 0.75rem 1.5rem;
+          font-size: 1rem;
           font-weight: 600;
-          letter-spacing: 0.03em;
+          letter-spacing: 0.02em;
           background: transparent;
-          color: rgba(255, 255, 255, 0.75);
+          color: rgba(255, 255, 255, 0.7);
           cursor: pointer;
           transition: all 0.2s ease;
         }
 
         .hero-tab.active {
-          background: rgba(255, 255, 255, 0.12);
+          background: transparent;
           color: #ffffff;
-          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+          border-bottom: 2px solid #4A90E2;
         }
 
         .hero-tab:hover {
@@ -2214,9 +2232,10 @@ const MemberDashboard: React.FC = () => {
 
         .section-header {
           display: flex;
-          justify-content: flex-end;
+          justify-content: space-between;
           align-items: center;
           margin-bottom: 2rem;
+          padding: 0 0.5rem;
         }
 
         .refresh-chip {
@@ -2249,8 +2268,14 @@ const MemberDashboard: React.FC = () => {
         /* Meetings Grid */
         .meetings-grid {
           display: grid;
-          gap: 2rem;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 1.5rem;
+          grid-template-columns: repeat(3, 1fr);
+        }
+
+        @media (max-width: 1400px) {
+          .meetings-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
         }
 
         /* Meeting Card */
@@ -2299,21 +2324,21 @@ const MemberDashboard: React.FC = () => {
         }
 
         .status-pill.started {
-          background: rgba(30, 161, 65, 0.22);
-          color: #28c76f;
-          border: 1px solid rgba(30, 161, 65, 0.45);
+          background: #28c76f;
+          color: #ffffff;
+          border: none;
         }
 
         .status-pill.scheduled {
-          background: rgba(220, 196, 155, 0.25);
-          color: #e0b276;
-          border: 1px solid rgba(220, 196, 155, 0.45);
+          background: #ffc107;
+          color: #ffffff;
+          border: none;
         }
 
         .status-pill.ended {
-          background: rgba(237, 111, 115, 0.25);
-          color: #ff7b82;
-          border: 1px solid rgba(237, 111, 115, 0.45);
+          background: #dc3545;
+          color: #ffffff;
+          border: none;
         }
 
         .card-icon-button {
@@ -2343,9 +2368,10 @@ const MemberDashboard: React.FC = () => {
         }
 
         .meeting-card-description {
-          margin: 0;
+          margin: 0.5rem 0 0 0;
           font-size: 0.95rem;
-          color: rgba(255, 255, 255, 0.7);
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 500;
         }
 
         .meeting-card-body {
@@ -2401,18 +2427,18 @@ const MemberDashboard: React.FC = () => {
         }
 
         .meeting-action.started {
-          background: #1ea141;
-          box-shadow: 0 12px 25px rgba(30, 161, 65, 0.35);
+          background: #28c76f;
+          box-shadow: 0 4px 12px rgba(40, 199, 111, 0.35);
         }
 
         .meeting-action.scheduled {
-          background: #737373;
-          box-shadow: 0 12px 25px rgba(115, 115, 115, 0.35);
+          background: #6c757d;
+          box-shadow: 0 4px 12px rgba(108, 117, 125, 0.35);
         }
 
         .meeting-action.ended {
           background: #1f6be0;
-          box-shadow: 0 12px 25px rgba(31, 107, 224, 0.4);
+          box-shadow: 0 4px 12px rgba(31, 107, 224, 0.4);
         }
 
         .meeting-action:hover {
@@ -2843,7 +2869,7 @@ const MemberDashboard: React.FC = () => {
           }
 
           .meetings-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
           }
 
           .section-header {

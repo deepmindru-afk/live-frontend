@@ -1,6 +1,15 @@
+// Import base styles (dark mode) - MUST come first
 import '../styles/auth.scss';
 import '../styles/dashboard.scss';
 import '../pages/app/globals.css';
+// Import light mode styles (will be scoped with data-theme='light') - MUST come after dark mode
+import '../styles/light-mode/auth.scss';
+import '../styles/light-mode/dashboard.scss';
+import '../pages/lightMode/instructor.scss';
+import '../pages/lightMode/theme-toggle.scss';
+import '../pages/lightMode/attendance.scss';
+import '../pages/lightMode/member.scss';
+import '../pages/lightMode/prejoin.scss';
 // Import Excalidraw styles
 import '@excalidraw/excalidraw/index.css';
 import ApolloProviderWrapper from '../lib/apollo-provider';

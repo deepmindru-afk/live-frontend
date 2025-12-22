@@ -5,8 +5,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { handleTutorSignup, isAuthenticated, getCurrentUser, redirectBasedOnRole } from '../../lib/simple-auth-handlers';
 import { SignupData } from '../../lib/simple-auth-handlers';
+import { useTheme } from '../../lib/theme-context';
 
 const InstructorSignupPage: React.FC = () => {
+  const { theme } = useTheme();
   const [formData, setFormData] = useState<SignupData>({
     displayName: '',
     email: '',
@@ -132,7 +134,7 @@ const InstructorSignupPage: React.FC = () => {
         <div className="auth-modal">
           <div className="logo">
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="HRDE"
               width={150}
               height={69}

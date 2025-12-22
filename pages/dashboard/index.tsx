@@ -8,6 +8,7 @@ import { CREATE_MEETING, START_MEETING, END_MEETING } from '../../apollo/meeting
 import { GET_MY_MEETINGS, GET_ALL_MEETINGS, GET_MEETING_STATS } from '../../apollo/meeting/queries';
 import { handleLogout } from '../../lib/simple-auth-handlers';
 import ThemeToggle from '../../components/ThemeToggle';
+import { useTheme } from '../../lib/theme-context';
 import Swal from 'sweetalert2';
 
 interface Meeting {
@@ -24,6 +25,7 @@ interface Meeting {
 
 const Dashboard: React.FC = () => {
   const router = useRouter();
+  const { theme } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'STARTED' | 'SCHEDULED' | 'ENDED' | 'VOD'>('STARTED');
@@ -467,7 +469,7 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-header">
           <div className="logo" onClick={() => router.push('/dashboard')}>
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="HRDe Live"
               width={120}
               height={40}

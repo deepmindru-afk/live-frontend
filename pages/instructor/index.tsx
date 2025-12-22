@@ -11,6 +11,8 @@ import { CREATE_VOD, UPDATE_VOD, DELETE_VOD, UPLOAD_VOD_FILE, CREATE_VOD_FROM_UR
 import { handleLogout } from '../../lib/simple-auth-handlers';
 import Swal from 'sweetalert2';
 import { isValidObjectId } from '../../lib/validation';
+import ThemeToggle from '../../components/ThemeToggle';
+import { useTheme } from '../../lib/theme-context';
 
 interface Meeting {
   _id: string;
@@ -50,6 +52,7 @@ interface VOD {
 
 const Dashboard: React.FC = () => {
   const router = useRouter();
+  const { theme } = useTheme();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'LIVE' | 'SCHEDULED' | 'ENDED' | 'VOD'>('LIVE');
@@ -1156,6 +1159,9 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-container">
         {/* Header */}
         <div className="dashboard-header">
+          <div className="theme-toggle-wrapper">
+            <ThemeToggle />
+          </div>
           <div
             className="dashboard-header-logo"
             onClick={() => router.push('/dashboard')}
@@ -1168,7 +1174,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <Image
-              src="/mainLogo.png"
+              src={theme === 'dark' ? '/darkMode.png' : '/mainLogo.png'}
               alt="HRDe Live"
               width={120}
               height={40}
@@ -1231,76 +1237,23 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-sidebar">
 
             {/* Create Room Panel */}
-            <div
-              className="action-panel create-room"
-              style={{
-                background: 'linear-gradient(180deg, #111827 0%, #0f172a 35%, #1f2937 100%)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: '0 18px 40px rgba(15, 23, 42, 0.35)',
-                padding: '1.75rem',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  marginBottom: '1.25rem',
-                }}
-              >
-                <div
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: '1.15rem',
-                  }}
-                >
+            <div className="action-panel create-room">
+              <div className="panel-header">
+                <div className="icon-wrapper">
                   <Image
                     src="/Icons/dashboard/Vector.svg"
                     alt="Create meeting"
                     width={20}
                     height={20}
-                    style={{ filter: 'brightness(3)' }}
                   />
                 </div>
-                <div>
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: '1.25rem',
-                      fontWeight: 600,
-                      color: 'rgba(255,255,255,0.95)',
-                    }}
-                  >
-                    방 만들기
-                  </h3>
-                  <p
-                    style={{
-                      margin: '0.25rem 0 0 0',
-                      fontSize: '0.9rem',
-                      color: 'rgba(255,255,255,0.6)',
-                    }}
-                  >
-                    LIVE방을 생성합니다.
-                  </p>
+                <div className="text-group">
+                  <h3>방 만들기</h3>
+                  <p>LIVE방을 생성합니다.</p>
                 </div>
               </div>
 
-              <label
-                htmlFor="meeting-title"
-                style={{
-                  display: 'block',
-                  fontSize: '0.85rem',
-                  color: 'rgba(255,255,255,0.7)',
-                  marginBottom: '0.4rem',
-                }}
-              >
+              <label htmlFor="meeting-title">
                 방 제목 *
               </label>
               <input
@@ -1309,27 +1262,9 @@ const Dashboard: React.FC = () => {
                 placeholder="방 제목"
                 value={newMeetingTitle}
                 onChange={(e) => setNewMeetingTitle(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.85rem',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  background: 'rgba(17, 24, 39, 0.65)',
-                  color: 'white',
-                  fontSize: '0.95rem',
-                  marginBottom: '1rem',
-                }}
               />
 
-              <label
-                htmlFor="course-code"
-                style={{
-                  display: 'block',
-                  fontSize: '0.85rem',
-                  color: 'rgba(255,255,255,0.7)',
-                  marginBottom: '0.4rem',
-                }}
-              >
+              <label htmlFor="course-code">
                 강의코드 (선택)
               </label>
               <input
@@ -1338,29 +1273,11 @@ const Dashboard: React.FC = () => {
                 placeholder="강의코드"
                 value={courseCode}
                 onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%',
-                  padding: '0.85rem',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  background: 'rgba(17, 24, 39, 0.65)',
-                  color: 'white',
-                  fontSize: '0.95rem',
-                  textTransform: 'uppercase',
-                  marginBottom: '1.1rem',
-                }}
+                style={{ textTransform: 'uppercase' }}
               />
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label
-                  htmlFor="class-material-upload"
-                  style={{
-                    display: 'block',
-                    fontSize: '0.85rem',
-                    color: 'rgba(255,255,255,0.7)',
-                    marginBottom: '0.6rem',
-                  }}
-                >
+              <div className="file-upload-section">
+                <label htmlFor="class-material-upload">
                   수업자료 업로드 (선택)
                 </label>
                 <input
@@ -1378,46 +1295,16 @@ const Dashboard: React.FC = () => {
                     }
                   }}
                 />
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    flexWrap: 'wrap',
-                  }}
-                >
+                <div className="file-upload-controls">
                   <button
                     type="button"
+                    className="file-select-btn"
                     onClick={() => materialInputRef.current?.click()}
-                    style={{
-                      padding: '0.7rem 1.2rem',
-                      borderRadius: '9px',
-                      border: '1px solid rgba(255, 255, 255, 0.18)',
-                      background: 'linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(99,102,241,0.25) 100%)',
-                      color: 'rgba(255,255,255,0.9)',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.35) 0%, rgba(99,102,241,0.35) 100%)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(99,102,241,0.25) 100%)';
-                    }}
                   >
                     파일선택
                   </button>
                   <span
-                    style={{
-                      color: 'rgba(255,255,255,0.7)',
-                      fontSize: '0.8rem',
-                      maxWidth: '180px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="file-name"
                     title={classMaterialFile?.name || ''}
                   >
                     {classMaterialFile ? classMaterialFile.name : '선택된 파일 없음'}
@@ -1425,68 +1312,26 @@ const Dashboard: React.FC = () => {
                   {classMaterialFile && (
                     <button
                       type="button"
+                      className="file-remove-btn"
                       onClick={() => {
                         setClassMaterialFile(null);
                         if (materialInputRef.current) {
                           materialInputRef.current.value = '';
                         }
                       }}
-                      style={{
-                        padding: '0.55rem 0.9rem',
-                        borderRadius: '9px',
-                        border: '1px solid rgba(239,68,68,0.45)',
-                        background: 'rgba(239,68,68,0.15)',
-                        color: '#fecaca',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(239,68,68,0.25)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-                      }}
                     >
                       제거
                     </button>
                   )}
                 </div>
-                <p
-                  style={{
-                    margin: '0.6rem 0 0 0',
-                    fontSize: '0.72rem',
-                    color: 'rgba(255,255,255,0.45)',
-                  }}
-                >
+                <p className="file-upload-info">
                   PDF, 문서, 이미지 등 25MB까지 업로드 가능합니다.
                 </p>
               </div>
 
               <button
                 onClick={handleCreateMeeting}
-                style={{
-                  width: '100%',
-                  padding: '0.95rem 1rem',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-                  color: 'white',
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: '0 14px 28px rgba(79, 70, 229, 0.35)',
-                  letterSpacing: '0.01em',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 16px 32px rgba(79, 70, 229, 0.45)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 14px 28px rgba(79, 70, 229, 0.35)';
-                }}
+                className="create-btn"
               >
                 생성하기
               </button>
@@ -1536,91 +1381,28 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-main">
             <div className="meetings-panel">
               {/* Tabs with Icons - Single Line */}
-              <div style={{ 
-                display: 'flex', 
-                gap: '8px', 
-                flexWrap: 'wrap',
-                marginBottom: '20px',
-                paddingBottom: '12px',
-                borderBottom: '2px solid #e9ecef'
-              }}>
+              <div className="tabs-container">
                 <button
                   onClick={() => setActiveTab('LIVE')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s',
-                    backgroundColor: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'LIVE' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
-                    color: activeTab === 'LIVE' ? '#ffffff' : '#cbd5f5',
-                  }}
+                  className={`tab-button ${activeTab === 'LIVE' ? 'active' : ''}`}
                 >
                   <span>진행중</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('SCHEDULED')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s',
-                    backgroundColor: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'SCHEDULED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
-                    color: activeTab === 'SCHEDULED' ? '#ffffff' : '#cbd5f5',
-                  }}
+                  className={`tab-button ${activeTab === 'SCHEDULED' ? 'active' : ''}`}
                 >
                   <span>예약됨</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('ENDED')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s',
-                    backgroundColor: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'ENDED' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
-                    color: activeTab === 'ENDED' ? '#ffffff' : '#cbd5f5',
-                  }}
+                  className={`tab-button ${activeTab === 'ENDED' ? 'active' : ''}`}
                 >
                   <span>종료됨</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('VOD')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s',
-                    backgroundColor: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-                    background: activeTab === 'VOD' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#161616',
-                    color: activeTab === 'VOD' ? '#ffffff' : '#cbd5f5',
-                  }}
+                  className={`tab-button ${activeTab === 'VOD' ? 'active' : ''}`}
                 >
                   <span>VOD</span>
                 </button>
@@ -1661,22 +1443,13 @@ const Dashboard: React.FC = () => {
                 <div>
                   {/* Warning Banner for VOD Access */}
                   {vodAccessDenied && (
-                    <div style={{
-                      backgroundColor: '#fff3cd',
-                      border: '1px solid #ffc107',
-                      borderRadius: '8px',
-                      padding: '12px 16px',
-                      marginBottom: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px'
-                    }}>
-                      <span style={{ fontSize: '20px' }}>⚠️</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: '600', color: '#856404', fontSize: '14px', marginBottom: '4px' }}>
+                    <div className="warning-banner">
+                      <span className="warning-icon">⚠️</span>
+                      <div className="warning-content">
+                        <div className="warning-title">
                           기록 상태 확인 불가
                         </div>
-                        <div style={{ color: '#856404', fontSize: '13px' }}>
+                        <div className="warning-text">
                           강사 권한으로는 녹화 상태를 확인할 수 없습니다. 관리자에게 문의하세요.
                         </div>
                       </div>
@@ -1825,30 +1598,7 @@ const Dashboard: React.FC = () => {
                                   <>
                                     <button 
                                       onClick={() => handleStartMeeting(meeting._id)}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
-                                        color: 'white',
-                                        boxShadow: '0 4px 12px rgba(86, 171, 47, 0.3)',
-                                        transition: 'all 0.3s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '92px'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(86, 171, 47, 0.4)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(86, 171, 47, 0.3)';
-                                      }}
+                                      className="action-btn btn-start"
                                     >
                                       시작
                                     </button>
@@ -1869,59 +1619,13 @@ const Dashboard: React.FC = () => {
           });
         }
                                       }}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
-                                        color: 'white',
-                                      boxShadow: '0 4px 12px rgba(34, 211, 238, 0.35)',
-                                        transition: 'all 0.3s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '92px'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(34, 211, 238, 0.45)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(34, 211, 238, 0.35)';
-                                      }}
+                                      className="action-btn btn-join"
                                     >
                                       참여
                                     </button>
                                     <button 
                                       onClick={() => handleEndMeeting(meeting._id)}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                                        color: 'white',
-                                        boxShadow: '0 4px 12px rgba(245, 87, 108, 0.3)',
-                                        transition: 'all 0.3s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '92px'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(245, 87, 108, 0.4)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.3)';
-                                      }}
+                                      className="action-btn btn-end"
                                     >
                                       종료
                                     </button>
@@ -1931,30 +1635,7 @@ const Dashboard: React.FC = () => {
                                   <>
                                     <button 
                                       onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                      style={{
-                                        padding: '8px 16px',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                        color: 'white',
-                                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-                                        transition: 'all 0.3s ease',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        minWidth: '92px'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.4)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-                                      }}
+                                      className="action-btn btn-attendance"
                                     >
                                       출석 현황
                                     </button>
@@ -2012,18 +1693,7 @@ const Dashboard: React.FC = () => {
                                 <>
                                   <button 
                                     onClick={() => handleStartMeeting(meeting._id)}
-                                    style={{
-                                      padding: '8px 16px',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
-                                      color: 'white',
-                                      flex: 1,
-                                      minWidth: '120px'
-                                    }}
+                                    className="action-btn btn-start"
                                   >
                                     시작
                                   </button>
@@ -2037,35 +1707,13 @@ const Dashboard: React.FC = () => {
                                         window.location.href = `/prejoin/${meeting._id}`;
                                       }
                                     }}
-                                    style={{
-                                      padding: '8px 16px',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
-                                      color: 'white',
-                                      flex: 1,
-                                      minWidth: '120px'
-                                    }}
+                                    className="action-btn btn-join"
                                   >
                                     참여
                                   </button>
                                   <button 
                                     onClick={() => handleEndMeeting(meeting._id)}
-                                    style={{
-                                      padding: '8px 16px',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      cursor: 'pointer',
-                                      fontSize: '13px',
-                                      fontWeight: '600',
-                                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                                      color: 'white',
-                                      flex: 1,
-                                      minWidth: '120px'
-                                    }}
+                                    className="action-btn btn-end"
                                   >
                                     종료
                                   </button>
@@ -2074,17 +1722,8 @@ const Dashboard: React.FC = () => {
                               {meeting.status === 'ENDED' && (
                                 <button 
                                   onClick={() => router.push(`/attendance/${meeting._id}`)}
-                                  style={{
-                                    padding: '8px 16px',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                    fontWeight: '600',
-                                    background: 'linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%)',
-                                    color: 'white',
-                                    width: '100%'
-                                  }}
+                                  className="action-btn btn-attendance"
+                                  style={{ width: '100%' }}
                                 >
                                   출석 현황
                                 </button>
@@ -2106,27 +1745,10 @@ const Dashboard: React.FC = () => {
 
       {/* File Upload Modal */}
       {showUploadModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <h2 style={{ margin: '0 0 20px 0' }}>파일 업로드</h2>
-            <div style={{ marginBottom: '20px' }}>
+        <div className="modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>파일 업로드</h2>
+            <div className="modal-input-section">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2139,49 +1761,22 @@ const Dashboard: React.FC = () => {
                 onClick={() => {
                   fileInputRef.current?.click();
                 }}
-                style={{
-                  width: '100%',
-                  padding: '20px',
-                  border: '2px dashed #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: '#f8f9fa',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  color: '#666'
-                }}
+                className="modal-file-button"
               >
                 {selectedFile ? selectedFile.name : '파일을 선택하세요'}
               </button>
             </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px'
-            }}>
+            <div className="modal-actions">
               <button
                 onClick={() => setShowUploadModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
+                className="btn-cancel"
               >
                 취소
               </button>
               <button
                 onClick={uploadFile}
                 disabled={!selectedFile}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: !selectedFile ? '#ccc' : '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: !selectedFile ? 'not-allowed' : 'pointer'
-                }}
+                className="btn-primary"
               >
                 업로드
               </button>
@@ -2192,28 +1787,11 @@ const Dashboard: React.FC = () => {
 
       {/* URL Upload Modal */}
       {showURLModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <h2 style={{ margin: '0 0 20px 0' }}>URL 등록</h2>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+        <div className="modal-overlay" onClick={() => setShowURLModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>URL 등록</h2>
+            <div className="modal-input-section">
+              <label className="modal-label">
                 VOD 제목
               </label>
               <input
@@ -2221,16 +1799,9 @@ const Dashboard: React.FC = () => {
                 value={urlTitle}
                 onChange={(e) => setUrlTitle(e.target.value)}
                 placeholder="VOD 제목을 입력하세요"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  marginBottom: '15px'
-                }}
+                className="modal-input modal-input--spaced"
               />
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
+              <label className="modal-label">
                 URL
               </label>
               <input
@@ -2238,43 +1809,19 @@ const Dashboard: React.FC = () => {
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
                 placeholder="VOD URL을 입력하세요"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
+                className="modal-input"
               />
             </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px'
-            }}>
+            <div className="modal-actions">
               <button
                 onClick={() => setShowURLModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
+                className="btn-cancel"
               >
                 취소
               </button>
               <button
                 onClick={uploadFromURL}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#1976d2',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
+                className="btn-primary"
               >
                 등록
               </button>
@@ -2285,56 +1832,18 @@ const Dashboard: React.FC = () => {
 
       {/* VOD Menu Dropdown */}
       {showVODMenu && selectedVOD && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2000
-        }} onClick={closeVODMenu}>
+        <div className="vod-menu-overlay" onClick={closeVODMenu}>
           <div 
             className="vod-menu"
-            style={{
-              position: 'absolute',
-              top: '100px',
-              left: '50px',
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-              padding: '8px 0',
-              minWidth: '200px',
-              zIndex: 2001
-            }} 
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid #eee',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#333'
-            }}>
+            <div className="vod-menu-header">
               {selectedVOD.title}
             </div>
             
             <button
               onClick={() => deleteVOD(selectedVOD._id)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: '14px',
-                color: '#dc3545',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              className="vod-menu-item"
             >
               <span>🗑️</span>
               삭제
